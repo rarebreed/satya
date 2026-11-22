@@ -1,8 +1,8 @@
 """Lazy tool registry and discovery meta-tool (`load_gm_tools`) for the Satya AI GM.
 
-Partitions the 45 built-in AI GM tools (plus any external MCP tools) into a small
-always-on Core set (~10 tools) and 6 deferred domain packs so normal turns bind
-~11 JSON schemas instead of all 45, with automatic state-based pre-activation for
+Partitions the 47 built-in AI GM tools (plus any external MCP tools) into a small
+always-on Core set (~12 tools) and 6 deferred domain packs so normal turns bind
+~13 JSON schemas instead of all 47, with automatic state-based pre-activation for
 active combat (`combat` pack) and OOC/rules queries (7 read-only tools) plus
 turn-end expiry of dynamically loaded packs.
 """
@@ -239,6 +239,62 @@ _BUILTIN_DEFERRED_TOOL_NAMES: Final[frozenset[str]] = frozenset(
 _CORE_TOOL_NAME_SET: Final[frozenset[str]] = frozenset(CORE_GM_TOOL_NAMES)
 _TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9_]+")
 
+# Intent-driven tool pre-activation rules for authoring/mutation requests that may arrive
+# on `OUT_OF_CHARACTER` (or before the model discovers deferred packs), without matching
+# read-only questions such as "How many NPCs do you have?" or "Show me the list of NPCs".
+_TURN_INTENT_PREACTIVATION_RULES: Final[tuple[tuple[re.Pattern[str], tuple[str, ...]], ...]] = (
+    (
+        re.compile(
+            r"\b(?:add|create|generate|make|roll\s+up|build|register|spawn|introduce|draft|new)\b[^.!?\n]{0,45}\b(?:npcs?|non[- ]player\s+characters?)\b",
+            re.IGNORECASE,
+        ),
+        ("generate_npc_from_description",),
+    ),
+    (
+        re.compile(
+            r"\b(?:npcs?|non[- ]player\s+characters?)\b[^.!?\n]{0,25}\b(?:add|create|generate|roll\s+up|register|spawn|draft)\b",
+            re.IGNORECASE,
+        ),
+        ("generate_npc_from_description",),
+    ),
+    (
+        re.compile(
+            r"\b(?:update|change|set|modify|edit)\b[^.!?\n]{0,35}\b(?:npc|disposition|immediate\s+agenda|combat\s+stance|fatigue|wound\s+shock)\b",
+            re.IGNORECASE,
+        ),
+        ("update_npc_state",),
+    ),
+    (
+        re.compile(
+            r"\b(?:save|record|remember|note|add|store|log|pin)\b[^.!?\n]{0,35}\b(?:gm\s+memory|memory\s+note|session\s+note|gm\s+note|campaign\s+note|session\s+records?)\b",
+            re.IGNORECASE,
+        ),
+        ("upsert_gm_memory",),
+    ),
+    (
+        re.compile(
+            r"\b(?:load|import|activate|bring\s+in|pull\s+in|add)\b[^.!?\n]{0,45}\b(?:campaign|starter|universal|pack|awakened)\s+npcs?\b"
+            r"|\bload\b[^.!?\n]{0,40}\b(?:bandajara|alex\s+wen|sri\s+ramana|marcus\s+vance|elena\s+rostova|chloe\s+chen|cliff\s+reed|starter|campaign)\b",
+            re.IGNORECASE,
+        ),
+        ("load_campaign_npc",),
+    ),
+    (
+        re.compile(
+            r"\b(?:delete|remove|erase|clear|purge)\b[^.!?\n]{0,35}\b(?:gm\s+memory|memory\s+note|session\s+note|gm\s+note|gm\s+doc|document)\b",
+            re.IGNORECASE,
+        ),
+        ("delete_gm_memory",),
+    ),
+    (
+        re.compile(
+            r"\b(?:generate|create|make|build|draw|render)\b[^.!?\n]{0,30}\b(?:tactical\s+map|battlemap|battle\s+map|map)\b",
+            re.IGNORECASE,
+        ),
+        ("generate_tactical_map",),
+    ),
+)
+
 
 def _tool_name(tool_obj: Any) -> str:
     return str(getattr(tool_obj, "name", "") or getattr(tool_obj, "__name__", "")).strip()
@@ -456,6 +512,25 @@ class GmToolRegistry:
             for t_name in spec.tool_names
         }
 
+    def infer_preactivated_tool_names(
+        self,
+        text: str | None,
+        *,
+        campaign_pack: str | None = None,
+    ) -> tuple[str, ...]:
+        """Return tool names whose authoring/action intent matches `text` and are visible for `campaign_pack`."""
+        raw = str(text or "").strip()
+        if not raw:
+            return ()
+        visible = _CORE_TOOL_NAME_SET | self._visible_deferred_tool_names(campaign_pack)
+        inferred: list[str] = []
+        for pattern, tool_names in _TURN_INTENT_PREACTIVATION_RULES:
+            if pattern.search(raw):
+                for t_name in tool_names:
+                    if t_name in self.tool_map and t_name in visible and t_name not in inferred:
+                        inferred.append(t_name)
+        return tuple(inferred)
+
     def resolve_bound_tools(
         self,
         *,
@@ -463,11 +538,13 @@ class GmToolRegistry:
         combat_active: bool = False,
         loaded_packs: Sequence[str] = (),
         loaded_names: Sequence[str] = (),
+        preactivated_names: Sequence[str] = (),
         campaign_pack: str | None = None,
         include_loader: bool = True,
     ) -> tuple[list[Any], list[str]]:
         """Resolve the deduplicated tool objects and pack labels to bind for one supervisor call."""
         visible_map = {spec.pack_id: spec for spec in self.visible_deferred_packs(campaign_pack)}
+        visible_names = _CORE_TOOL_NAME_SET | self._visible_deferred_tool_names(campaign_pack)
         bound: list[Any] = []
         seen_names: set[str] = set()
         labels: list[str] = []
@@ -508,6 +585,15 @@ class GmToolRegistry:
                 extra_added = True
         if extra_added and "custom" not in labels:
             labels.append("custom")
+
+        intent_added = False
+        for raw_name in preactivated_names:
+            t_name = str(raw_name or "").strip()
+            if t_name in self.tool_map and t_name in visible_names and t_name not in seen_names:
+                _add_tool(t_name)
+                intent_added = True
+        if intent_added and "intent" not in labels:
+            labels.append("intent")
 
         if include_loader:
             visible_deferred = self._visible_deferred_tool_names(campaign_pack)

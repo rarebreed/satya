@@ -25,7 +25,9 @@ use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::campaign_lore::{append_omnisearch_lore_and_npc_hits, resolve_pack_defaults};
+use crate::campaign_lore::{
+    OmnisearchAccess, append_omnisearch_lore_and_npc_hits, resolve_pack_defaults,
+};
 use crate::gm_api::verify_gm_service_header;
 use crate::map_handlers::{
     broadcast_role_filtered_map, ensure_vector_map_ready, filter_map_for_role, log_map_canvas_event,
@@ -551,12 +553,23 @@ pub async fn player_ai_public_lookup_handler(
                     snippet: r.snippet.chars().take(360).collect(),
                     is_persistent: true,
                     score: r.score + 15,
+                    section_anchor: Some(satya_rules_book::slugify_heading(&r.section_heading)),
+                    can_delete: false,
+                    is_campaign_default: true,
                 });
             }
         }
     }
 
-    append_omnisearch_lore_and_npc_hits(&state, sid, false, q_trim, &norm_scope, &mut hits).await;
+    append_omnisearch_lore_and_npc_hits(
+        &state,
+        sid,
+        OmnisearchAccess::player(),
+        q_trim,
+        &norm_scope,
+        &mut hits,
+    )
+    .await;
 
     (
         StatusCode::OK,

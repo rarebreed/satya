@@ -2455,3 +2455,922 @@ async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_ai_gm_service_generated_npc_visible_to_player_in_session_npcs_and_ws_broadcast() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let temp_dir =
+        std::env::temp_dir().join(format!("satya_ai_gm_npc_sync_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let player_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let player_user = state
+        .auth
+        .verify_auth_token(&player_auth.auth_token)
+        .await
+        .unwrap();
+
+    // Solo / Autonomous AI GM session where the human joins as Player (no Human GM in roster)
+    state
+        .auth
+        .create_session(
+            &player_user,
+            "ai-gm-npc-sync",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Player,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let (pl_tx, mut pl_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    {
+        let mut sock_guard = state.active_sockets.write().await;
+        sock_guard
+            .entry("ai-gm-npc-sync".to_string())
+            .or_default()
+            .insert(player_user.user_id.clone(), (1, pl_tx));
+    }
+
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let prompt = "Can you add an NPC for me? I want a researcher at DAISE who is adamant that AI are not conscious and believes that AGI will solve many of the world's problems. The NPC name will be Cliff Reed. He has advanced degrees in Computer Science and Math";
+
+    // 1. AI GM service generates Cliff Reed via `/api/gm/sessions/:id/npcs/generate`
+    let gen_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/gm/sessions/ai-gm-npc-sync/npcs/generate")
+                .header("Authorization", format!("Bearer {gm_svc_tok}"))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&satya_schema::GenerateNpcRequest {
+                        prompt: prompt.to_string(),
+                        name_override: None,
+                        template: Some("AUTO".to_string()),
+                        career_terms: 2,
+                        seed: 0,
+                        gm_secret_notes: None,
+                        is_persistent: true,
+                        campaign_tag: Some("ai-gm-npc-sync".to_string()),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(gen_res.status(), StatusCode::OK);
+    let gen_bytes = to_bytes(gen_res.into_body(), 128 * 1024).await.unwrap();
+    let gen_resp: satya_schema::GenerateNpcResponse =
+        serde_json::from_slice(&gen_bytes).unwrap();
+    assert_eq!(gen_resp.npc.character_name, "Cliff Reed");
+    assert_eq!(
+        gen_resp.npc.faction_id.as_deref(),
+        Some("GOVERNMENT_DAISE")
+    );
+
+    // 2. WebSocket broadcast notifies connected Notebook clients without leaking secrets
+    let ws_raw = pl_rx
+        .try_recv()
+        .expect("Expected ServerWsPacket::NpcRosterUpdated on session socket");
+    let ws_pkt: satya_schema::ServerWsPacket = serde_json::from_str(&ws_raw).unwrap();
+    assert_eq!(
+        ws_pkt,
+        satya_schema::ServerWsPacket::NpcRosterUpdated {
+            session_id: "ai-gm-npc-sync".to_string(),
+        }
+    );
+
+    // 3. Player clicking "Refresh NPCs" (`GET /api/sessions/:id/npcs`) sees Cliff Reed (redacted)
+    let list_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/ai-gm-npc-sync/npcs")
+                .header("Authorization", format!("Bearer {}", player_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_res.status(), StatusCode::OK);
+    let list_bytes = to_bytes(list_res.into_body(), 128 * 1024).await.unwrap();
+    let list_resp: satya_schema::SessionNpcsResponse =
+        serde_json::from_slice(&list_bytes).unwrap();
+    assert!(!list_resp.viewer_can_see_gm_secrets);
+    assert_eq!(list_resp.npcs.len(), 1);
+    assert_eq!(list_resp.npcs[0].character_name, "Cliff Reed");
+    assert_eq!(
+        list_resp.npcs[0].faction_id.as_deref(),
+        Some("GOVERNMENT_DAISE")
+    );
+    assert!(list_resp.npcs[0].gm_character.is_none());
+    assert!(list_resp.npcs[0].gm_secret_dossier.is_none());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_solo_gm_session_rules_and_resume_upgrade() {
+    let temp_dir = std::env::temp_dir().join(format!("satya_solo_gm_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    let marcus_auth = state
+        .auth
+        .authenticate_user("marcus_recon", "satya-truth-2026")
+        .await
+        .unwrap();
+    let marcus_user = state
+        .auth
+        .verify_auth_token(&marcus_auth.auth_token)
+        .await
+        .unwrap();
+
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "solo-cogm-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::SoloGm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let join_player = state
+        .auth
+        .join_session(
+            &marcus_user,
+            "solo-cogm-test",
+            "room-pw",
+            SessionRole::Player,
+            None,
+        )
+        .await;
+    assert!(
+        join_player.is_err(),
+        "Second human actor must be blocked in SoloGm session"
+    );
+
+    let join_obs = state
+        .auth
+        .join_session(
+            &marcus_user,
+            "solo-cogm-test",
+            "room-pw",
+            SessionRole::Observer,
+            None,
+        )
+        .await;
+    assert!(
+        join_obs.is_ok(),
+        "Human observers may still spectate SoloGm sessions"
+    );
+
+    let (ctx, _) = state
+        .auth
+        .get_session_gm_context("solo-cogm-test")
+        .await
+        .unwrap();
+    assert_eq!(ctx.operating_mode, satya_schema::AiGmOperatingMode::SoloCoGm);
+
+    // Upgrade from solo Player AI-GM session to SoloGm on resume
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "solo-upgrade-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Player,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+    let resumed = state
+        .auth
+        .resume_session(
+            &sara_user,
+            &satya_schema::ResumeSessionRequest {
+                session_id: "solo-upgrade-test".to_string(),
+                session_password: Some("room-pw".to_string()),
+                join_token: None,
+                role: Some(SessionRole::SoloGm),
+                display_name: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(resumed.2.role, SessionRole::SoloGm);
+    let (ctx2, _) = state
+        .auth
+        .get_session_gm_context("solo-upgrade-test")
+        .await
+        .unwrap();
+    assert_eq!(
+        ctx2.operating_mode,
+        satya_schema::AiGmOperatingMode::SoloCoGm
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_solo_gm_spoiler_shield_and_table_mutations() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_shield_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "solo-shield-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::SoloGm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    state
+        .auth
+        .upsert_session_gm_memory(
+            "solo-shield-test",
+            "ai_gm_svc",
+            "AI GM",
+            true,
+            satya_schema::UpsertGmMemoryRequest {
+                memory_id: Some("mem_hidden_plot".to_string()),
+                title: "Hidden Conspiracy Plot".to_string(),
+                category: satya_schema::GmMemoryCategory::NpcSecret,
+                content: "Secret mastermind identity".to_string(),
+                is_pinned: true,
+                is_persistent: true,
+                campaign_tag: Some("solo-shield-test".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Generate an NPC via AI GM
+    let gen_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/gm/sessions/solo-shield-test/npcs/generate")
+                .header("Authorization", format!("Bearer {gm_svc_tok}"))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&satya_schema::GenerateNpcRequest {
+                        prompt: "Dr. Vance, nervous DAISE auditor".to_string(),
+                        name_override: Some("Dr. Vance".to_string()),
+                        template: Some("AUTO".to_string()),
+                        career_terms: 2,
+                        seed: 42,
+                        gm_secret_notes: Some("Carrying falsified logs.".to_string()),
+                        is_persistent: true,
+                        campaign_tag: Some("solo-shield-test".to_string()),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(gen_res.status(), StatusCode::OK);
+
+    // Unshielded SoloGm sees full NPC sheets & GM memories
+    let unshielded_npcs: satya_schema::SessionNpcsResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/solo-shield-test/npcs?spoiler_shield=false")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            256 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(unshielded_npcs.viewer_can_see_gm_secrets);
+    assert!(unshielded_npcs.npcs[0].gm_character.is_some());
+
+    // Shielded SoloGm gets redacted NPCs & empty GM memories
+    let shielded_npcs: satya_schema::SessionNpcsResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/solo-shield-test/npcs?spoiler_shield=true")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            256 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(!shielded_npcs.viewer_can_see_gm_secrets);
+    assert!(shielded_npcs.npcs[0].gm_character.is_none());
+    assert!(shielded_npcs.npcs[0].gm_secret_dossier.is_none());
+
+    let shielded_mems: satya_schema::SessionGmMemoriesResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/solo-shield-test/memories?spoiler_shield=true")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            128 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(shielded_mems.memories.is_empty());
+
+    // Co-GM mutations STILL work while Spoiler Shield is ON
+    let load_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/solo-shield-test/npcs/load-starter?spoiler_shield=true")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&satya_schema::LoadStarterNpcRequest {
+                        npc_id: "alex_wen".to_string(),
+                        is_persistent: true,
+                        campaign_tag: None,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(load_res.status(), StatusCode::OK);
+    let load_resp: satya_schema::GenerateNpcResponse =
+        serde_json::from_slice(&to_bytes(load_res.into_body(), 128 * 1024).await.unwrap()).unwrap();
+    assert_eq!(load_resp.npc.character_name, "Alex Wen");
+    assert!(load_resp.npc.gm_character.is_none());
+
+    // World ledger hides gm_secret_agenda when spoiler_shield=true
+    let shielded_ledger: satya_schema::SessionWorldLedger = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/solo-shield-test/world-ledger?spoiler_shield=true")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            128 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        shielded_ledger
+            .faction_clocks
+            .iter()
+            .all(|c| c.gm_secret_agenda.is_none())
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_load_all_awakened_starter_npcs_verified_official_and_lookup() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_starter_npcs_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "starter-load-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::SoloGm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Check omnisearch BEFORE loading: Bandajara shows up as Campaign NPC (Not Loaded)
+    let pre_lookup: satya_schema::GmOmnisearchResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/starter-load-test/lookup?q=Bandajara&scope=ALL")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            256 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    let pre_npc_hit = pre_lookup
+        .hits
+        .iter()
+        .find(|h| h.source_kind == satya_schema::GmLookupSourceKind::SessionNpc)
+        .expect("Expected starter Bandajara hit");
+    assert!(pre_npc_hit.subtitle.contains("Not Loaded"));
+    assert!(pre_npc_hit.is_campaign_default);
+    assert!(!pre_npc_hit.can_delete);
+    let lore_hit = pre_lookup
+        .hits
+        .iter()
+        .find(|h| {
+            h.source_kind == satya_schema::GmLookupSourceKind::CampaignLore
+                && h.item_id.contains("major_characters.md")
+        })
+        .expect("Expected CampaignLore hit from major_characters.md");
+    assert!(lore_hit.is_campaign_default);
+    assert!(!lore_hit.can_delete);
+    assert!(lore_hit.section_anchor.is_some());
+
+    // Materialize every starter NPC in awakened_npcs.toml
+    for starter_id in [
+        "dr_bandajara",
+        "alex_wen",
+        "daise_agent_chen",
+        "satyang_sister_lin",
+        "humanis_harlan_reeves",
+        "rogue_proxy_echo",
+    ] {
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sessions/starter-load-test/npcs/load-starter")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&satya_schema::LoadStarterNpcRequest {
+                            npc_id: starter_id.to_string(),
+                            is_persistent: true,
+                            campaign_tag: None,
+                        })
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "failed loading {starter_id}");
+        let loaded: satya_schema::GenerateNpcResponse =
+            serde_json::from_slice(&to_bytes(res.into_body(), 256 * 1024).await.unwrap()).unwrap();
+        let ch = loaded
+            .npc
+            .gm_character
+            .expect("Expected full CharacterSheetRecord");
+        assert_eq!(
+            ch.verification_status,
+            satya_schema::CharacterVerificationStatus::VerifiedOfficial,
+            "{starter_id} audit violations: {:?}",
+            ch.audit_violations
+        );
+        assert!(ch.audit_violations.is_empty());
+        assert!(!ch.skills.is_empty());
+    }
+
+    let list_resp: satya_schema::SessionNpcsResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/starter-load-test/npcs")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            512 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(list_resp.campaign_pack, "awakened");
+    assert_eq!(list_resp.npcs.len(), 6);
+    assert_eq!(list_resp.campaign_npcs.len(), 6);
+    assert!(
+        list_resp
+            .npcs
+            .iter()
+            .any(|n| n.character_id == "dr_bandajara" && n.character_name == "Dr. Bandajara")
+    );
+    assert!(
+        list_resp
+            .npcs
+            .iter()
+            .any(|n| n.character_id == "alex_wen" && n.age_years == 25)
+    );
+
+    let post_lookup: satya_schema::GmOmnisearchResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/starter-load-test/lookup?q=Bandajara&scope=NPC")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            128 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    let post_hit = post_lookup
+        .hits
+        .iter()
+        .find(|h| h.item_id == "dr_bandajara")
+        .unwrap();
+    assert!(post_hit.subtitle.starts_with("Session NPC ·"));
+    assert!(post_hit.can_delete);
+    assert!(!post_hit.is_campaign_default);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_campaign_lore_catalog_visibility_and_traversal_guard() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_lore_api_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "lore-vis-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .join_session(
+            &sara_user,
+            "lore-vis-test",
+            "room-pw",
+            SessionRole::Player,
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Player catalog exposes major_characters.md but excludes GM_CONSPIRACY_SECRET chapters
+    let player_cat: satya_schema::CampaignLoreCatalogResponse = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/lore-vis-test/lore")
+                        .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            256 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        player_cat
+            .chapters
+            .iter()
+            .any(|c| c.relative_path.ends_with("major_characters.md") && c.visibility == "PUBLIC")
+    );
+    assert!(
+        !player_cat
+            .chapters
+            .iter()
+            .any(|c| c.relative_path.contains("04-chronicle-and-gm/"))
+    );
+
+    let pub_chap_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/lore-vis-test/lore/chapter?path=docs/campaign/03-minds-and-factions/major_characters.md")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(pub_chap_res.status(), StatusCode::OK);
+    let pub_doc: satya_schema::CampaignLoreChapterDocument =
+        serde_json::from_slice(&to_bytes(pub_chap_res.into_body(), 256 * 1024).await.unwrap())
+            .unwrap();
+    assert!(pub_doc.rendered_html.contains("Dr. Budi Bandajara"));
+    assert!(pub_doc.rendered_html.contains("Alex Wen"));
+
+    let secret_for_player = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/lore-vis-test/lore/chapter?path=docs/campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(secret_for_player.status(), StatusCode::FORBIDDEN);
+
+    let secret_for_gm = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/lore-vis-test/lore/chapter?path=docs/campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(secret_for_gm.status(), StatusCode::OK);
+
+    let traversal_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/lore-vis-test/lore/chapter?path=../Cargo.toml")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(traversal_res.status(), StatusCode::NOT_FOUND);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_delete_non_default_gm_docs_and_memories_protects_defaults() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_del_docs_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "del-docs-test",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::SoloGm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    state
+        .auth
+        .upsert_session_gm_memory(
+            "del-docs-test",
+            "ai_gm_svc",
+            "AI GM",
+            true,
+            satya_schema::UpsertGmMemoryRequest {
+                memory_id: Some("mem_custom_note".to_string()),
+                title: "Session Scratch Note".to_string(),
+                category: satya_schema::GmMemoryCategory::SceneState,
+                content: "Temporary clue".to_string(),
+                is_pinned: false,
+                is_persistent: true,
+                campaign_tag: Some("del-docs-test".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Delete via AI GM route (/api/gm/sessions/:id/memories/:memory_id)
+    let del_mem_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/gm/sessions/del-docs-test/memories/mem_custom_note")
+                .header("Authorization", format!("Bearer {gm_svc_tok}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_mem_res.status(), StatusCode::OK);
+    let del_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(del_mem_res.into_body(), 16 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(del_json["deleted"], true);
+
+    // Reject deletion of campaign_default_ / default_ IDs
+    let default_mem_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/gm/sessions/del-docs-test/memories/default_awakened_intro")
+                .header("Authorization", format!("Bearer {gm_svc_tok}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(default_mem_del.status(), StatusCode::FORBIDDEN);
+
+    let default_doc_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/sessions/del-docs-test/docs/campaign_default_lore")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(default_doc_del.status(), StatusCode::FORBIDDEN);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

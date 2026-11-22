@@ -18,16 +18,58 @@ use satya_campaign::{
     FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt,
 };
 use satya_schema::{
-    GenerateNpcRequest, GenerateNpcResponse, Participant, ParticipantKind, SessionNpcEntry,
-    SessionNpcsResponse, SessionRole, UpdateSessionNpcRequest,
+    GenerateNpcRequest, GenerateNpcResponse, LoadStarterNpcRequest, Participant, ParticipantKind,
+    SessionNpcEntry, SessionNpcsResponse, SessionRole, UpdateSessionNpcRequest,
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
+/// Returns `true` when the viewer can manage NPC rosters (load starter NPCs, roll up NPCs,
+/// delete non-default session NPCs, toggle persistence) — independent of Solo Spoiler Shield.
+#[must_use]
+pub fn can_viewer_manage_npcs(
+    session_id: Option<&str>,
+    self_part: Option<&Participant>,
+    roster: &[Participant],
+) -> bool {
+    if session_id.is_none() {
+        return true;
+    }
+    if let Some(me) = self_part {
+        if me.role == SessionRole::Observer {
+            return false;
+        }
+        if me.role.is_gm_or_co_gm() {
+            return true;
+        }
+        let has_human_gm = roster
+            .iter()
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm);
+        let human_count = roster
+            .iter()
+            .filter(|p| p.participant_kind == ParticipantKind::Human)
+            .count();
+        return me.role == SessionRole::Player && !has_human_gm && human_count <= 1;
+    }
+    false
+}
+
+/// Checks whether the local viewer is authorized to manage the NPC roster / campaign starter catalog.
+#[must_use]
+pub fn viewer_can_manage_npcs() -> bool {
+    with_state(|st| {
+        can_viewer_manage_npcs(
+            st.session_id.as_deref(),
+            st.self_participant.as_ref(),
+            &st.roster,
+        )
+    })
+}
+
 /// Pure role-and-roster policy determining whether a viewer can inspect GM-only NPC secrets.
 /// Returns `true` when offline (`session_id.is_none()`), or when the viewer is `GM`/`Host`/`AiGm`;
 /// always returns `false` for `Observer` or for a non-GM `Player` when a Human GM is in the roster;
-/// otherwise defers to server-provided `fallback` (`viewer_can_see_gm_secrets`).
+/// for `SoloGm` or empty-roster fallback, defers to server/shield-adjusted `fallback` (`viewer_can_see_gm_secrets`).
 #[must_use]
 pub fn can_viewer_see_npc_secrets(
     session_id: Option<&str>,
@@ -47,6 +89,9 @@ pub fn can_viewer_see_npc_secrets(
             SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
         ) {
             return true;
+        }
+        if me.role == SessionRole::SoloGm {
+            return fallback;
         }
     }
     if roster
@@ -262,15 +307,73 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
     html
 }
 
-/// Renders the NPC selector dropdown (`#npc-roster-select`), visibility badge (`#npc-list-visibility-badge`),
+/// Formats the universal campaign starter NPC catalog (`#npc-campaign-catalog-list`) with
+/// 1-click `Load into Session` buttons and `Preview` chips.
+#[must_use]
+pub fn format_campaign_npc_catalog_html(
+    campaign_npcs: &[SessionNpcEntry],
+    session_npcs: &[SessionNpcEntry],
+    can_manage: bool,
+) -> String {
+    if campaign_npcs.is_empty() {
+        return r#"<span class="pill pill-muted">No campaign starter NPCs cataloged yet.</span>"#
+            .to_string();
+    }
+    campaign_npcs
+        .iter()
+        .map(|entry| {
+            let loaded = session_npcs.iter().any(|s| {
+                s.character_id == entry.character_id
+                    || s.character_name
+                        .trim()
+                        .eq_ignore_ascii_case(entry.character_name.trim())
+            });
+            let js_id = escape_js_single_quoted_attr(&entry.character_id);
+            let status_pill = if loaded {
+                r#"<span class="pill pill-active">In Session</span>"#
+            } else {
+                r#"<span class="pill pill-muted">Campaign Starter (Not Loaded)</span>"#
+            };
+            let action_btn = if !loaded && can_manage {
+                format!(
+                    r#"<button type="button" class="btn-chip btn-chip-accent" onclick="window.satyaLoadStarterNpc('{js_id}')">Load into Session</button>"#
+                )
+            } else {
+                String::new()
+            };
+            format!(
+                r#"<div class="gm-doc-card">
+                    <div class="gm-doc-header">
+                        <div><strong>{}</strong> <span class="muted">· {} (Age {})</span></div>
+                        <div class="btn-row-compact">
+                            {status_pill}
+                            <button type="button" class="btn-chip" onclick="window.satyaSelectStarterNpcPreview('{js_id}')">Preview</button>
+                            {action_btn}
+                        </div>
+                    </div>
+                    <div class="subtitle">{}</div>
+                </div>"#,
+                escape_html(&entry.character_name),
+                escape_html(&entry.callsign_or_role),
+                entry.age_years,
+                escape_html(&entry.public_summary),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Renders the NPC selector dropdown (`#npc-roster-select`), universal campaign catalog
+/// (`#npc-campaign-catalog-list`), visibility badge (`#npc-list-visibility-badge`),
 /// generator panel (`#npc-generator-panel`), and selected NPC card (`#npc-selected-card-container`).
 pub fn render_npcs_tab_dom() {
     ensure_default_demo_npc_if_empty();
     let can_see_gm = viewer_can_see_npc_gm_secrets();
+    let can_manage = viewer_can_manage_npcs();
 
     set_display(
         "npc-generator-panel",
-        if can_see_gm { "block" } else { "none" },
+        if can_manage { "block" } else { "none" },
     );
     set_text(
         "npc-list-visibility-badge",
@@ -281,19 +384,31 @@ pub fn render_npcs_tab_dom() {
         },
     );
 
-    let (npcs, selected_id) = with_state_mut(|st| {
-        if st.selected_npc_id.is_none()
-            || !st
-                .session_npcs
-                .iter()
-                .any(|n| Some(&n.character_id) == st.selected_npc_id.as_ref())
-        {
+    let (npcs, campaign_npcs, pack_name, selected_id) = with_state_mut(|st| {
+        let sel_matches = st.selected_npc_id.as_ref().is_some_and(|sel| {
+            st.session_npcs.iter().any(|n| &n.character_id == sel)
+                || st.campaign_npcs.iter().any(|n| &n.character_id == sel)
+        });
+        if !sel_matches {
             st.selected_npc_id = st.session_npcs.first().map(|n| n.character_id.clone());
         }
-        (st.session_npcs.clone(), st.selected_npc_id.clone())
+        (
+            st.session_npcs.clone(),
+            st.campaign_npcs.clone(),
+            st.campaign_pack_name.clone(),
+            st.selected_npc_id.clone(),
+        )
     });
 
     set_text("npc-roster-count-pill", &format!("{} NPCs", npcs.len()));
+    set_text(
+        "npc-campaign-catalog-status",
+        &format!("{} pack · {} starter NPCs", pack_name, campaign_npcs.len()),
+    );
+    set_html(
+        "npc-campaign-catalog-list",
+        &format_campaign_npc_catalog_html(&campaign_npcs, &npcs, can_manage),
+    );
 
     let mut opts_html = String::new();
     for n in &npcs {
@@ -313,6 +428,11 @@ pub fn render_npcs_tab_dom() {
         let card_html = if let Some(active_npc) = npcs
             .iter()
             .find(|n| Some(&n.character_id) == selected_id.as_ref())
+            .or_else(|| {
+                campaign_npcs
+                    .iter()
+                    .find(|n| Some(&n.character_id) == selected_id.as_ref())
+            })
             .or_else(|| npcs.first())
         {
             format_npc_card_html(active_npc, can_see_gm)
@@ -333,17 +453,132 @@ pub fn satya_refresh_npcs_tab() {
     let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         return;
     };
+    let shielded = with_state(|st| st.solo_spoiler_shield);
 
     spawn_local(async move {
-        let url = format!("/api/sessions/{sid}/npcs");
-        if let Ok(resp) = fetch_json::<(), SessionNpcsResponse>("GET", &url, Some(&tok), None).await
+        let q = if shielded { "?spoiler_shield=true" } else { "" };
+        let url = format!("/api/sessions/{sid}/npcs{q}");
+        match fetch_json::<(), SessionNpcsResponse>("GET", &url, Some(&tok), None).await {
+            Ok(resp) => {
+                with_state_mut(|st| {
+                    st.viewer_can_see_gm_secrets = resp.viewer_can_see_gm_secrets;
+                    st.session_npcs = resp.npcs;
+                    if !resp.campaign_pack.trim().is_empty() {
+                        st.campaign_pack_name = resp.campaign_pack;
+                    }
+                    st.campaign_npcs = resp.campaign_npcs;
+                });
+                render_npcs_tab_dom();
+                crate::wasm_client::notebook::render_combat_tracker();
+            }
+            Err(err) => {
+                set_feedback(
+                    "gm-doc-feedback",
+                    &format!("Failed to refresh NPC list: {err}"),
+                    true,
+                );
+            }
+        }
+    });
+}
+
+/// Previews a universal starter NPC from `#npc-campaign-catalog-list` in `#npc-selected-card-container`.
+#[wasm_bindgen]
+pub fn satya_select_starter_npc_preview(npc_id: String) {
+    if npc_id.trim().is_empty() {
+        return;
+    }
+    with_state_mut(|st| {
+        st.selected_npc_id = Some(npc_id);
+    });
+    satya_select_notebook_tab("npcs".to_string());
+    render_npcs_tab_dom();
+}
+
+/// Materializes and loads a universal starter NPC (`npc_id`) into the current session via
+/// `POST /api/sessions/:session_id/npcs/load-starter`.
+#[wasm_bindgen]
+pub fn satya_load_starter_npc(npc_id: String) {
+    if !viewer_can_manage_npcs() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master, Solo Co-GM, or solo host can load campaign starter NPCs.",
+            true,
+        );
+        return;
+    }
+    let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
+        let loaded_name = with_state_mut(|st| {
+            let entry = st
+                .campaign_npcs
+                .iter()
+                .find(|n| n.character_id == npc_id)
+                .cloned()?;
+            let name = entry.character_name.clone();
+            let low = name.trim().to_ascii_lowercase();
+            retain_non_duplicate_npcs(&mut st.session_npcs, &entry.character_id, &low, false);
+            st.selected_npc_id = Some(entry.character_id.clone());
+            st.session_npcs.insert(0, entry);
+            Some(name)
+        });
+        if let Some(name) = loaded_name {
+            notify_npc_vault_synced(&format!("Loaded '{name}' into local NPC List."), true);
+        }
+        return;
+    };
+    let shielded = with_state(|st| st.solo_spoiler_shield);
+    spawn_local(async move {
+        let q = if shielded { "?spoiler_shield=true" } else { "" };
+        let url = format!("/api/sessions/{sid}/npcs/load-starter{q}");
+        let req = LoadStarterNpcRequest {
+            npc_id,
+            is_persistent: true,
+            campaign_tag: Some(sid.clone()),
+        };
+        match fetch_json::<LoadStarterNpcRequest, GenerateNpcResponse>(
+            "POST",
+            &url,
+            Some(&tok),
+            Some(&req),
+        )
+        .await
         {
-            with_state_mut(|st| {
-                st.viewer_can_see_gm_secrets = resp.viewer_can_see_gm_secrets;
-                st.session_npcs = resp.npcs;
-            });
-            render_npcs_tab_dom();
-            crate::wasm_client::notebook::render_combat_tracker();
+            Ok(resp) => {
+                let name = resp.npc.character_name.clone();
+                let name_low = name.trim().to_ascii_lowercase();
+                with_state_mut(|st| {
+                    retain_non_duplicate_npcs(
+                        &mut st.session_npcs,
+                        &resp.npc.character_id,
+                        &name_low,
+                        false,
+                    );
+                    if let Some(mem) = resp.gm_memory {
+                        st.gm_memories.retain(|m| {
+                            m.memory_id != mem.memory_id
+                                && !is_matching_npc_memory(
+                                    m,
+                                    &resp.npc.character_id,
+                                    Some(&name_low),
+                                )
+                        });
+                        st.gm_memories.insert(0, mem);
+                    }
+                    st.selected_npc_id = Some(resp.npc.character_id.clone());
+                    st.session_npcs.insert(0, resp.npc);
+                });
+                notify_npc_vault_synced(
+                    &format!("Loaded campaign NPC '{name}' into the active session."),
+                    true,
+                );
+            }
+            Err(err) => {
+                set_feedback(
+                    "gm-doc-feedback",
+                    &format!("Failed to load campaign starter NPC: {err}"),
+                    true,
+                );
+            }
         }
     });
 }
@@ -412,7 +647,7 @@ fn notify_npc_vault_synced(msg: &str, append_notice: bool) {
 /// via `PATCH /api/sessions/:session_id/npcs/:character_id`.
 #[wasm_bindgen]
 pub fn satya_toggle_npc_persistence(character_id: String, is_persistent: bool) {
-    if !viewer_can_see_npc_gm_secrets() {
+    if !viewer_can_manage_npcs() {
         return;
     }
     let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
@@ -476,10 +711,11 @@ pub fn satya_toggle_npc_persistence(character_id: String, is_persistent: bool) {
 /// via `DELETE /api/sessions/:session_id/npcs/:character_id`.
 #[wasm_bindgen]
 pub fn satya_delete_session_npc(character_id: String) {
-    if !viewer_can_see_npc_gm_secrets() {
+    if !viewer_can_manage_npcs() {
         return;
     }
     let remove_local = |cid: &str| {
+        crate::wasm_client::gm_omnisearch::close_archivist_modal_if_matching(cid);
         with_state_mut(|st| {
             let name_low = st
                 .session_npcs
@@ -526,7 +762,7 @@ pub fn satya_delete_session_npc(character_id: String) {
 /// `NPC List` selector immediately, and persists it to the session/campaign vault when connected.
 #[wasm_bindgen]
 pub fn satya_generate_npc_from_prompt() {
-    if !viewer_can_see_npc_gm_secrets() {
+    if !viewer_can_manage_npcs() {
         append_system_notice("Only the Game Master (or Solo Mode host) can roll up new NPCs.");
         return;
     }
@@ -822,5 +1058,53 @@ mod tests {
             !player_html.contains("satyaToggleNpcPersistence")
                 && !player_html.contains("satyaDeleteSessionNpc")
         );
+    }
+
+    #[test]
+    fn test_solo_gm_manage_vs_spoiler_shield_and_campaign_catalog() {
+        let solo = Participant::human("u-solo", "solo", "Solo", SessionRole::SoloGm);
+        let roster = [solo.clone()];
+        assert!(can_viewer_manage_npcs(Some("s1"), Some(&solo), &roster));
+        assert!(can_viewer_see_npc_secrets(
+            Some("s1"),
+            Some(&solo),
+            &roster,
+            true
+        ));
+        assert!(!can_viewer_see_npc_secrets(
+            Some("s1"),
+            Some(&solo),
+            &roster,
+            false
+        ));
+
+        let bandajara = SessionNpcEntry {
+            character_id: "dr_bandajara".to_string(),
+            character_name: "Dr. Bandajara".to_string(),
+            callsign_or_role: "AI Researcher".to_string(),
+            age_years: 42,
+            public_summary: "Eurasian researcher carrying an analog notebook.".to_string(),
+            apparent_condition: "guarded".to_string(),
+            ..Default::default()
+        };
+        let alex = SessionNpcEntry {
+            character_id: "alex_wen".to_string(),
+            character_name: "Alex Wen".to_string(),
+            callsign_or_role: "Navy SARC / PT".to_string(),
+            age_years: 25,
+            public_summary: "Protective veteran medic.".to_string(),
+            apparent_condition: "cautious".to_string(),
+            ..Default::default()
+        };
+        let html = format_campaign_npc_catalog_html(
+            &[bandajara.clone(), alex],
+            &[bandajara],
+            true,
+        );
+        assert!(html.contains("Dr. Bandajara"));
+        assert!(html.contains("In Session"));
+        assert!(html.contains("window.satyaSelectStarterNpcPreview('dr_bandajara')"));
+        assert!(html.contains("window.satyaLoadStarterNpc('alex_wen')"));
+        assert!(!html.contains("window.satyaLoadStarterNpc('dr_bandajara')"));
     }
 }

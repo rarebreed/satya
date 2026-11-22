@@ -209,7 +209,7 @@ async fn handle_ws_client(
                             .iter()
                             .filter(|p| {
                                 p.participant_kind == ParticipantKind::Human
-                                    && p.role == SessionRole::Player
+                                    && p.role.is_player_actor()
                             })
                             .count()
                             >= 2;
@@ -243,7 +243,7 @@ async fn handle_ws_client(
                                     &roster_clone,
                                 )
                                 .await;
-                                if self_part_clone.role == SessionRole::Player
+                                if self_part_clone.role.is_player_actor()
                                     && !multi_human_players
                                     && visibility == MessageVisibility::Public
                                     && channel_context == ChannelContext::InCharacter
@@ -258,13 +258,13 @@ async fn handle_ws_client(
                                 }
                             });
                         } else if visibility == MessageVisibility::Public
-                            && ((self_participant.role == SessionRole::Player
+                            && ((self_participant.role.is_player_actor()
                                 && channel_context == ChannelContext::InCharacter
                                 && (!multi_human_players
                                     || current_roster
                                         .iter()
                                         .all(|p| p.role != SessionRole::AiGm)))
-                                || (self_participant.role == SessionRole::Gm
+                                || (self_participant.role.is_human_gm_or_co_gm()
                                     && matches!(
                                         channel_context,
                                         ChannelContext::GmNarration | ChannelContext::InCharacter
@@ -751,11 +751,15 @@ async fn handle_ws_client(
                                 &roster_clone,
                             )
                             .await;
-                            if self_part_clone.role == SessionRole::Player
-                                && !current_roster.iter().filter(|p| {
-                                    p.participant_kind == ParticipantKind::Human
-                                        && p.role == SessionRole::Player
-                                }).count().ge(&2)
+                            if self_part_clone.role.is_player_actor()
+                                && !current_roster
+                                    .iter()
+                                    .filter(|p| {
+                                        p.participant_kind == ParticipantKind::Human
+                                            && p.role.is_player_actor()
+                                    })
+                                    .count()
+                                    .ge(&2)
                             {
                                 trigger_auto_ai_players_for_human_turn(
                                     &state_clone,

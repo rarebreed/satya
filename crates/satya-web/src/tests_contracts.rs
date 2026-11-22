@@ -194,6 +194,40 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
                 updated_at_us: 1,
             },
         ]);
+    let lore_hit = satya_schema::GmLookupHit {
+        source_kind: satya_schema::GmLookupSourceKind::CampaignLore,
+        item_id: "docs/campaign/03-minds-and-factions/major_characters.md#1".to_string(),
+        title: "Dr. Budi Bandajara".to_string(),
+        subtitle: "Campaign Lore (awakened)".to_string(),
+        snippet: "Malaysian mathematician.".to_string(),
+        is_persistent: true,
+        score: 50,
+        section_anchor: Some("dr-budi-bandajara".to_string()),
+        is_campaign_default: true,
+        ..Default::default()
+    };
+    let rules_hit = satya_schema::GmLookupHit {
+        source_kind: satya_schema::GmLookupSourceKind::RulesBook,
+        item_id: "tasks".to_string(),
+        title: "Tasks — Contested Checks".to_string(),
+        subtitle: "Rules Book".to_string(),
+        snippet: "2d20 cascade.".to_string(),
+        is_persistent: true,
+        score: 45,
+        section_anchor: Some("contested-checks".to_string()),
+        is_campaign_default: true,
+        ..Default::default()
+    };
+    let starter_npc_entry = satya_schema::SessionNpcEntry {
+        character_id: "dr_bandajara".to_string(),
+        character_name: "Dr. Bandajara".to_string(),
+        callsign_or_role: "AI Researcher".to_string(),
+        age_years: 42,
+        public_summary: "Researcher".to_string(),
+        apparent_condition: "guarded".to_string(),
+        is_persistent: true,
+        ..Default::default()
+    };
     let omnisearch_html = crate::wasm_client::gm_omnisearch::format_gm_omnisearch_hits_html(
         &satya_schema::GmOmnisearchResponse {
             session_id: "sess-c".to_string(),
@@ -201,6 +235,8 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
             query: String::new(),
             scope: "ALL".to_string(),
             hits: vec![
+                lore_hit.clone(),
+                rules_hit.clone(),
                 satya_schema::GmLookupHit {
                     source_kind: satya_schema::GmLookupSourceKind::GmDocument,
                     item_id: "doc_contract".to_string(),
@@ -209,6 +245,8 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
                     snippet: "Classified".to_string(),
                     is_persistent: true,
                     score: 25,
+                    can_delete: true,
+                    ..Default::default()
                 },
                 satya_schema::GmLookupHit {
                     source_kind: satya_schema::GmLookupSourceKind::GmMemory,
@@ -218,6 +256,8 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
                     snippet: "Tick".to_string(),
                     is_persistent: true,
                     score: 25,
+                    can_delete: true,
+                    ..Default::default()
                 },
                 satya_schema::GmLookupHit {
                     source_kind: satya_schema::GmLookupSourceKind::SessionNpc,
@@ -227,10 +267,59 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
                     snippet: "Broker".to_string(),
                     is_persistent: true,
                     score: 48,
+                    can_delete: true,
+                    ..Default::default()
+                },
+                satya_schema::GmLookupHit {
+                    source_kind: satya_schema::GmLookupSourceKind::SessionNpc,
+                    item_id: "alex_wen".to_string(),
+                    title: "Alex Wen".to_string(),
+                    subtitle: "Campaign NPC (awakened · Not Loaded)".to_string(),
+                    snippet: "Corpsman".to_string(),
+                    is_persistent: false,
+                    score: 24,
+                    is_campaign_default: true,
+                    ..Default::default()
                 },
             ],
         },
     );
+    let catalog_html = crate::wasm_client::npcs::format_campaign_npc_catalog_html(
+        std::slice::from_ref(&starter_npc_entry),
+        &[],
+        true,
+    );
+    let (_, _, _, modal_actions_npc) =
+        crate::wasm_client::gm_omnisearch::format_archivist_modal_html(
+            &satya_schema::GmLookupHit {
+                source_kind: satya_schema::GmLookupSourceKind::SessionNpc,
+                item_id: "npc_contract".to_string(),
+                title: "Sammat".to_string(),
+                subtitle: "Session NPC".to_string(),
+                snippet: "Broker".to_string(),
+                is_persistent: true,
+                score: 48,
+                can_delete: true,
+                ..Default::default()
+            },
+            "Broker",
+            true,
+            Some(&starter_npc_entry),
+        );
+    let (_, _, _, modal_actions_rules) =
+        crate::wasm_client::gm_omnisearch::format_archivist_modal_html(
+            &rules_hit, "Rules", true, None,
+        );
+    let (_, _, _, modal_actions_lore) =
+        crate::wasm_client::gm_omnisearch::format_archivist_modal_html(
+            &lore_hit, "Lore", true, None,
+        );
+    let mut extras = String::new();
+    extras.push_str(&catalog_html);
+    extras.push_str(&modal_actions_npc);
+    extras.push_str(&modal_actions_rules);
+    extras.push_str(&modal_actions_lore);
+    let omnisearch_html = format!("{omnisearch_html}\n{extras}");
     let npc_card_html = crate::wasm_client::npcs::format_npc_card_html(
         &satya_schema::SessionNpcEntry {
             character_id: "npc_contract".to_string(),

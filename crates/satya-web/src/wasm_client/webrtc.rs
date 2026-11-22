@@ -269,6 +269,10 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             ));
             satya_refresh_metrics();
         }
+        ServerWsPacket::NpcRosterUpdated { .. } => {
+            crate::wasm_client::npcs::satya_refresh_npcs_tab();
+            crate::wasm_client::gm_omnisearch::refresh_gm_omnisearch_if_active();
+        }
         ServerWsPacket::WebrtcSignal {
             from_participant,
             signal_kind,

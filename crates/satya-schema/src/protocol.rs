@@ -355,6 +355,11 @@ pub enum ServerWsPacket {
         /// Sanitized `GM_ONLY` document record.
         document: Box<GmDocumentRecord>,
     },
+    /// Signals that the persisted session NPC roster (`session_npcs`) was created, updated, or deleted.
+    NpcRosterUpdated {
+        /// Session ID whose NPC roster changed.
+        session_id: String,
+    },
 }
 
 /// Source format of a `GM_ONLY` document submitted to the session Game Master.
@@ -636,7 +641,9 @@ pub struct UpdateCombatTrackerRequest {
 
 crate::define_wire_enum! {
     /// Source domain of a unified GM Omnisearch hit (`GET /api/sessions/:session_id/lookup`).
+    #[derive(Default)]
     pub enum GmLookupSourceKind [count = 8] {
+        #[default]
         RulesBook => ("RULES_BOOK", "Rules Book"),
         GmDocument => ("GM_DOCUMENT", "GM Document"),
         GmMemory => ("GM_MEMORY", "GM Memory"),
@@ -649,7 +656,7 @@ crate::define_wire_enum! {
 }
 
 /// Single ranked search or state lookup hit returned by `GET /api/sessions/:session_id/lookup`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GmLookupHit {
     pub source_kind: GmLookupSourceKind,
     pub item_id: String,
@@ -658,6 +665,42 @@ pub struct GmLookupHit {
     pub snippet: String,
     pub is_persistent: bool,
     pub score: usize,
+    /// Optional heading anchor slug inside a Rules Book or Campaign Lore chapter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section_anchor: Option<String>,
+    /// Whether the caller may delete this hit (always `false` for built-in campaign defaults).
+    #[serde(default)]
+    pub can_delete: bool,
+    /// `true` for built-in Rules Book chapters, Campaign Lore chapters, clocks, and unloaded Starter NPCs.
+    #[serde(default)]
+    pub is_campaign_default: bool,
+}
+
+/// Metadata summary for a single Campaign Lore Markdown chapter.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignLoreChapterSummary {
+    pub relative_path: String,
+    pub title: String,
+    pub part: String,
+    pub visibility: String,
+    #[serde(default)]
+    pub headings: Vec<String>,
+}
+
+/// Catalog response returned by `GET /api/sessions/:session_id/lore` and `GET /api/campaign/lore`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignLoreCatalogResponse {
+    pub pack_name: String,
+    pub chapters: Vec<CampaignLoreChapterSummary>,
+}
+
+/// Rendered Campaign Lore chapter returned by `GET /api/sessions/:session_id/lore/chapter`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignLoreChapterDocument {
+    pub pack_name: String,
+    pub summary: CampaignLoreChapterSummary,
+    pub markdown: String,
+    pub rendered_html: String,
 }
 
 /// Unified response returned by `GET /api/sessions/:session_id/lookup` for both Human GM Omnisearch and AI GM RAG/MCP lookup.

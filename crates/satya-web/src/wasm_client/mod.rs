@@ -130,6 +130,7 @@ macro_rules! for_all_window_callbacks {
             "satyaRefreshSavedSessions" => satya_refresh_saved_sessions(),
             "satyaSelectSavedSession" => satya_select_saved_session(),
             "satyaResumeSavedSession" => satya_resume_saved_session(),
+            "satyaResumeAsSoloGm" => satya_resume_as_solo_gm(),
             "satyaExportSessionSnapshot" => satya_export_session_snapshot(),
             "satyaImportSessionSnapshot" => satya_import_session_snapshot(),
             "satyaExportChatTranscript" => satya_export_chat_transcript(String),
@@ -268,6 +269,9 @@ macro_rules! for_all_window_callbacks {
             "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
             "satyaOpenCombatantDetails" => satya_open_combatant_details(String, String),
             "satyaSelectRulesChapter" => satya_select_rules_chapter(String),
+            "satyaSelectReaderSource" => satya_select_reader_source(String),
+            "satyaOpenRulesSection" => satya_open_rules_section(String, String),
+            "satyaOpenCampaignLoreSection" => satya_open_campaign_lore_section(String, String),
             "satyaSearchRulesBook" => satya_search_rules_book(),
 
             // GM Document Vault & Google Drive Picker
@@ -292,12 +296,18 @@ macro_rules! for_all_window_callbacks {
             "satyaApplyScenarioPreset" => satya_apply_scenario_preset(String),
             "satyaSaveScenarioDirectorConfig" => satya_save_scenario_director_config(),
             "satyaSearchGmOmnisearch" => satya_search_gm_omnisearch(),
+            "satyaOpenArchivistHit" => satya_open_archivist_hit(String),
+            "satyaCloseArchivistModal" => satya_close_archivist_modal(),
+            "satyaInspectNpcFromArchivist" => satya_inspect_npc_from_archivist(String),
             "satyaRefreshNpcsTab" => satya_refresh_npcs_tab(),
             "satyaSelectNpcFromList" => satya_select_npc_from_list(),
             "satyaToggleNpcPersistence" => satya_toggle_npc_persistence(String, bool),
             "satyaDeleteSessionNpc" => satya_delete_session_npc(String),
             "satyaGenerateNpcFromPrompt" => satya_generate_npc_from_prompt(),
             "satyaLoadSelectedNpcToSheet" => satya_load_selected_npc_to_sheet(),
+            "satyaLoadStarterNpc" => satya_load_starter_npc(String),
+            "satyaSelectStarterNpcPreview" => satya_select_starter_npc_preview(String),
+            "satyaToggleSoloSpoilerShield" => satya_toggle_solo_spoiler_shield(),
 
             // 6-Step Character Creation Wizard
             "satyaWizardSetStep" => satya_wizard_set_step(u8),

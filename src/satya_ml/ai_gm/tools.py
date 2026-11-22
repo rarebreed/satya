@@ -8,6 +8,7 @@ loading via `langchain-mcp-adapters`.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import random
@@ -17,6 +18,8 @@ import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final, cast
+
+logger = logging.getLogger("satya_ml.ai_gm.tools")
 
 from satya_py.combat import CharacterTacticalEnvelope
 from satya_py.enums import (
@@ -42,6 +45,8 @@ from satya_ml.ai_gm.tool_spec import (
 from satya_ml.signaling_client import (
     OFFLINE_SIGNALING_VALUES as _OFFLINE_SIGNALING_VALUES,
     gm_service_token,
+    http_delete_json,
+    http_delete_json_detailed,
     http_get_json,
     http_post_json,
     httpx_timeout as _httpx_timeout,
@@ -74,6 +79,18 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
 def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
     """GET JSON from `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
     return http_get_json(url, timeout=timeout)
+
+
+def _http_delete_json_detailed(
+    url: str, timeout: float = 2.5
+) -> tuple[dict[str, Any] | None, int | None, str | None]:
+    """DELETE at `url` with GM service headers, returning `(parsed_json, status_code, error_body)`."""
+    return http_delete_json_detailed(url, timeout=timeout)
+
+
+def _http_delete_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
+    """DELETE at `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
+    return http_delete_json(url, timeout=timeout)
 
 
 from satya_py import campaign as _campaign, combat as _combat, dice as _dice
@@ -112,7 +129,7 @@ def set_session_operating_mode(
     mode: str,
     human_gm_user_id: str | None = None,
 ) -> None:
-    """Record the operating mode ('autonomous' or 'co_pilot') and clear or set optional human GM ID."""
+    """Record the operating mode ('autonomous', 'co_pilot', or 'solo_co_gm') and optional human GM ID."""
     _SESSION_MODES[session_id] = mode
     if human_gm_user_id is None:
         _SESSION_HUMAN_GMS.pop(session_id, None)
@@ -121,7 +138,7 @@ def set_session_operating_mode(
 
 
 def get_session_operating_mode(session_id: str) -> str:
-    """Return the operating mode ('autonomous' or 'co_pilot') for a session."""
+    """Return the operating mode ('autonomous', 'co_pilot', or 'solo_co_gm') for a session."""
     return _SESSION_MODES.get(session_id, "autonomous")
 
 
@@ -180,6 +197,7 @@ def get_session_combat_tracker(session_id: str) -> dict[str, Any]:
 
 
 _SESSION_NPC_PACKS: Final[SessionStore[str]] = SessionStore()
+_SESSION_PERSISTED_NPCS: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()
 
 
 def reset_session_npcs(session_id: str | None = None) -> None:
@@ -188,6 +206,35 @@ def reset_session_npcs(session_id: str | None = None) -> None:
 
 
 reset_session_gm_state = reset_session_npcs
+
+
+def get_persisted_session_npcs(session_id: str) -> list[dict[str, Any]] | None:
+    """Return the most recent signaling-persisted NPC roster for `session_id`, or `None` if signaling has not been queried."""
+    if session_id not in _SESSION_PERSISTED_NPCS:
+        return None
+    return [dict(item) for item in _SESSION_PERSISTED_NPCS[session_id]]
+
+
+def _upsert_persisted_session_npc(session_id: str, norm_entry: dict[str, Any]) -> None:
+    """Insert or update `norm_entry` in `_SESSION_PERSISTED_NPCS[session_id]`, deduplicating by ID and name."""
+    nid = str(norm_entry.get("npc_id") or "").strip().lower()
+    name_low = str(norm_entry.get("name") or "").strip().lower()
+    existing = list(_SESSION_PERSISTED_NPCS.get(session_id, []))
+    filtered = [
+        item
+        for item in existing
+        if str(item.get("npc_id") or "").strip().lower() != nid
+        and (not name_low or str(item.get("name") or "").strip().lower() != name_low)
+    ]
+    _SESSION_PERSISTED_NPCS[session_id] = [dict(norm_entry), *filtered]
+
+
+def _ensure_session_npcs_initialized(session_id: str) -> dict[str, dict[str, Any]]:
+    active_pack = get_active_campaign_pack_name()
+    if session_id not in _SESSION_NPCS or _SESSION_NPC_PACKS.get(session_id) != active_pack:
+        _SESSION_NPCS[session_id] = load_all_npc_profiles()
+        _SESSION_NPC_PACKS[session_id] = active_pack
+    return _SESSION_NPCS[session_id]
 
 
 def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
@@ -232,19 +279,27 @@ def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, 
 
 def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
     """Return the mutable NPC state dictionary for `session_id`, non-destructively merging signaling state."""
-    active_pack = get_active_campaign_pack_name()
-    if session_id not in _SESSION_NPCS or _SESSION_NPC_PACKS.get(session_id) != active_pack:
-        _SESSION_NPCS[session_id] = load_all_npc_profiles()
-        _SESSION_NPC_PACKS[session_id] = active_pack
-    npcs = _SESSION_NPCS[session_id]
+    npcs = _ensure_session_npcs_initialized(session_id)
     base = _signaling_base_url()
     if base:
-        data = _http_get_json(f"{base}/api/gm/sessions/{session_id}/npcs", timeout=1.5)
+        encoded_sid = urllib.parse.quote(session_id, safe="")
+        data = _http_get_json(f"{base}/api/gm/sessions/{encoded_sid}/npcs", timeout=1.5)
         if isinstance(data, dict):
+            starter_ids = set(load_all_npc_profiles())
+            prev_persisted_ids = {
+                str(item.get("npc_id") or "").strip().lower()
+                for item in _SESSION_PERSISTED_NPCS.get(session_id, [])
+                if isinstance(item, dict) and item.get("npc_id")
+            }
+            remote_list: list[dict[str, Any]] = []
+            remote_ids: set[str] = set()
             for raw_entry in data.get("npcs") or []:
                 if isinstance(raw_entry, dict) and raw_entry.get("character_id"):
                     norm = _normalize_remote_npc_entry(raw_entry)
-                    existing = npcs.get(norm["npc_id"])
+                    nid = norm["npc_id"]
+                    remote_ids.add(nid)
+                    remote_list.append(norm)
+                    existing = npcs.get(nid)
                     if existing is not None:
                         has_gm_char = isinstance(raw_entry.get("gm_character"), dict) and bool(
                             raw_entry.get("gm_character")
@@ -265,9 +320,13 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
                             norm["disposition"] = existing["disposition"]
                         if not raw_entry.get("gm_secret_dossier") and existing.get("secrets"):
                             norm["secrets"] = list(existing["secrets"])
-                        npcs[norm["npc_id"]] = {**existing, **norm}
+                        npcs[nid] = {**existing, **norm}
                     else:
-                        npcs[norm["npc_id"]] = norm
+                        npcs[nid] = norm
+            for stale_id in prev_persisted_ids - remote_ids:
+                if stale_id not in starter_ids:
+                    npcs.pop(stale_id, None)
+            _SESSION_PERSISTED_NPCS[session_id] = remote_list
     return npcs
 
 
@@ -276,16 +335,71 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
 # ============================================================================
 
 
+def _compact_npc_summary(profile: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    return {
+        "npc_id": str(profile.get("npc_id") or fallback_id),
+        "name": str(profile.get("name") or fallback_id),
+        "archetype": str(profile.get("archetype") or "NPC"),
+        "faction": str(profile.get("faction") or "Independent"),
+        "disposition": str(profile.get("disposition") or "wary"),
+        "apparent_condition": str(profile.get("apparent_condition") or "Healthy & Alert"),
+    }
+
+
 @satya_gm_tool(pack="core", tier="TIER_2_RULESET_ENGINE", ooc_readonly=True)
-def lookup_npc_profile(npc_id: str, session_id: str = "default") -> dict[str, Any]:
-    """Read an NPC's Satya d20 profile, attribute TNs, skills, psyche, agenda, combat stance, and secrets."""
+def lookup_npc_profile(npc_id: str = "all", session_id: str = "default") -> dict[str, Any]:
+    """Read an NPC's Satya d20 profile, attribute TNs, skills, psyche, agenda, combat stance, and secrets.
+
+    Pass a specific NPC name/ID, or pass `"all"` / `"list"` / `""` to list all active persisted Session NPCs
+    alongside available campaign starter contacts.
+    """
     npcs = get_session_npcs(session_id)
+    persisted = get_persisted_session_npcs(session_id) or []
+    persisted_ids = {
+        str(entry.get("npc_id") or "").strip().lower()
+        for entry in persisted
+        if entry.get("npc_id")
+    }
+    starter_ids = set(load_all_npc_profiles())
+
+    def _annotate_profile(cid: str, profile: dict[str, Any]) -> dict[str, Any]:
+        cid_low = cid.strip().lower()
+        in_session = cid_low in persisted_ids
+        is_starter = cid_low in starter_ids
+        annotated = {
+            **profile,
+            "in_session_npc_list": in_session,
+            "is_campaign_starter": is_starter,
+        }
+        if is_starter and not in_session:
+            annotated["load_hint"] = (
+                f"Not yet persisted in Session NPC List; call load_campaign_npc(npc_id_or_name='{cid}') "
+                "to load this starter NPC into the session."
+            )
+        return annotated
+
     key = npc_id.strip().lower()
+    if key in {"", "*", "all", "list"}:
+        starter_entries = [
+            _compact_npc_summary(profile, cid)
+            for cid, profile in npcs.items()
+            if cid.strip().lower() not in persisted_ids
+        ]
+        return {
+            "session_npcs": [_compact_npc_summary(p, str(p.get("npc_id") or "")) for p in persisted],
+            "session_npc_count": len(persisted),
+            "starter_pack_npcs": starter_entries,
+            "note": (
+                "Only `session_npcs` are persisted in the Tabletop Notebook `NPC List`. "
+                "Call `load_campaign_npc` to load a listed `starter_pack_npcs` contact into the session, "
+                "or `generate_npc_from_description` to create a brand-new NPC."
+            ),
+        }
     if key in npcs:
-        return npcs[key]
+        return _annotate_profile(key, npcs[key])
     for candidate_id, profile in npcs.items():
         if key in candidate_id.lower() or key in str(profile.get("name", "")).lower():
-            return profile
+            return _annotate_profile(candidate_id, profile)
     return {
         "error": f"NPC '{npc_id}' not found",
         "available_npcs": sorted(npcs.keys()),
@@ -340,7 +454,9 @@ def update_npc_state(
                 f"{npc.get('disposition', 'steady')} · Fat {npc['fatigue']}/Shock {npc['wound_shock']}"
             )
         if patch_body:
-            url = f"{base}/api/gm/sessions/{session_id}/npcs/{target_key}"
+            encoded_sid = urllib.parse.quote(session_id, safe="")
+            encoded_key = urllib.parse.quote(target_key, safe="")
+            url = f"{base}/api/gm/sessions/{encoded_sid}/npcs/{encoded_key}"
             try:
                 with httpx.Client(timeout=_httpx_timeout(url, 1.5)) as client:
                     client.patch(
@@ -364,9 +480,14 @@ def generate_npc_from_description(
     session_id: str = "default",
 ) -> dict[str, Any]:
     """Roll up a complete Satya NPC (32 Characteristics including 9 bipolar Psyche traits `EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS`, 5-Stage Lifepath, Skills, Faction Tags, and Motivational Profile) from a short description and/or template: generic (`AUTO`, `MEDICAL_DOCTOR`, `COMBAT_SOLDIER`, `DETECTIVE_INVESTIGATOR`, `SYNDICATE_ENFORCER`, `STEM_ENGINEER`, `INTELLIGENCE_OPERATIVE`, `BLUE_COLLAR_TECH`, `FRONTIER_RANGER`) or one of the 14 Awakened Faction Sub-Archetypes (`SATYANG_MANJUSRI`, `SATYANG_AVALOKITESVARA`, `SATYANG_KSITIGARBHA`, `SATYANG_VAJRAPANI`, `SATYANG_BLUE_LOTUS`, `BIG_TECH_EXECUTIVE_HAWK`, `BIG_TECH_CONFLICTED_RESEARCHER`, `BIG_TECH_CORPORATE_SECOPS`, `HUMANIS_DISPLACED_POPULIST`, `HUMANIS_APOCALYPTIC_VANGUARD`, `DAISE_CONTAINMENT_INSPECTOR`, `GOV_BLACK_BUDGET_HANDLER`, `ROGUE_AI_SLIME_MOLD_SWARM`, `ROGUE_AI_AWAKENED_MIND`)."""
+    clean_name = (
+        name_override.strip()
+        if isinstance(name_override, str) and name_override.strip()
+        else None
+    )
     payload = {
         "prompt": description,
-        "name_override": name_override,
+        "name_override": clean_name,
         "template": template,
         "career_terms": max(1, min(4, int(career_terms))),
         "seed": 0,
@@ -374,28 +495,39 @@ def generate_npc_from_description(
         "is_persistent": bool(is_persistent),
         "campaign_tag": session_id,
     }
-    remote_res = _http_post_json(
-        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs/generate",
-        payload,
-        timeout=3.0,
-    )
+    base = _signaling_base_url()
+    remote_res: dict[str, Any] | None = None
+    if base:
+        encoded_sid = urllib.parse.quote(session_id, safe="")
+        remote_res = _http_post_json(
+            f"{base}/api/gm/sessions/{encoded_sid}/npcs/generate",
+            payload,
+            timeout=5.0,
+        )
     if remote_res is not None and isinstance(remote_res.get("npc"), dict):
         npc_entry = dict(remote_res["npc"])
-        _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry.get("character_id", "")).lower()] = (
-            _normalize_remote_npc_entry(npc_entry)
-        )
+        norm = _normalize_remote_npc_entry(npc_entry)
+        _ensure_session_npcs_initialized(session_id)[norm["npc_id"]] = norm
+        _upsert_persisted_session_npc(session_id, norm)
         gm_char = npc_entry.get("gm_character")
         if isinstance(gm_char, dict):
             chars = get_session_characters(session_id)
             chars = [c for c in chars if c.get("character_id") != gm_char.get("character_id")]
             chars.append(gm_char)
             set_session_characters(session_id, chars)
-        return remote_res
+        return {**remote_res, "persisted_to_signaling": True}
+
+    if base:
+        logger.warning(
+            "[generate_npc_from_description] Failed to persist NPC to signaling (%s) for session='%s'; falling back to local AI GM memory only (will not appear in Notebook NPC List).",
+            base,
+            session_id,
+        )
 
     gen_res = _campaign.generate_npc_profile(
         description,
         template,
-        name_override,
+        clean_name,
         max(1, min(4, int(career_terms))),
         42,
         get_active_campaign_pack_name(),
@@ -407,7 +539,7 @@ def generate_npc_from_description(
         dossier = f"{dossier}\nGM Secret Notes: {gm_secret_notes.strip()}".strip()
         ch["notes"] = dossier
     cid = str(ch.get("character_id") or f"npc-{uuid.uuid4().hex[:8]}")
-    cname = str(ch.get("character_name") or name_override or "Generated Contact")
+    cname = str(ch.get("character_name") or clean_name or "Generated Contact")
     crole = str(ch.get("callsign_or_role") or "Specialist")
     npc_entry = {
         "character_id": cid,
@@ -446,7 +578,7 @@ def generate_npc_from_description(
         "social_combat_wedge_hint": motiv.get("dual_psyche_wedge"),
         "awakened_social_origin_hook": gen_res.get("awakened_social_origin_hook"),
     }
-    _SESSION_NPCS.setdefault(session_id, {})[cid.lower()] = _normalize_remote_npc_entry(npc_entry)
+    _ensure_session_npcs_initialized(session_id)[cid.lower()] = _normalize_remote_npc_entry(npc_entry)
     if ch:
         chars = get_session_characters(session_id)
         chars = [c for c in chars if c.get("character_id") != ch.get("character_id")]
@@ -466,13 +598,219 @@ def generate_npc_from_description(
             }
         )
 
-    return {
+    out: dict[str, Any] = {
         "npc": npc_entry,
         "motivation": motiv,
         "gm_memory": gm_mem,
-        "offline_fallback": False,
+        "offline_fallback": True,
+        "persisted_to_signaling": False,
         "engine_backed": True,
     }
+    if base:
+        out["warning"] = (
+            "Signaling persistence failed; NPC exists only in local AI GM memory "
+            "and will not appear in the Tabletop Notebook NPC List."
+        )
+    return out
+
+
+def get_available_campaign_starter_npcs(session_id: str) -> list[dict[str, str]]:
+    """Return active-pack starter NPCs not yet persisted in the session's `NPC List`."""
+    starters = load_all_npc_profiles()
+    persisted = get_persisted_session_npcs(session_id) or []
+    persisted_ids = {
+        str(item.get("npc_id") or "").strip().lower()
+        for item in persisted
+        if isinstance(item, dict) and item.get("npc_id")
+    }
+    persisted_names = {
+        str(item.get("name") or "").strip().lower()
+        for item in persisted
+        if isinstance(item, dict) and item.get("name")
+    }
+    available: list[dict[str, str]] = []
+    for starter_id, profile in starters.items():
+        sid_low = starter_id.strip().lower()
+        name_val = str(profile.get("name") or starter_id).strip()
+        if sid_low in persisted_ids or name_val.lower() in persisted_names:
+            continue
+        available.append(
+            {
+                "npc_id": starter_id,
+                "name": name_val,
+                "archetype": str(profile.get("archetype") or "NPC"),
+                "faction": str(profile.get("faction") or "Independent"),
+            }
+        )
+    return available
+
+
+def _resolve_starter_npc_match(
+    needle: str, starters: dict[str, dict[str, Any]]
+) -> tuple[str, dict[str, Any]] | None:
+    raw = needle.strip().lower()
+    if not raw:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+    for candidate_id, profile in starters.items():
+        cid_low = candidate_id.strip().lower()
+        if raw == cid_low or (slug and slug == cid_low):
+            return candidate_id, profile
+    for candidate_id, profile in starters.items():
+        name_low = str(profile.get("name") or "").strip().lower()
+        if raw == name_low:
+            return candidate_id, profile
+    tokens = [tok for tok in re.split(r"[^a-z0-9]+", raw) if tok]
+    for candidate_id, profile in starters.items():
+        hay = f"{candidate_id} {profile.get('name', '')} {profile.get('archetype', '')}".lower()
+        if raw in hay or (tokens and all(tok in hay for tok in tokens)):
+            return candidate_id, profile
+    return None
+
+
+def _build_offline_starter_npc_entry(
+    starter_id: str,
+    profile: dict[str, Any],
+    is_persistent: bool,
+) -> dict[str, Any]:
+    secrets = [str(s) for s in (profile.get("secrets") or []) if s]
+    dossier = (
+        "\n".join(secrets)
+        if secrets
+        else str(profile.get("notes") or profile.get("public_summary") or "")
+    )
+    cname = str(profile.get("name") or starter_id)
+    crole = str(profile.get("archetype") or "NPC")
+    gm_char = {
+        "character_id": starter_id,
+        "character_name": cname,
+        "callsign_or_role": crole,
+        "faction_id": profile.get("faction_id"),
+        "faction_archetype": profile.get("faction_archetype"),
+        "age_years": int(profile.get("age_years", 34) or 34),
+        "attribute_tns": dict(profile.get("attribute_tns") or {}),
+        "skills": dict(profile.get("skills") or {}),
+        "combat_stance": normalize_combat_stance(
+            profile.get("combat_stance"),
+            default=CombatStance.STABILITY,
+        ).value,
+        "morale_state": str(profile.get("morale_state") or "steady").lower(),
+        "fatigue_level": int(profile.get("fatigue", 0) or 0),
+        "wound_shock_index": int(profile.get("wound_shock", 0) or 0),
+        "notes": str(profile.get("notes") or ""),
+    }
+    return {
+        "character_id": starter_id,
+        "character_name": cname,
+        "callsign_or_role": crole,
+        "faction_id": profile.get("faction_id"),
+        "faction_archetype": profile.get("faction_archetype"),
+        "age_years": gm_char["age_years"],
+        "public_summary": str(profile.get("public_summary") or profile.get("notes") or ""),
+        "apparent_condition": str(profile.get("apparent_condition") or "Healthy & Alert"),
+        "is_persistent": bool(is_persistent),
+        "gm_character": gm_char,
+        "psyche_summary": list(profile.get("psyche_summary") or []),
+        "top_skills": [
+            f"{k} (N={v})"
+            for k, v in sorted(
+                (profile.get("skills") or {}).items(),
+                key=lambda kv: -int(kv[1]),
+            )[:4]
+        ],
+        "gm_secret_dossier": dossier,
+        "disposition": str(profile.get("disposition") or "wary"),
+        "morale_state": str(profile.get("morale_state") or "steady").lower(),
+        "immediate_agenda": profile.get("immediate_agenda"),
+        "core_drive": profile.get("core_drive"),
+        "dual_psyche_wedge_hint": profile.get("dual_psyche_wedge_hint"),
+        "social_combat_wedge_hint": profile.get("dual_psyche_wedge_hint"),
+        "is_campaign_starter": True,
+    }
+
+
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER")
+def load_campaign_npc(
+    npc_id_or_name: str,
+    is_persistent: bool = True,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Load an official campaign starter NPC (e.g. `dr_bandajara`, `alex_wen`, `satyang_sister_lin`) into this session's persisted NPC List & Vault."""
+    needle = str(npc_id_or_name or "").strip()
+    if not needle:
+        return {
+            "error": "npc_id_or_name is required.",
+            "available_starter_npcs": get_available_campaign_starter_npcs(session_id),
+        }
+
+    starters = load_all_npc_profiles()
+    match = _resolve_starter_npc_match(needle, starters)
+    target_id = match[0] if match is not None else needle
+
+    base = _signaling_base_url()
+    remote_res: dict[str, Any] | None = None
+    if base:
+        encoded_sid = urllib.parse.quote(session_id, safe="")
+        payload = {
+            "npc_id": target_id,
+            "is_persistent": bool(is_persistent),
+            "campaign_tag": session_id,
+        }
+        remote_res = _http_post_json(
+            f"{base}/api/gm/sessions/{encoded_sid}/npcs/load-starter",
+            payload,
+            timeout=3.5,
+        )
+
+    pack_name = get_active_campaign_pack_name()
+    if remote_res is not None and isinstance(remote_res.get("npc"), dict):
+        npc_entry = dict(remote_res["npc"])
+        norm = _normalize_remote_npc_entry(npc_entry)
+        _ensure_session_npcs_initialized(session_id)[norm["npc_id"]] = norm
+        _upsert_persisted_session_npc(session_id, norm)
+        gm_char = npc_entry.get("gm_character")
+        if isinstance(gm_char, dict):
+            chars = get_session_characters(session_id)
+            chars = [c for c in chars if c.get("character_id") != gm_char.get("character_id")]
+            chars.append(gm_char)
+            set_session_characters(session_id, chars)
+        return {
+            **remote_res,
+            "persisted_to_signaling": True,
+            "campaign_pack": pack_name,
+        }
+
+    if match is None:
+        return {
+            "error": f"Campaign starter NPC '{needle}' not found in active pack '{pack_name}'.",
+            "available_starter_npcs": get_available_campaign_starter_npcs(session_id),
+        }
+
+    starter_id, profile = match
+    npc_entry = _build_offline_starter_npc_entry(starter_id, profile, is_persistent)
+    norm = _normalize_remote_npc_entry(npc_entry)
+    _ensure_session_npcs_initialized(session_id)[norm["npc_id"]] = norm
+    _upsert_persisted_session_npc(session_id, norm)
+    gm_char = npc_entry.get("gm_character")
+    if isinstance(gm_char, dict):
+        chars = get_session_characters(session_id)
+        chars = [c for c in chars if c.get("character_id") != gm_char.get("character_id")]
+        chars.append(gm_char)
+        set_session_characters(session_id, chars)
+
+    out: dict[str, Any] = {
+        "npc": npc_entry,
+        "gm_memory": None,
+        "offline_fallback": True,
+        "persisted_to_signaling": False,
+        "campaign_pack": pack_name,
+    }
+    if base:
+        out["warning"] = (
+            "Signaling persistence failed; starter NPC loaded into local AI GM session memory only "
+            "and may not appear in the Tabletop Notebook NPC List until signaling reconnects."
+        )
+    return out
 
 
 # ============================================================================
@@ -1080,6 +1418,88 @@ def upsert_gm_memory(
     memories.append(local_note)
     set_session_gm_memories(session_id, memories)
     return local_note
+
+
+_CAMPAIGN_DEFAULT_ID_PREFIXES: Final[tuple[str, ...]] = ("default_", "campaign_default_")
+
+
+def _is_campaign_default_id(item_id: str) -> bool:
+    low = item_id.strip().lower()
+    return any(low.startswith(prefix) for prefix in _CAMPAIGN_DEFAULT_ID_PREFIXES)
+
+
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER")
+def delete_gm_memory(
+    memory_id: str,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Delete a non-default GM Memory Note from the shared Human + AI GM Vault (protects built-in campaign defaults)."""
+    mid = str(memory_id or "").strip()
+    if not mid:
+        return {
+            "status": "error",
+            "memory_id": mid,
+            "deleted": False,
+            "error": "memory_id is required.",
+        }
+
+    memories = get_session_gm_memories(session_id)
+    cached_match = next(
+        (m for m in memories if str(m.get("memory_id") or "").strip() == mid),
+        None,
+    )
+    if _is_campaign_default_id(mid) or bool(cached_match and cached_match.get("is_campaign_default")):
+        return {
+            "status": "forbidden",
+            "memory_id": mid,
+            "deleted": False,
+            "error": "Built-in campaign default GM memories cannot be deleted.",
+        }
+
+    base = _signaling_base_url()
+    if base:
+        encoded_sid = urllib.parse.quote(session_id, safe="")
+        encoded_mid = urllib.parse.quote(mid, safe="")
+        data, status, err_body = _http_delete_json_detailed(
+            f"{base}/api/gm/sessions/{encoded_sid}/memories/{encoded_mid}",
+            timeout=2.5,
+        )
+        if status == 200 and data is not None:
+            deleted_flag = bool(data.get("deleted", True))
+            if deleted_flag:
+                set_session_gm_memories(
+                    session_id,
+                    [m for m in memories if str(m.get("memory_id") or "").strip() != mid],
+                )
+            return {
+                "status": "ok",
+                "memory_id": mid,
+                "deleted": deleted_flag,
+                "persisted_to_signaling": True,
+            }
+        if status in {403, 404}:
+            return {
+                "status": "forbidden" if status == 403 else "error",
+                "memory_id": mid,
+                "deleted": False,
+                "persisted_to_signaling": False,
+                "error": err_body or f"HTTP {status}",
+            }
+
+    remaining = [m for m in memories if str(m.get("memory_id") or "").strip() != mid]
+    existed = len(remaining) < len(memories)
+    if existed:
+        set_session_gm_memories(session_id, remaining)
+    out: dict[str, Any] = {
+        "status": "ok",
+        "memory_id": mid,
+        "deleted": existed,
+        "offline_fallback": True,
+        "persisted_to_signaling": False,
+    }
+    if base:
+        out["warning"] = "Signaling DELETE failed or was unreachable; updated local AI GM cache only."
+    return out
 
 
 @satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER", ooc_readonly=True)

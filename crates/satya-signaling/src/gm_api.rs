@@ -228,7 +228,7 @@ pub async fn gm_session_chat_handler(
         && !ctx
             .roster
             .iter()
-            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Player)
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role.is_player_actor())
     {
         state
             .ensure_session_ai_players_loaded(session_id.trim())
@@ -254,7 +254,7 @@ pub async fn gm_session_chat_handler(
                         || ctx.roster.iter().any(|p| {
                             p.user_id == c.entity_id
                                 && p.participant_kind == ParticipantKind::Human
-                                && p.role == SessionRole::Player
+                                && p.role.is_player_actor()
                         })
                 })
                 .map(|c| c.next_action_tick)
@@ -572,7 +572,7 @@ pub async fn gm_session_roll_handler(
     let gm_recipient_ids: Vec<String> = ctx
         .roster
         .iter()
-        .filter(|p| matches!(p.role, SessionRole::Gm | SessionRole::Host | SessionRole::AiGm))
+        .filter(|p| p.role.is_gm_or_co_gm())
         .map(|p| p.user_id.clone())
         .collect();
 
@@ -1237,20 +1237,33 @@ pub async fn trigger_ai_gm_chat_reply(
         None => (None, None),
     };
 
+    let operating_mode = ctx_opt.as_ref().map(|c| c.operating_mode).unwrap_or_else(|| {
+        if roster
+            .iter()
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
+        {
+            AiGmOperatingMode::CoPilot
+        } else if roster
+            .iter()
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::SoloGm)
+        {
+            AiGmOperatingMode::SoloCoGm
+        } else {
+            AiGmOperatingMode::Autonomous
+        }
+    });
     let human_gm_user_id = ctx_opt
         .as_ref()
         .and_then(|c| c.human_gm_user_id.clone())
         .or_else(|| {
             roster
                 .iter()
-                .find(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
+                .find(|p| {
+                    p.participant_kind == ParticipantKind::Human
+                        && matches!(p.role, SessionRole::Gm | SessionRole::SoloGm)
+                })
                 .map(|p| p.user_id.clone())
         });
-    let operating_mode = if human_gm_user_id.is_some() {
-        AiGmOperatingMode::CoPilot
-    } else {
-        AiGmOperatingMode::Autonomous
-    };
 
     let provider = vault_opt
         .as_ref()

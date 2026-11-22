@@ -28,9 +28,18 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
     assert!(!wasm_client::is_ai_gm_mode("TTRPG_GM"));
     assert!(wasm_client::is_ai_gm_mode("TTRPG_GM_AI"));
     assert!(wasm_client::is_ai_gm_mode("TTRPG_AI_GM"));
+    assert!(wasm_client::is_ai_gm_mode("TTRPG_SOLO_AI_GM"));
     assert!(!wasm_client::is_ai_gm_mode("MEETING"));
     assert_eq!(wasm_client::parse_session_role("GM"), SessionRole::Gm);
+    assert_eq!(
+        wasm_client::parse_session_role("SOLO_GM"),
+        SessionRole::SoloGm
+    );
     assert_eq!(wasm_client::parse_session_role("HOST"), SessionRole::Host);
+    assert_eq!(
+        wasm_client::session_role_badge(SessionRole::SoloGm),
+        "Solo Co-GM"
+    );
     assert_eq!(
         wasm_client::parse_visibility("PRIVATE"),
         MessageVisibility::Private
@@ -89,6 +98,11 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
     assert!(ai_gm_roles.iter().any(|(v, _)| *v == "PLAYER"));
     assert!(!ai_gm_roles.iter().any(|(v, _)| *v == "GM"));
     assert!(!ai_gm_roles.iter().any(|(v, _)| *v == "HOST"));
+
+    let solo_gm_roles = wasm_client::role_options_for_mode("TTRPG_SOLO_AI_GM");
+    assert!(solo_gm_roles.iter().any(|(v, _)| *v == "SOLO_GM"));
+    assert!(solo_gm_roles.iter().any(|(v, _)| *v == "OBSERVER"));
+    assert!(!solo_gm_roles.iter().any(|(v, _)| *v == "PLAYER"));
 
     let meet_roles = wasm_client::role_options_for_mode("MEETING");
     assert!(meet_roles.iter().any(|(v, _)| *v == "HOST"));

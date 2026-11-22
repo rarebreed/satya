@@ -45,7 +45,7 @@
       "type": {
         "type": "enum",
         "name": "AiGmOperatingMode",
-        "symbols": ["AUTONOMOUS", "CO_PILOT"]
+        "symbols": ["AUTONOMOUS", "CO_PILOT", "SOLO_CO_GM"]
       }
     },
     {
@@ -97,7 +97,7 @@
               "type": "enum",
               "name": "SessionRole",
               "namespace": "com.satya.types",
-              "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
+              "symbols": ["GM", "AI_GM", "SOLO_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
             }
           },
           {

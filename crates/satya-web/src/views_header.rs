@@ -120,6 +120,17 @@ pub fn HeaderBar() -> impl IntoView {
                 <div class="status-pills">
                     <span id="auth-status-pill" class="pill pill-muted">"Not Logged In"</span>
                     <span id="session-status-pill" class="pill pill-muted">"No Active Session"</span>
+                    <button
+                        type="button"
+                        id="btn-solo-spoiler-shield"
+                        class="btn btn-sm btn-secondary"
+                        style="display: none;"
+                        title="Toggle Solo Co-GM Spoiler Shield to hide GM-only NPC secrets, GM notes, hidden map tokens, and spoiler campaign lore while keeping table controls active"
+                        onclick="window.satyaToggleSoloSpoilerShield()"
+                        on:click=move |_| wasm_client::satya_toggle_solo_spoiler_shield()
+                    >
+                        "Spoiler Shield: OFF"
+                    </button>
                 </div>
                 <div class="hamburger-menu-wrap">
                     <button

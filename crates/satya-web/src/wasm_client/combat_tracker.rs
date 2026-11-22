@@ -258,7 +258,7 @@ pub fn format_combat_tracker_rich_html(ctx: &CombatTrackerRenderContext<'_>) -> 
                 let is_self = ctx.self_participant.is_some_and(|me| {
                     me.role != SessionRole::Observer
                         && (c.entity_id == me.user_id
-                            || (me.role == SessionRole::Player
+                            || (me.role.is_player_actor()
                                 && c.display_name.eq_ignore_ascii_case(&me.display_name)))
                 });
                 let matched_npc = if is_self {
@@ -372,7 +372,7 @@ pub fn format_combat_tracker_rich_html(ctx: &CombatTrackerRenderContext<'_>) -> 
     let combatants: Vec<&Participant> = ctx
         .roster
         .iter()
-        .filter(|p| p.role == SessionRole::Player)
+        .filter(|p| p.role.is_player_actor())
         .collect();
     if !combatants.is_empty() {
         return combatants
@@ -498,7 +498,7 @@ pub fn format_combat_tracker_entries_html(
 pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32) -> String {
     let combatants: Vec<&Participant> = roster
         .iter()
-        .filter(|p| p.role == SessionRole::Player)
+        .filter(|p| p.role.is_player_actor())
         .collect();
     if combatants.is_empty() {
         return r#"<span class="pill pill-muted">No active player combatants in roster.</span>"#
@@ -694,7 +694,7 @@ fn sync_conditions_inner(push_to_server: bool) {
             }
             let can_push = push_to_server
                 && me.role != SessionRole::Observer
-                && (me.role == SessionRole::Player
+                && (me.role.is_player_actor()
                     || st
                         .combat_combatants
                         .iter()

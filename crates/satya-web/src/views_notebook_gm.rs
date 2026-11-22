@@ -151,6 +151,23 @@ pub fn NotebookGmAndNpcPanes() -> impl IntoView {
                 </div>
             </div>
 
+            // --- 1B. UNIVERSAL CAMPAIGN STARTER NPC CATALOG ---
+            <div id="npc-campaign-catalog-panel" class="roster-bar">
+                <div class="gm-doc-header">
+                    <span class="roster-title">
+                        "Campaign NPC Catalog (Universal Pack Roster — Load into Current Session):"
+                    </span>
+                    <span id="npc-campaign-catalog-status" class="pill pill-muted">
+                        "awakened pack · Connect or Refresh NPCs to sync"
+                    </span>
+                </div>
+                <div id="npc-campaign-catalog-list" class="gm-docs-list">
+                    <span class="pill pill-muted">
+                        "Starter campaign NPCs appear here with 1-click Load into Session."
+                    </span>
+                </div>
+            </div>
+
             // --- 2. GM / SOLO QUICK NPC ROLL-UP GENERATOR ---
             <div id="npc-generator-panel" class="roster-bar">
                 <span class="roster-title">
@@ -686,6 +703,35 @@ pub fn NotebookGmAndNpcPanes() -> impl IntoView {
                 <div id="gm-memories-list" class="gm-docs-list">
                     <span class="pill pill-muted">"No persistent GM memory notes recorded in this session yet."</span>
                 </div>
+            </div>
+        </div>
+
+        <div
+            id="gm-archivist-modal"
+            class="gm-archivist-modal-backdrop"
+            style="display: none;"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gm-archivist-modal-title"
+        >
+            <div class="gm-archivist-modal-card">
+                <div class="gm-doc-header">
+                    <div>
+                        <strong id="gm-archivist-modal-title">"GM Archivist Entry"</strong>
+                        <div id="gm-archivist-modal-meta" class="subtitle"></div>
+                    </div>
+                    <button
+                        type="button"
+                        id="btn-close-gm-archivist-modal"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaCloseArchivistModal()"
+                        on:click=move |_| wasm_client::satya_close_archivist_modal()
+                    >
+                        "Close"
+                    </button>
+                </div>
+                <div id="gm-archivist-modal-body" class="gm-archivist-modal-body satya-rules-article"></div>
+                <div id="gm-archivist-modal-actions" class="btn-row-compact"></div>
             </div>
         </div>
     }

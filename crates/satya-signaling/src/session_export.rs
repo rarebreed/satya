@@ -249,7 +249,7 @@ impl AuthAndSessionManager {
             let session = guard
                 .get(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' not found"))?;
-            let is_gm = matches!(role, SessionRole::Gm | SessionRole::Host);
+            let is_gm = role.is_human_gm_or_co_gm();
             let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
             let memories = if is_gm {
                 session.gm_memories.clone()
@@ -279,7 +279,7 @@ impl AuthAndSessionManager {
                 .unwrap_or_default()
         };
 
-        let is_gm = matches!(role, SessionRole::Gm | SessionRole::Host);
+        let is_gm = role.is_human_gm_or_co_gm();
         let mut session_characters = self.load_session_characters_from_db(sid, &roster).await;
         if !is_gm {
             for sheet in &mut session_characters {
@@ -343,9 +343,7 @@ impl AuthAndSessionManager {
             .is_some();
         if live_exists || saved_exists {
             let authorized = match self.resolve_authorized_member_role(&target_sid, user).await {
-                Ok((_, member_role, _)) => {
-                    matches!(member_role, SessionRole::Gm | SessionRole::Host)
-                }
+                Ok((_, member_role, _)) => member_role.is_human_gm_or_co_gm(),
                 Err(_) => false,
             };
             if !authorized {

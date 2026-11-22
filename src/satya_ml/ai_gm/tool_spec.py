@@ -172,7 +172,7 @@ def get_registered_tool_specs(*, include_meta: bool = True) -> dict[str, ToolSpe
 
 
 def get_builtin_tool_objects() -> list[Any]:
-    """Return the 45 built-in AI GM tool objects derived from `@satya_gm_tool` registrations."""
+    """Return the 47 built-in AI GM tool objects derived from `@satya_gm_tool` registrations."""
     specs = get_registered_tool_specs(include_meta=False)
     return [spec.tool_obj for spec in specs.values()]
 

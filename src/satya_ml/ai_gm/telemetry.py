@@ -449,13 +449,18 @@ def build_trajectory_report_payload(
     turn_logs: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Construct a strict `GmTrajectoryReportRequest` dictionary for `/api/gm/sessions/:id/trajectory`."""
+    raw_mode = str(operating_mode).lower()
     norm_mode = (
         operating_mode.value
         if isinstance(operating_mode, AiGmOperatingMode)
         else (
-            AiGmOperatingMode.CO_PILOT.value
-            if "co_pilot" in str(operating_mode).lower()
-            else AiGmOperatingMode.AUTONOMOUS.value
+            AiGmOperatingMode.SOLO_CO_GM.value
+            if "solo" in raw_mode
+            else (
+                AiGmOperatingMode.CO_PILOT.value
+                if "co_pilot" in raw_mode
+                else AiGmOperatingMode.AUTONOMOUS.value
+            )
         )
     )
     strict_tool_records = [

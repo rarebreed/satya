@@ -37,6 +37,15 @@ from satya_ml.signaling_client import load_ai_gm_toml_config
 logger = logging.getLogger("satya_ml.ai_gm.server")
 
 
+def _normalize_operating_mode(raw: str) -> str:
+    low = (raw or "").strip().lower()
+    if "solo" in low:
+        return "solo_co_gm"
+    if "co_pilot" in low:
+        return "co_pilot"
+    return "autonomous"
+
+
 def configure_ai_gm_logging(level_override: str | None = None) -> str:
     """Configure structured console logging, `data/logs/ai-gm.log` file persistence, and turn log buffering.
 
@@ -229,7 +238,7 @@ def handle_ai_gm_event(
         lazy_tool_loading=raw_lazy,
     )
 
-    op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
+    op_mode = _normalize_operating_mode(payload.operating_mode)
     actor_display = (
         (effective_actor or {}).get("display_name")
         or (effective_actor or {}).get("username")
@@ -365,7 +374,7 @@ def handle_scenario_beat(
         checkpointer=_SHARED_CHECKPOINTER,
         lazy_tool_loading=raw_lazy,
     )
-    op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
+    op_mode = _normalize_operating_mode(payload.operating_mode)
     with turn_telemetry_scope(payload.session_id, traceparent=traceparent) as telemetry:
         initial_state = {
             "session_id": payload.session_id,

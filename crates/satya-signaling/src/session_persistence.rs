@@ -586,7 +586,7 @@ impl AuthAndSessionManager {
             }
             MessageVisibility::GmOnly => {
                 ev.sender.user_id == user_id
-                    || role == SessionRole::Gm
+                    || role.is_human_gm_or_co_gm()
                     || (!has_human_gm && ev.recipients.iter().any(|r| r.user_id == user_id))
             }
             MessageVisibility::HostOnly => {
@@ -676,10 +676,7 @@ impl AuthAndSessionManager {
             .load_visible_events_from_db(sid, &participant.user_id, participant.role, has_human_gm)
             .await;
 
-        let can_see_gm_secrets = matches!(
-            participant.role,
-            SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
-        );
+        let can_see_gm_secrets = participant.role.is_gm_or_co_gm();
         let (active_map, combat_tracker) = {
             let guard = self.sessions.read().await;
             if let Some(s) = guard.get(sid) {
@@ -894,6 +891,24 @@ impl AuthAndSessionManager {
             {
                 anyhow::bail!("Cannot escalate role to GM/HOST on session resume");
             }
+            if resolved_role == SessionRole::SoloGm
+                && !matches!(saved_role, Some(SessionRole::SoloGm))
+            {
+                let has_ai_gm = session.roster.values().any(|p| p.role == SessionRole::AiGm);
+                let has_other_human_actor = session.roster.values().any(|p| {
+                    p.user_id != user.user_id
+                        && p.participant_kind == ParticipantKind::Human
+                        && matches!(
+                            p.role,
+                            SessionRole::Gm | SessionRole::Player | SessionRole::SoloGm
+                        )
+                });
+                if session.host_user_id != user.user_id || !has_ai_gm || has_other_human_actor {
+                    anyhow::bail!(
+                        "Cannot switch to SOLO_GM unless you are the host of a solo AI GM session"
+                    );
+                }
+            }
 
             let resolved_display_name = req
                 .display_name
@@ -1095,6 +1110,7 @@ pub(crate) fn session_role_to_db(role: SessionRole) -> &'static str {
     match role {
         SessionRole::Gm => "GM",
         SessionRole::AiGm => "AI_GM",
+        SessionRole::SoloGm => "SOLO_GM",
         SessionRole::Player => "PLAYER",
         SessionRole::Host => "HOST",
         SessionRole::Participant => "PARTICIPANT",
@@ -1106,6 +1122,7 @@ pub(crate) fn session_role_from_db(raw: &str) -> SessionRole {
     match raw.trim().to_uppercase().as_str() {
         "GM" => SessionRole::Gm,
         "AI_GM" => SessionRole::AiGm,
+        "SOLO_GM" => SessionRole::SoloGm,
         "HOST" => SessionRole::Host,
         "PARTICIPANT" => SessionRole::Participant,
         "OBSERVER" => SessionRole::Observer,

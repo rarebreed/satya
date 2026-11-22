@@ -1,6 +1,6 @@
 # AI Minds, Embodiment & Consciousness in 2035
 
-> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · **Part III:** *AI Minds & Consciousness* · [Factions of 2035](factions_of_2035.md) · [Satyang & Its Operational Divisions](satyang_and_four_pillars.md) · **Hard-Science Deep Dives:** [AI 2.0 Substrate & Active Inference](../05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md) · [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md) · [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · **Part III:** *AI Minds & Consciousness* · [Factions of 2035](factions_of_2035.md) · [Satyang & Its Operational Divisions](satyang_and_four_pillars.md) · [Major Characters](major_characters.md) · **Hard-Science Deep Dives:** [AI 2.0 Substrate & Active Inference](../05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md) · [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md) · [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md)
 
 By **2035**, the question of whether **AI 2.0** possesses genuine subjective experience is no longer an academic seminar topic—it sits directly beneath labor riots, federal inspection warrants, corporate boardrooms, and every tabletop encounter with a cornered digital mind.
 

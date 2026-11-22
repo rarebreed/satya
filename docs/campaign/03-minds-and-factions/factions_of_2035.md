@@ -1,6 +1,6 @@
 # Factions of 2035: Session-Zero Dossiers
 
-> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [AI Minds & Consciousness](ai_minds_and_consciousness.md) · *Factions of 2035* · [Satyang & Its Operational Divisions](satyang_and_four_pillars.md)  
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [AI Minds & Consciousness](ai_minds_and_consciousness.md) · *Factions of 2035* · [Satyang & Its Operational Divisions](satyang_and_four_pillars.md) · [Major Characters](major_characters.md)  
 > **Rules Integration**: [Characteristics & Psyche](../../ttrpg/03-character/characteristics_and_aptitudes.md) · [Lifepath Hobbies, Life Events & Factions](../../ttrpg/03-character/lifepath_events_hobbies_and_factions.md) · [Psyche, Morale & Social Combat](../../ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md)
 
 Much of the drama in *Awakened* (**2035 AD**) arises from friction among five major power blocs—none of them simple cartoon villains. In the default chronicle, player characters originate within or alongside **Satyang**, though experienced groups can build characters from any bloc (or eventually play an embodied AI agent directly).

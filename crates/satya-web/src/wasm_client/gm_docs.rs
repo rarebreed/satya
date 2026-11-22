@@ -9,8 +9,8 @@ pub use crate::wasm_client::gm_docs_google::*;
 pub use crate::wasm_client::gm_memories_and_director::*;
 use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_schema::{
-    GmDocumentRecord, GmDocumentSource, SessionGmDocsResponse, SubmitGmDocumentRequest,
-    ToggleGmDocumentPersistenceRequest,
+    GmDocumentRecord, GmDocumentSource, Participant, SessionGmDocsResponse, SessionRole,
+    SubmitGmDocumentRequest, ToggleGmDocumentPersistenceRequest,
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -24,20 +24,39 @@ pub fn parse_gm_doc_source(raw: &str) -> GmDocumentSource {
     }
 }
 
-/// Returns `true` when the active viewer is offline or has GM Vault management privileges
-/// (excludes `Observer` and non-GM `Player` viewers).
+/// Returns `true` when the active viewer is offline or has GM / Solo Co-GM Vault management privileges
+/// (independent of Spoiler Shield; excludes `Observer` and multi-player non-GM `Player` viewers).
 pub(crate) fn viewer_can_manage_gm_vault() -> bool {
+    crate::wasm_client::npcs::viewer_can_manage_npcs()
+}
+
+/// Returns `true` when `self_part` can delete a specific `GM_ONLY` document uploaded by `uploader_user_id`
+/// (`GM`/`Host`/`SoloGm`/solo host, or the original non-Observer uploader).
+#[must_use]
+pub fn viewer_can_manage_gm_doc(
+    session_id: Option<&str>,
+    self_part: Option<&Participant>,
+    roster: &[Participant],
+    uploader_user_id: &str,
+) -> bool {
+    crate::wasm_client::npcs::can_viewer_manage_npcs(session_id, self_part, roster)
+        || self_part
+            .is_some_and(|p| p.role != SessionRole::Observer && p.user_id == uploader_user_id)
+}
+
+fn can_delete_specific_doc(doc: &GmDocumentRecord) -> bool {
+    let is_default = doc.doc_id.starts_with("default_")
+        || doc.doc_id.starts_with("campaign_default_");
+    if is_default {
+        return false;
+    }
     with_state(|st| {
-        st.session_id.is_none()
-            || (crate::wasm_client::npcs::can_viewer_see_npc_secrets(
-                st.session_id.as_deref(),
-                st.self_participant.as_ref(),
-                &st.roster,
-                st.viewer_can_see_gm_secrets,
-            ) && st
-                .self_participant
-                .as_ref()
-                .is_some_and(|p| p.role != satya_schema::SessionRole::Observer))
+        viewer_can_manage_gm_doc(
+            st.session_id.as_deref(),
+            st.self_participant.as_ref(),
+            &st.roster,
+            &doc.uploader_user_id,
+        )
     })
 }
 
@@ -46,7 +65,7 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
     if docs.is_empty() {
         return r#"<span class="pill pill-muted">No GM_ONLY documents submitted in this session yet.</span>"#.to_string();
     }
-    let show_controls = viewer_can_manage_gm_vault();
+    let show_persist_controls = viewer_can_manage_gm_vault();
     docs.iter()
         .rev()
         .map(|d| {
@@ -65,7 +84,11 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
                 .as_deref()
                 .filter(|s| !s.is_empty())
                 .unwrap_or(&d.session_id);
-            let persist_badge = if d.is_persistent {
+            let is_default = d.doc_id.starts_with("default_")
+                || d.doc_id.starts_with("campaign_default_");
+            let persist_badge = if is_default {
+                r#" <span class="pill pill-muted">Campaign Default</span>"#.to_string()
+            } else if d.is_persistent {
                 format!(
                     r#" <span class="pill pill-active" title="Saved in SQLite GM Vault across restarts and campaign sessions">Persistent ({})</span>"#,
                     escape_html(tag_label)
@@ -73,21 +96,24 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
             } else {
                 r#" <span class="pill pill-muted" title="Session-only unless marked persistent">Session-Only</span>"#.to_string()
             };
-            let controls_html = if show_controls {
-                let js_id = escape_js_single_quoted_attr(&d.doc_id);
+            let js_id = escape_js_single_quoted_attr(&d.doc_id);
+            let mut controls_html = String::new();
+            if show_persist_controls && !is_default {
                 let next_persist = !d.is_persistent;
                 let toggle_btn_label = if d.is_persistent {
                     "Unmark Persistent"
                 } else {
                     "Mark Persistent"
                 };
-                format!(
-                    r#"<button type="button" class="btn-chip" onclick="window.satyaToggleGmDocPersistence('{js_id}', {next_persist})">{toggle_btn_label}</button>
-                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmDocument('{js_id}')">Delete</button>"#
-                )
-            } else {
-                String::new()
-            };
+                controls_html.push_str(&format!(
+                    r#"<button type="button" class="btn-chip" onclick="window.satyaToggleGmDocPersistence('{js_id}', {next_persist})">{toggle_btn_label}</button>"#
+                ));
+            }
+            if can_delete_specific_doc(d) {
+                controls_html.push_str(&format!(
+                    r#" <button type="button" class="btn-chip btn-chip-danger" onclick="window.satyaDeleteGmDocument('{js_id}')">Delete</button>"#
+                ));
+            }
             format!(
                 r#"<div class="gm-doc-card">
                     <div class="gm-doc-header">
@@ -456,5 +482,40 @@ mod tests {
         assert!(html.contains("Sara &lt;Valkyrie&gt;"));
         assert!(html.contains("window.satyaToggleGmDocPersistence('doc_it\\'s_1', false)"));
         assert!(html.contains("window.satyaDeleteGmDocument('doc_it\\'s_1')"));
+    }
+
+    #[test]
+    fn test_viewer_can_manage_gm_doc_allows_player_uploader_and_solo_gm() {
+        let solo = Participant::human("u-solo", "solo", "Solo", SessionRole::SoloGm);
+        let p1 = Participant::human("u-p1", "p1", "Player 1", SessionRole::Player);
+        let p2 = Participant::human("u-p2", "p2", "Player 2", SessionRole::Player);
+        let obs = Participant::human("u-obs", "obs", "Observer", SessionRole::Observer);
+        let gm = Participant::human("u-gm", "gm", "GM", SessionRole::Gm);
+        let roster = [gm.clone(), p1.clone(), p2.clone(), obs.clone()];
+
+        assert!(viewer_can_manage_gm_doc(
+            Some("sess-1"),
+            Some(&p1),
+            &roster,
+            "u-p1"
+        ));
+        assert!(!viewer_can_manage_gm_doc(
+            Some("sess-1"),
+            Some(&p2),
+            &roster,
+            "u-p1"
+        ));
+        assert!(!viewer_can_manage_gm_doc(
+            Some("sess-1"),
+            Some(&obs),
+            &roster,
+            "u-obs"
+        ));
+        assert!(viewer_can_manage_gm_doc(
+            Some("sess-2"),
+            Some(&solo),
+            std::slice::from_ref(&solo),
+            "ai_gm_svc"
+        ));
     }
 }

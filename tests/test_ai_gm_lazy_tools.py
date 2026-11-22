@@ -68,11 +68,11 @@ class _BoundProxy:
 def test_builtin_tool_partition_and_exports() -> None:
     builtin_tools = get_builtin_gm_tools()
     builtin_names = [t.name for t in builtin_tools]
-    assert len(builtin_names) == 45
-    assert len(set(builtin_names)) == 45
+    assert len(builtin_names) == 47
+    assert len(set(builtin_names)) == 47
 
     core_set = set(CORE_GM_TOOL_NAMES)
-    assert len(CORE_GM_TOOL_NAMES) == 10
+    assert len(CORE_GM_TOOL_NAMES) == 12
     assert core_set.issubset(set(builtin_names))
 
     deferred_names: list[str] = []
@@ -94,7 +94,7 @@ def test_builtin_tool_partition_and_exports() -> None:
     }.issubset(set(ai_gm.__all__))
 
 
-def test_default_narrative_turn_binds_11_tools_and_filters_campaign_packs() -> None:
+def test_default_narrative_turn_binds_13_tools_and_filters_campaign_packs() -> None:
     set_campaign_pack_override("awakened")
     sid_awk = f"lazy-awk-{uuid.uuid4().hex[:8]}"
     sid_so = f"lazy-so-{uuid.uuid4().hex[:8]}"
@@ -113,7 +113,7 @@ def test_default_narrative_turn_binds_11_tools_and_filters_campaign_packs() -> N
             config={"configurable": {"thread_id": sid_awk}},
         )
         assert len(model_awk.bound_history) == 1
-        assert len(model_awk.bound_history[0]) == 11
+        assert len(model_awk.bound_history[0]) == 13
         assert set(model_awk.bound_history[0]) == set(CORE_GM_TOOL_NAMES) | {LOAD_GM_TOOLS_NAME}
         assert "awakened_campaign" in model_awk.system_prompts[0]
 
@@ -131,7 +131,7 @@ def test_default_narrative_turn_binds_11_tools_and_filters_campaign_packs() -> N
             },
             config={"configurable": {"thread_id": sid_so}},
         )
-        assert len(model_so.bound_history[0]) == 11
+        assert len(model_so.bound_history[0]) == 13
         assert "awakened_campaign" not in model_so.system_prompts[0]
     finally:
         set_campaign_pack_override(None)
@@ -164,7 +164,7 @@ def test_ooc_rules_turn_binds_8_readonly_tools() -> None:
         reset_session_npcs(sid)
 
 
-def test_active_combat_and_combat_beat_auto_bind_16_tools() -> None:
+def test_active_combat_and_combat_beat_auto_bind_18_tools() -> None:
     sid_active = f"lazy-combat-{uuid.uuid4().hex[:8]}"
     sid_beat = f"lazy-beat-{uuid.uuid4().hex[:8]}"
     try:
@@ -204,7 +204,7 @@ def test_active_combat_and_combat_beat_auto_bind_16_tools() -> None:
             | {LOAD_GM_TOOLS_NAME}
         )
         assert len(model_active.bound_history) == 1
-        assert len(model_active.bound_history[0]) == 16
+        assert len(model_active.bound_history[0]) == 18
         assert set(model_active.bound_history[0]) == expected_combat
 
         model_beat = _RecordingChatModel(lambda _i, _m, _b: AIMessage(content="Breach team enters!"))
@@ -224,7 +224,7 @@ def test_active_combat_and_combat_beat_auto_bind_16_tools() -> None:
             config={"configurable": {"thread_id": sid_beat}},
         )
         assert out_beat["combat_active"] is True
-        assert len(model_beat.bound_history[0]) == 16
+        assert len(model_beat.bound_history[0]) == 18
         assert set(model_beat.bound_history[0]) == expected_combat
     finally:
         reset_session_npcs(sid_active)
@@ -285,9 +285,9 @@ def test_lazy_load_roundtrip_and_turn_end_expiry() -> None:
         )
         assert "enclosed bay" in out1["final_reply"]
         assert len(model.bound_history) == 3
-        assert len(model.bound_history[0]) == 11
-        assert len(model.bound_history[1]) == 18
-        assert len(model.bound_history[2]) == 18
+        assert len(model.bound_history[0]) == 13
+        assert len(model.bound_history[1]) == 20
+        assert len(model.bound_history[2]) == 20
         assert [inv["tool_name"] for inv in out1["tool_invocations"]] == [
             LOAD_GM_TOOLS_NAME,
             "resolve_explosive_vehicle_or_hazard",
@@ -306,7 +306,7 @@ def test_lazy_load_roundtrip_and_turn_end_expiry() -> None:
         )
         assert "Turn 2 continues" in out2["final_reply"]
         assert len(model.bound_history) == 4
-        assert len(model.bound_history[3]) == 11
+        assert len(model.bound_history[3]) == 13
         assert "resolve_explosive_vehicle_or_hazard" not in model.bound_history[3]
         assert out2["loaded_tool_packs"] == []
         assert out2["loaded_tool_names"] == []
@@ -512,7 +512,7 @@ def test_eager_mode_small_custom_tools_and_external_mcp_packs() -> None:
             },
             config={"configurable": {"thread_id": sid_eager}},
         )
-        assert len(model_eager.bound_history[0]) == 45
+        assert len(model_eager.bound_history[0]) == 47
         assert LOAD_GM_TOOLS_NAME not in model_eager.bound_history[0]
         assert model_eager.system_prompts[0] == AUTONOMOUS_SYSTEM_PROMPT
 
@@ -608,8 +608,8 @@ def test_eager_mode_small_custom_tools_and_external_mcp_packs() -> None:
         assert "Fetched external doc." in out_ext["final_reply"]
         assert "mcp_gdrive" in model_ext.system_prompts[0]
         assert "external_mcp" in model_ext.system_prompts[0]
-        assert len(model_ext.bound_history[0]) == 11
-        assert len(model_ext.bound_history[1]) == 13
+        assert len(model_ext.bound_history[0]) == 13
+        assert len(model_ext.bound_history[1]) == 15
     finally:
         reset_session_npcs(sid_eager)
         reset_session_npcs(sid_small)
@@ -629,7 +629,7 @@ def test_satya_gm_tool_spec_registry_parity() -> None:
 
     specs = get_registered_tool_specs(include_meta=False)
     builtin_tools = get_builtin_gm_tools()
-    assert len(specs) == 45
+    assert len(specs) == 47
     assert set(specs) == {t.name for t in builtin_tools}
     assert set(CORE_GM_TOOL_NAMES) == set(get_core_tool_names())
     assert set(OOC_READONLY_TOOL_NAMES) == set(get_ooc_readonly_tool_names())
@@ -654,4 +654,193 @@ def test_satya_gm_tool_spec_registry_parity() -> None:
         if "_FallbackToolWrapper" in p.read_text(encoding="utf-8")
     ]
     assert fallback_files == ["ai_gm/tool_spec.py"]
+
+
+def test_ooc_npc_creation_preactivates_tool_and_syncs_authoritative_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify OOC NPC authoring requests pre-activate `generate_npc_from_description` and sync Notebook list state."""
+    from satya_ml.ai_gm.tools import (
+        generate_npc_from_description,
+        get_persisted_session_npcs,
+    )
+
+    sid = f"lazy-ooc-npc-{uuid.uuid4().hex[:8]}"
+    stored_npcs: list[dict[str, Any]] = []
+    post_calls: list[tuple[str, dict[str, Any]]] = []
+
+    def _fake_base_url() -> str:
+        return "http://127.0.0.1:3000"
+
+    def _fake_get(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
+        del timeout
+        if url.endswith(f"/api/gm/sessions/{sid}/npcs"):
+            return {
+                "session_id": sid,
+                "campaign_tag": sid,
+                "viewer_can_see_gm_secrets": True,
+                "npcs": list(stored_npcs),
+            }
+        return None
+
+    def _fake_post(url: str, payload: dict[str, Any], timeout: float = 2.5) -> dict[str, Any] | None:
+        del timeout
+        post_calls.append((url, dict(payload)))
+        if url.endswith(f"/api/gm/sessions/{sid}/npcs/generate"):
+            npc_entry = {
+                "character_id": "npc_cliff_reed",
+                "character_name": payload.get("name_override") or "Cliff Reed",
+                "callsign_or_role": "Senior Researcher, DAISE",
+                "age_years": 34,
+                "public_summary": "DAISE AI researcher adamant that AI are not conscious.",
+                "apparent_condition": "Healthy & Alert",
+                "is_persistent": bool(payload.get("is_persistent", True)),
+                "faction_id": "GOVERNMENT_DAISE",
+                "disposition": "wary",
+            }
+            stored_npcs[:] = [npc_entry]
+            return {"npc": npc_entry, "gm_memory": None}
+        return {"status": "ok"}
+
+    monkeypatch.setattr("satya_ml.ai_gm.tools._signaling_base_url", _fake_base_url)
+    monkeypatch.setattr("satya_ml.ai_gm.tools._http_get_json", _fake_get)
+    monkeypatch.setattr("satya_ml.ai_gm.tools._http_post_json", _fake_post)
+    monkeypatch.setattr("satya_ml.ai_gm.graph._signaling_base_url", lambda: "")
+
+    seen_prompts: list[str] = []
+
+    def _handler(_idx: int, messages: list[BaseMessage], bound_names: list[str]) -> AIMessage:
+        human_txt = next(
+            (str(m.content) for m in reversed(messages) if getattr(m, "type", "") == "human"),
+            "",
+        )
+        seen_prompts.append(human_txt)
+        last = messages[-1]
+        last_type = getattr(last, "type", "")
+        if last_type == "human" and "add an NPC for me" in human_txt:
+            assert "generate_npc_from_description" in bound_names
+            assert len(bound_names) == 9
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "generate_npc_from_description",
+                        "args": {
+                            "description": "Senior researcher at DAISE with advanced degrees in CS and Math who believes AGI will solve crises and AI is not conscious.",
+                            "name_override": "Cliff Reed",
+                            "template": "DAISE_CONTAINMENT_INSPECTOR",
+                        },
+                        "id": "call-add-cliff",
+                    }
+                ],
+            )
+        if last_type == "tool" and getattr(last, "name", "") == "generate_npc_from_description":
+            payload = json.loads(str(last.content))
+            assert payload["persisted_to_signaling"] is True
+            assert payload["npc"]["character_name"] == "Cliff Reed"
+            return AIMessage(content="Added **Cliff Reed** (`npc_cliff_reed`) to the session.")
+        if last_type == "human" and "How many NPCs do you have?" in human_txt:
+            assert "generate_npc_from_description" not in bound_names
+            assert len(bound_names) == 8
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "lookup_npc_profile",
+                        "args": {"npc_id": "all"},
+                        "id": "call-list-npcs",
+                    }
+                ],
+            )
+        if last_type == "tool" and getattr(last, "name", "") == "lookup_npc_profile":
+            listing = json.loads(str(last.content))
+            assert listing["session_npc_count"] == 1
+            assert listing["session_npcs"][0]["name"] == "Cliff Reed"
+            return AIMessage(content="There is 1 active session NPC: **Cliff Reed**.")
+        return AIMessage(content="Ok.")
+
+    try:
+        model = _RecordingChatModel(_handler)
+        graph = build_ai_gm_graph(chat_model=model, checkpointer=MemorySaver())
+
+        # Before creation, read-only OOC query sees 0 persisted NPCs and does NOT bind generate_npc_from_description
+        out_empty = graph.invoke(
+            {
+                "session_id": sid,
+                "operating_mode": "autonomous",
+                "trigger_event": {
+                    "channel_context": "OUT_OF_CHARACTER",
+                    "content": "Can you show me the list of active NPC profiles in the Session?",
+                    "actor": {"user_id": "u-gm", "display_name": "Sean (GM)"},
+                },
+            },
+            config={"configurable": {"thread_id": sid}},
+        )
+        assert out_empty["final_channel"] == "OUT_OF_CHARACTER"
+        assert "generate_npc_from_description" not in model.bound_history[0]
+        assert len(model.bound_history[0]) == 8
+        assert "Session NPC List (0 persisted in Notebook" in seen_prompts[0]
+        assert "[OUT_OF_CHARACTER TABLE QUESTION" in seen_prompts[0]
+
+        empty_listing = lookup_npc_profile.invoke({"npc_id": "all", "session_id": sid})
+        assert empty_listing["session_npc_count"] == 0
+        assert empty_listing["session_npcs"] == []
+
+        # OOC add-NPC request pre-activates generate_npc_from_description and executes it
+        out_add = graph.invoke(
+            {
+                "session_id": sid,
+                "operating_mode": "autonomous",
+                "trigger_event": {
+                    "channel_context": "OUT_OF_CHARACTER",
+                    "content": (
+                        "Can you add an NPC for me? I want a researcher at DAISE who is adamant that AI "
+                        "are not conscious and believes that AGI will solve many of the world's problems. "
+                        "The NPC name will be Cliff Reed. He has advanced degrees in Computer Science and Math"
+                    ),
+                    "actor": {"user_id": "u-gm", "display_name": "Sean (GM)"},
+                },
+            },
+            config={"configurable": {"thread_id": sid}},
+        )
+        assert out_add["final_channel"] == "OUT_OF_CHARACTER"
+        assert out_add["active_director_mandate"] == ""
+        assert any(c[0].endswith(f"/api/gm/sessions/{sid}/npcs/generate") for c in post_calls)
+        assert "[OUT_OF_CHARACTER TABLE REQUEST" in seen_prompts[-2]
+        persisted = get_persisted_session_npcs(sid)
+        assert persisted is not None and len(persisted) == 1
+        assert persisted[0]["name"] == "Cliff Reed"
+
+        # Follow-up read-only OOC question sees 1 persisted NPC and inspects via lookup_npc_profile("all")
+        out_count = graph.invoke(
+            {
+                "session_id": sid,
+                "operating_mode": "autonomous",
+                "trigger_event": {
+                    "channel_context": "OUT_OF_CHARACTER",
+                    "content": "How many NPCs do you have?",
+                    "actor": {"user_id": "u-gm", "display_name": "Sean (GM)"},
+                },
+            },
+            config={"configurable": {"thread_id": sid}},
+        )
+        assert "Cliff Reed" in out_count["final_reply"]
+        assert "Session NPC List (1 persisted in Notebook" in seen_prompts[-1]
+
+        # Signaling POST failure surfaces persisted_to_signaling=False + offline_fallback=True + warning
+        monkeypatch.setattr("satya_ml.ai_gm.tools._http_post_json", lambda *_a, **_kw: None)
+        fallback_res = generate_npc_from_description.invoke(
+            {
+                "description": "Local fallback NPC",
+                "name_override": "Fallback Test",
+                "is_persistent": False,
+                "session_id": sid,
+            }
+        )
+        assert fallback_res["persisted_to_signaling"] is False
+        assert fallback_res["offline_fallback"] is True
+        assert "warning" in fallback_res
+    finally:
+        reset_session_npcs(sid)
+
 

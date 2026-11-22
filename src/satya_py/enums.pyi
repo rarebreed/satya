@@ -155,6 +155,7 @@ class WireEnumName(StrEnum):
 class AiGmOperatingMode(StrEnum):
     AUTONOMOUS = "AUTONOMOUS"
     CO_PILOT = "CO_PILOT"
+    SOLO_CO_GM = "SOLO_CO_GM"
 
 class AiGmTurnStatus(StrEnum):
     COMPLETED = "COMPLETED"
@@ -395,6 +396,7 @@ class SessionMode(StrEnum):
 class SessionRole(StrEnum):
     GM = "GM"
     AI_GM = "AI_GM"
+    SOLO_GM = "SOLO_GM"
     PLAYER = "PLAYER"
     HOST = "HOST"
     PARTICIPANT = "PARTICIPANT"

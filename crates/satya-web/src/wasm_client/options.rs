@@ -15,15 +15,16 @@ pub fn parse_session_mode(raw: &str) -> SessionMode {
 }
 
 /// Returns `true` when the selected business mode option enables the AI GM
-/// (`"TTRPG_GM_AI"` for GM + AI + Players, or `"TTRPG_AI_GM"` for AI GM + Players).
+/// (`"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"TTRPG_SOLO_AI_GM"`).
 pub fn is_ai_gm_mode(raw: &str) -> bool {
-    matches!(raw, "TTRPG_GM_AI" | "TTRPG_AI_GM")
+    matches!(raw, "TTRPG_GM_AI" | "TTRPG_AI_GM" | "TTRPG_SOLO_AI_GM")
 }
 
 /// Parses a `<select>` option string into a [`SessionRole`].
 pub fn parse_session_role(raw: &str) -> SessionRole {
     match raw {
         "GM" => SessionRole::Gm,
+        "SOLO_GM" => SessionRole::SoloGm,
         "AI_GM" => SessionRole::AiGm,
         "HOST" => SessionRole::Host,
         "PARTICIPANT" => SessionRole::Participant,
@@ -203,7 +204,7 @@ pub fn normalize_font_size_id(raw: &str) -> &'static str {
 }
 
 /// Returns the valid `(value, label)` option pairs for `#session-role-select`
-/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
+/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, `"TTRPG_SOLO_AI_GM"`, or `"MEETING"`).
 pub fn role_options_for_mode(mode_raw: &str) -> SelectOptionSlice {
     match mode_raw {
         "MEETING" => &[
@@ -212,11 +213,26 @@ pub fn role_options_for_mode(mode_raw: &str) -> SelectOptionSlice {
             ("OBSERVER", "Observer"),
         ],
         "TTRPG_AI_GM" => &[("PLAYER", "Player"), ("OBSERVER", "Observer")],
+        "TTRPG_SOLO_AI_GM" => &[("SOLO_GM", "Solo Player (Co-GM)"), ("OBSERVER", "Observer")],
         _ => &[
             ("GM", "Game Master (GM)"),
             ("PLAYER", "Player"),
             ("OBSERVER", "Observer"),
         ],
+    }
+}
+
+/// Returns the human-readable badge string for a [`SessionRole`].
+#[must_use]
+pub const fn session_role_badge(role: SessionRole) -> &'static str {
+    match role {
+        SessionRole::Gm => "GM",
+        SessionRole::AiGm => "AI GM",
+        SessionRole::SoloGm => "Solo Co-GM",
+        SessionRole::Player => "Player",
+        SessionRole::Host => "Host",
+        SessionRole::Participant => "Participant",
+        SessionRole::Observer => "Observer",
     }
 }
 

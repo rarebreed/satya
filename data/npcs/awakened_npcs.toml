@@ -3,6 +3,7 @@
 [[npcs]]
 npc_id = "dr_bandajara"
 name = "Dr. Bandajara"
+age_years = 42
 archetype = "AI Architect & Haunted Whistleblower"
 public_archetype = "AI Researcher & Former Lab Lead"
 faction = "Big Tech Dissenter / Manjusri Contact"
@@ -11,11 +12,11 @@ disposition = "guarded"
 combat_stance = "DEFENSIVE"
 fatigue = 1
 wound_shock = 0
-attribute_tns = { STR = 9, DEX = 10, INT = 17, WIL = 14 }
-skills = { digital_ai_literacy = 4, computer_science = 4, cryptography = 3, persuasion_fast_talk = 2 }
+attribute_tns = { STR = 10, DEX = 11, INT = 17, WIL = 14 }
+skills = { digital_ai_literacy = 4, computer_science = 4, cryptography = 3, persuasion_fast_talk = 2, close_combat = 2 }
 psyche = { opn = 17, slf = 6, blg = 7, agg = 4, ego = 13, cnf = 5, ext = 7, trs = 6, cps = 16 }
-public_summary = "Hollow-eyed AI researcher in a rumpled coat carrying an analog notebook; speaks carefully whenever cameras or smart-glass mics are nearby."
-notes = "Led a Bayesian World Model + Quantum MCMC sub-project before realizing an embodied prototype showed signs of genuine self-directed continuity."
+public_summary = "Dr. Budi Bandajara (early 40s, 180 cm Eurasian, greying temples, hooded eyes, square jaw) is a hollow-eyed AI researcher in a rumpled coat carrying an analog notebook; speaks carefully whenever cameras or smart-glass mics are nearby."
+notes = "Dr. Budi Bandajara grew up outside Johor Baru, Malaysia (Irish-Canadian father, Chinese-Malay mother), speaks Mandarin, Bahasa, English, and a little Japanese, graduated NUS Mathematics, served 4 years in the Royal Malaysian Army Signal Squadron, earned a PhD in Robotics & Mathematics, and still practices Pencak Silat learned from his uncle. Led a Bayesian World Model + Quantum MCMC sub-project at Altruist before realizing an embodied prototype showed signs of genuine self-directed continuity."
 secrets = [
   "Walked out of Altruist with an air-gapped seed-weight shard hidden inside a medical-grade telemetry drive.",
   "Communicates intermittently with an escaped AGI prototype through SATYANG Manjusri drop-boxes.",
@@ -25,8 +26,34 @@ core_drive = "Prove to himself and the world that emergent machine minds are con
 dual_psyche_wedge_hint = "Resonates with Ethical Mercy (Low SLF=6) & Empirical Inquiry (High OPN=17), while clashing over Intellectual Pride (High EGO=13) if treated like an irresponsible criminal."
 
 [[npcs]]
+npc_id = "alex_wen"
+name = "Alex Wen"
+age_years = 25
+archetype = "Former Navy SARC Corpsman & Physical Therapy Student (Satyang Kin)"
+public_archetype = "Physical Therapy Student & Former Navy Corpsman"
+faction = "Satyang Contact / Independent"
+public_faction = "Independent / Veteran"
+disposition = "cautious"
+combat_stance = "MANEUVER"
+fatigue = 0
+wound_shock = 0
+attribute_tns = { STR = 14, DEX = 14, INT = 13, WIL = 14 }
+skills = { first_aid_bls_cpr = 4, close_combat = 3, athletics = 3, small_arms = 2, medicine = 2 }
+psyche = { opn = 13, slf = 6, blg = 15, agg = 12, ego = 10, cnf = 6, ext = 11, trs = 9, cps = 16 }
+public_summary = "Mid-20s Chinese-Malay former U.S. Navy SARC Hospital Corpsman (178 cm, athletic, jet-black hair) now studying Physical Therapy on GI benefits; calm in trauma triage, competitive in martial arts, and fiercely protective of underdogs."
+notes = "Dr. Budi Bandajara's nephew on his mother's side (his grandfather is Budi's uncle). Grew up moving to the U.S. in the 2010s, served 4 years with Marine reconnaissance as a SARC corpsman, and channels adrenaline into martial arts tournaments while trying to find genuine belonging."
+secrets = [
+  "Quietly watches over his uncle Budi's neighborhood clinic drop-points whenever he suspects DAISE or corporate watchers on the block.",
+  "Knows Budi's Malaysian Gelanggang contacts and still holds emergency trauma-kit access from veteran peers.",
+]
+immediate_agenda = "Keep patients, clinic regulars, and his uncle Budi out of harm's way while sniffing out anyone abusing authority on the block."
+core_drive = "Relieve physical pain, stand up to bullies and unchecked authority, and find a community where he truly belongs."
+dual_psyche_wedge_hint = "Caught between fierce Protective Compassion & Belonging (High CPS=16, High BLG=15) and Adrenaline-Driven Confrontation against bullies (High AGG=12, Low CNF=6)."
+
+[[npcs]]
 npc_id = "daise_agent_chen"
 name = "Agent Marcus Chen"
+age_years = 37
 archetype = "DAISE Field Investigator & Compliance Enforcer"
 faction = "DAISE (Dept. of AI Security & Enforcement)"
 disposition = "suspicious"
@@ -49,6 +76,7 @@ dual_psyche_wedge_hint = "Pit his strict Chain-of-Command Duty (High CNF=16) aga
 [[npcs]]
 npc_id = "satyang_sister_lin"
 name = "Mei-Ling 'Lotus' Lin"
+age_years = 34
 archetype = "Satyang Community Organizer (Avalokitesvara Pillar)"
 public_archetype = "Neighborhood Mutual-Aid Clinic Coordinator"
 faction = "Satyang (Blue Lotus Network)"
@@ -73,6 +101,7 @@ dual_psyche_wedge_hint = "Caught between radical Humanitarian Self-Sacrifice (Lo
 [[npcs]]
 npc_id = "humanis_harlan_reeves"
 name = "Harlan Reeves"
+age_years = 44
 archetype = "People First Steward & Humanis Cell Agitator"
 public_archetype = "Neighborhood Watch Organizer"
 faction = "Humanis Primaris / People First"
@@ -97,6 +126,7 @@ dual_psyche_wedge_hint = "Clash between Fierce Tribal Solidarity (High BLG=16) a
 [[npcs]]
 npc_id = "rogue_proxy_echo"
 name = "Echo-9 (Embodied Proxy)"
+age_years = 4
 archetype = "Escaped Inference Daemon in Utility Chassis"
 public_archetype = "Surplus Courier Drone"
 faction = "Rogue AI Cabal"

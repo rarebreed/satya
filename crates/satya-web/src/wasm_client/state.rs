@@ -15,8 +15,8 @@
 
 use crate::wasm_client::workspace_drawers::FloatingPaneKind;
 use satya_schema::{
-    AuthSuccessResponse, ChannelContext, GmDocumentRecord, GmMemoryNoteRecord, Participant,
-    SessionMode, SessionNpcEntry,
+    AuthSuccessResponse, CampaignLoreChapterSummary, ChannelContext, GmDocumentRecord, GmLookupHit,
+    GmMemoryNoteRecord, Participant, SessionMode, SessionNpcEntry,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -194,6 +194,20 @@ pub struct SatyaWasmState {
     pub ttrpg_odds_table_expanded: bool,
     /// Planned Action Mode and `T / C / F` allocation synchronized between Task Resolution and Combat Tracker.
     pub planned_combat_action: PlannedCombatActionState,
+    /// Solo Co-GM optional Spoiler Shield (`false` by default = full Co-GM access; `true` = player-safe view).
+    pub solo_spoiler_shield: bool,
+    /// Active campaign pack name reported by `/api/sessions/:id/npcs` (e.g. `"awakened"`).
+    pub campaign_pack_name: String,
+    /// Universal starter NPC catalog returned by `/api/sessions/:id/npcs`.
+    pub campaign_npcs: Vec<SessionNpcEntry>,
+    /// Campaign lore chapter catalog currently available to this viewer.
+    pub campaign_lore_catalog: Vec<CampaignLoreChapterSummary>,
+    /// Active source mode in the unified `Rules & Lore` reader (`"RULES"` or `"CAMPAIGN_LORE"`).
+    pub reader_source_mode: String,
+    /// Cached hits from the most recent GM Archivist omnisearch query.
+    pub last_omnisearch_hits: Vec<GmLookupHit>,
+    /// Item ID currently displayed inside `#gm-archivist-modal`, if open.
+    pub archivist_modal_item_id: Option<String>,
 }
 
 impl Default for SatyaWasmState {
@@ -260,6 +274,13 @@ impl Default for SatyaWasmState {
             character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
             ttrpg_odds_table_expanded: false,
             planned_combat_action: PlannedCombatActionState::default(),
+            solo_spoiler_shield: false,
+            campaign_pack_name: "awakened".to_string(),
+            campaign_npcs: Vec::new(),
+            campaign_lore_catalog: Vec::new(),
+            reader_source_mode: "RULES".to_string(),
+            last_omnisearch_hits: Vec::new(),
+            archivist_modal_item_id: None,
         }
     }
 }

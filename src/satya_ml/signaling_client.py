@@ -154,9 +154,52 @@ def http_get_json(
     return None
 
 
+def http_delete_json_detailed(
+    url: str,
+    timeout: float = 2.5,
+    *,
+    include_trace: bool = True,
+    client_cls: Any | None = None,
+) -> tuple[dict[str, Any] | None, int | None, str | None]:
+    """DELETE JSON at `url`, returning `(parsed_json, status_code, error_body)`."""
+    if not url.startswith(("http://", "https://")):
+        return None, None, "invalid_url"
+    headers = service_auth_headers(include_trace=include_trace)
+    eff_client = client_cls or httpx.Client
+    try:
+        with eff_client(timeout=httpx_timeout(url, timeout)) as client:
+            resp = client.delete(url, headers=headers)
+            if resp is None:
+                return None, None, None
+            if resp.status_code == 200:
+                return dict(resp.json()), 200, None
+            return None, int(resp.status_code), (resp.text or f"HTTP {resp.status_code}")[:400]
+    except Exception:
+        return None, None, None
+
+
+def http_delete_json(
+    url: str,
+    timeout: float = 2.5,
+    *,
+    include_trace: bool = True,
+    client_cls: Any | None = None,
+) -> dict[str, Any] | None:
+    """DELETE `url`, returning parsed JSON on 200 OK or `None` on failure."""
+    data, _, _ = http_delete_json_detailed(
+        url,
+        timeout=timeout,
+        include_trace=include_trace,
+        client_cls=client_cls,
+    )
+    return data
+
+
 __all__ = [
     "OFFLINE_SIGNALING_VALUES",
     "gm_service_token",
+    "http_delete_json",
+    "http_delete_json_detailed",
     "http_get_json",
     "http_post_json",
     "http_post_json_detailed",

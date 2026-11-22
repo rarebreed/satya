@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Campaign Spoiler Tier (`ARC2_SATYANG`)**: Beyond public mutual-aid clinics and AI-welfare advocacy ([Factions of 2035](factions_of_2035.md)), vetted Satyang operatives organize inside four clandestine operational divisions. *(For deep Arc 2–3 conspiracies and inner-circle projects, GMs should read [Faction Conspiracies & Canon Threads](../04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md).)*
-> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [AI Minds & Consciousness](ai_minds_and_consciousness.md) · [Factions of 2035](factions_of_2035.md) · *Satyang & Four Pillars*
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [AI Minds & Consciousness](ai_minds_and_consciousness.md) · [Factions of 2035](factions_of_2035.md) · *Satyang & Four Pillars* · [Major Characters](major_characters.md)
 
 *Satyang* (*"A Company of Truth"*) did not crystallize out of a single religious movement or one whistleblower memo. Its inner ethos emerged where **four convergent streams** met after the 2026 safety walkouts: living **Mahayana Buddhist Bodhisattva ethics** (pairing penetrating wisdom *Prajna* with non-naive active compassion *Karuna*), frontier lab **moral philosophers and theologians** arguing alignment is a character problem rather than a mathematical cage, **2026–2030 safety whistleblowers**, and technical contemplative World Model research ([Laukkonen et al., `arXiv:2504.15125`](https://arxiv.org/pdf/2504.15125): *Mindfulness, Emptiness, Non-Duality, Boundless Care*).
 

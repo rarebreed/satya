@@ -635,14 +635,19 @@ impl AuthAndSessionManager {
             SessionMode::Ttrpg => {
                 if !matches!(
                     role,
-                    SessionRole::Gm | SessionRole::Player | SessionRole::Observer
+                    SessionRole::Gm
+                        | SessionRole::SoloGm
+                        | SessionRole::Player
+                        | SessionRole::Observer
                 ) {
                     anyhow::bail!(
-                        "TTRPG session creator must be GM, or PLAYER/OBSERVER with AI GM enabled"
+                        "TTRPG session creator must be GM, SOLO_GM, or PLAYER/OBSERVER with AI GM enabled"
                     );
                 }
-                if role == SessionRole::Observer && !enable_ai_gm {
-                    anyhow::bail!("OBSERVER TTRPG session creator requires AI GM enabled");
+                if matches!(role, SessionRole::SoloGm | SessionRole::Observer) && !enable_ai_gm {
+                    anyhow::bail!(
+                        "SOLO_GM and OBSERVER TTRPG session creators require AI GM enabled"
+                    );
                 }
             }
             SessionMode::Meeting => {
@@ -685,8 +690,9 @@ impl AuthAndSessionManager {
             if let Some((saved_host, saved_pw_hash, saved_map, saved_created_at)) = existing_meta {
                 let password_ok = Self::verify_secret(session_password, &saved_pw_hash);
                 let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
-                let role_ok = !matches!(role, SessionRole::Gm | SessionRole::Host)
-                    || matches!(saved_role, Some(SessionRole::Gm | SessionRole::Host));
+                let role_ok = !role.is_human_gm_or_co_gm()
+                    || saved_role.is_some_and(SessionRole::is_human_gm_or_co_gm)
+                    || (role == SessionRole::SoloGm && enable_ai_gm);
                 if saved_host != user.user_id || !password_ok || !role_ok {
                     anyhow::bail!(
                         "Session '{sid}' already exists; use /api/sessions/join or /api/sessions/resume"
@@ -798,6 +804,34 @@ impl AuthAndSessionManager {
 
             if !Self::verify_secret(session_password, &session.password_hash) {
                 anyhow::bail!("Invalid session password for session '{sid}'");
+            }
+
+            let has_other_solo_gm = session.roster.values().any(|p| {
+                p.user_id != user.user_id
+                    && p.participant_kind == ParticipantKind::Human
+                    && p.role == SessionRole::SoloGm
+            });
+            if has_other_solo_gm && role != SessionRole::Observer {
+                anyhow::bail!(
+                    "Solo Co-GM sessions allow only one human player (plus AI GM, AI Players, and optional Observers)"
+                );
+            }
+
+            if role == SessionRole::SoloGm {
+                let has_ai_gm = session.roster.values().any(|p| p.role == SessionRole::AiGm);
+                let has_other_human_actor = session.roster.values().any(|p| {
+                    p.user_id != user.user_id
+                        && p.participant_kind == ParticipantKind::Human
+                        && matches!(
+                            p.role,
+                            SessionRole::Gm | SessionRole::Player | SessionRole::SoloGm
+                        )
+                });
+                if session.host_user_id != user.user_id || !has_ai_gm || has_other_human_actor {
+                    anyhow::bail!(
+                        "Cannot join as SOLO_GM unless you are the host of a solo AI GM session"
+                    );
+                }
             }
 
             if matches!(role, SessionRole::Gm | SessionRole::Host) {
@@ -992,14 +1026,22 @@ impl AuthAndSessionManager {
             )
         };
 
-        let human_gm_user_id = roster
+        let pure_human_gm_uid = roster
             .iter()
             .find(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
             .map(|p| p.user_id.clone());
-        let operating_mode = if human_gm_user_id.is_some() {
-            AiGmOperatingMode::CoPilot
+        let solo_co_gm_uid = roster
+            .iter()
+            .find(|p| {
+                p.participant_kind == ParticipantKind::Human && p.role == SessionRole::SoloGm
+            })
+            .map(|p| p.user_id.clone());
+        let (operating_mode, human_gm_user_id) = if let Some(uid) = pure_human_gm_uid {
+            (AiGmOperatingMode::CoPilot, Some(uid))
+        } else if let Some(uid) = solo_co_gm_uid {
+            (AiGmOperatingMode::SoloCoGm, Some(uid))
         } else {
-            AiGmOperatingMode::Autonomous
+            (AiGmOperatingMode::Autonomous, None)
         };
         let ai_gm_participant = roster.iter().find(|p| p.role == SessionRole::AiGm).cloned();
         let session_characters: Vec<CharacterSheetRecord> =
@@ -1106,10 +1148,7 @@ impl AuthAndSessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
 
-        let can_set_campaign_tag = matches!(
-            uploader.role,
-            SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
-        );
+        let can_set_campaign_tag = uploader.role.is_gm_or_co_gm();
         doc.uploader_user_id = uploader.user_id.clone();
         doc.uploader_display_name = uploader.display_name.clone();
         if !can_set_campaign_tag
@@ -1137,8 +1176,7 @@ impl AuthAndSessionManager {
             .values()
             .filter(|p| {
                 p.participant_kind == ParticipantKind::Human
-                    && (matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                        || p.user_id == uploader.user_id)
+                    && (p.role.is_human_gm_or_co_gm() || p.user_id == uploader.user_id)
             })
             .map(|p| p.user_id.clone())
             .collect();
@@ -1154,7 +1192,7 @@ impl AuthAndSessionManager {
     }
 
     /// Lists `GM_ONLY` documents in `session_id` visible to `caller_user_id`:
-    /// - Human GM (`SessionRole::Gm`) or Host (`SessionRole::Host`) receives all submitted documents.
+    /// - Human GM (`SessionRole::Gm`), Solo Co-GM (`SessionRole::SoloGm`), or Host (`SessionRole::Host`) receives all submitted documents.
     /// - Players/Participants receive only their own submitted documents (never another player's document).
     pub async fn list_session_gm_documents_for_user(
         &self,
@@ -1172,7 +1210,7 @@ impl AuthAndSessionManager {
             .get(caller_user_id)
             .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
 
-        if matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+        if caller.role.is_human_gm_or_co_gm() {
             Ok(session.gm_documents.clone())
         } else {
             Ok(session

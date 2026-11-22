@@ -277,6 +277,16 @@ pub fn satya_select_saved_session() {
 /// via `POST /api/sessions/resume`.
 #[wasm_bindgen]
 pub fn satya_resume_saved_session() {
+    spawn_resume_saved_session(None);
+}
+
+/// Resumes a saved solo AI-GM session with `SessionRole::SoloGm` (`SOLO_GM`) via `POST /api/sessions/resume`.
+#[wasm_bindgen]
+pub fn satya_resume_as_solo_gm() {
+    spawn_resume_saved_session(Some(SessionRole::SoloGm));
+}
+
+fn spawn_resume_saved_session(role_override: Option<SessionRole>) {
     spawn_local(async move {
         let has_token = with_state(|st| st.auth_token.is_some());
         if !has_token && !perform_login().await {
@@ -319,7 +329,7 @@ pub fn satya_resume_saved_session() {
             session_id: session_id.clone(),
             session_password,
             join_token: None,
-            role: None,
+            role: role_override,
             display_name,
         };
 

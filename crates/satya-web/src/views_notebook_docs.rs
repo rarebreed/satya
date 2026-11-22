@@ -202,6 +202,17 @@ pub fn NotebookReferencePanes() -> impl IntoView {
         >
             <div class="pane-toolbar">
                 <div class="model-controls-row">
+                    <label class="inline-label" for="rules-lore-source-select">
+                        <span>"Source"</span>
+                        <select
+                            id="rules-lore-source-select"
+                            onchange="window.satyaSelectReaderSource('')"
+                            on:change=move |_| wasm_client::satya_select_reader_source(String::new())
+                        >
+                            <option value="RULES" selected>"TTRPG Rules Book (24 Ch.)"</option>
+                            <option value="CAMPAIGN_LORE">"Campaign Lore (Awakened)"</option>
+                        </select>
+                    </label>
                     <label class="inline-label" for="rules-chapter-select">
                         <span>"Chapter"</span>
                         <select

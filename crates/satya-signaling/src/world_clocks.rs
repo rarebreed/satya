@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -30,7 +30,9 @@ use sqlx::{Row, SqlitePool};
 use crate::auth::UserAccount;
 use crate::campaign_lore::{resolve_active_pack_name, resolve_pack_defaults};
 use crate::gm_api::verify_gm_service_header;
-use crate::npcs::can_caller_view_gm_secrets;
+use crate::npcs::{
+    SpoilerShieldQuery, can_caller_manage_gm_table, can_caller_view_gm_secrets_with_shield,
+};
 use crate::state::SignalingAppState;
 
 /// Ensures the `session_world_ledger` SQLite table exists idempotently.
@@ -179,6 +181,7 @@ pub async fn update_world_ledger(
 pub async fn get_session_world_ledger_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
+    Query(shield): Query<SpoilerShieldQuery>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let (user_opt, is_gm_service) = match resolve_caller(&state, &headers).await {
@@ -204,8 +207,14 @@ pub async fn get_session_world_ledger_handler(
         }
     }
 
-    let can_see_gm =
-        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let can_see_gm = can_caller_view_gm_secrets_with_shield(
+        &state,
+        sid,
+        user_opt.as_ref(),
+        is_gm_service,
+        shield.spoiler_shield,
+    )
+    .await;
     let ledger = get_or_init_world_ledger(&state, sid).await;
     (
         StatusCode::OK,
@@ -228,7 +237,7 @@ pub async fn update_session_world_ledger_handler(
     };
     let sid = session_id.trim();
     let can_see_gm =
-        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+        can_caller_manage_gm_table(&state, sid, user_opt.as_ref(), is_gm_service).await;
     if !can_see_gm {
         return (
             StatusCode::FORBIDDEN,

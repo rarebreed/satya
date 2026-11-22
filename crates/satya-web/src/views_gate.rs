@@ -160,6 +160,16 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="btn-resume-solo-gm"
+                                class="btn btn-secondary"
+                                title="Resume a saved solo AI-GM session with the Solo Player (Co-GM) role"
+                                onclick="window.satyaResumeAsSoloGm()"
+                                on:click=move |_| wasm_client::satya_resume_as_solo_gm()
+                            >
+                                "Resume as Solo Co-GM"
+                            </button>
+                            <button
+                                type="button"
                                 id="btn-refresh-saved-sessions"
                                 class="btn btn-secondary"
                                 title="Refresh saved sessions list from server"
@@ -222,6 +232,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                             <option value="TTRPG">"TTRPG Mode (GM + Players)"</option>
                             <option value="TTRPG_GM_AI">"TTRPG Mode (GM + AI + Players)"</option>
                             <option value="TTRPG_AI_GM">"TTRPG Mode (AI GM + Players)"</option>
+                            <option value="TTRPG_SOLO_AI_GM">"TTRPG Mode (Solo Player / Co-GM + AI GM)"</option>
                             <option value="MEETING">"Meeting Mode (Host + 2+ Attendees)"</option>
                         </select>
                     </label>
@@ -229,6 +240,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                         <span>"Your Session Role"</span>
                         <select id="session-role-select">
                             <option value="GM">"Game Master (GM)"</option>
+                            <option value="SOLO_GM">"Solo Player (Co-GM)"</option>
                             <option value="PLAYER">"Player"</option>
                             <option value="OBSERVER">"Observer"</option>
                         </select>

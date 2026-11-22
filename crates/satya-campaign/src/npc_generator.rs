@@ -432,7 +432,7 @@ pub fn extract_npc_name_from_prompt(prompt: &str, seed: u64) -> String {
     }
 
     let lower = trimmed.to_ascii_lowercase();
-    for marker in ["named ", "called "] {
+    for marker in ["named ", "called ", "name will be ", "name is "] {
         if let Some(pos) = lower.find(marker) {
             let after = &trimmed[pos + marker.len()..];
             let end = after.find([',', '.', ';', '(']).unwrap_or(after.len());
@@ -1217,5 +1217,28 @@ mod tests {
             );
             assert!(res.character.characteristics.cnf <= 7);
         }
+    }
+
+    #[test]
+    fn test_extract_npc_name_from_prompt_name_will_be_and_cliff_reed_daise() {
+        let prompt = "Can you add an NPC for me? I want a researcher at DAISE who is adamant that AI are not conscious and believes that AGI will solve many of the world's problems. The NPC name will be Cliff Reed. He has advanced degrees in Computer Science and Math";
+        assert_eq!(extract_npc_name_from_prompt(prompt, 0), "Cliff Reed");
+        assert_eq!(
+            extract_npc_name_from_prompt("Create an NPC whose name is Mara Vance.", 0),
+            "Mara Vance"
+        );
+
+        let res = generate_npc_from_prompt(&NpcGenerationParams {
+            prompt: prompt.to_string(),
+            name_override: None,
+            template: NpcTemplateKind::Auto,
+            faction_archetype: None,
+            career_terms: 2,
+            seed: 42,
+            owner_user_id: "ai_gm_service".to_string(),
+        });
+        assert_eq!(res.character.character_name, "Cliff Reed");
+        assert_eq!(res.character.faction_id.as_deref(), Some("GOVERNMENT_DAISE"));
+        assert!(verify_character_sheet_legality(&res.character).is_legal);
     }
 }

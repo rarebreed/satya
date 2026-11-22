@@ -311,8 +311,7 @@ pub fn can_author_map(self_part: Option<&Participant>, roster: &[Participant]) -
         .iter()
         .filter(|p| p.participant_kind == ParticipantKind::Human)
         .count();
-    let is_gm_or_host =
-        self_part.is_some_and(|p| matches!(p.role, SessionRole::Gm | SessionRole::Host));
+    let is_gm_or_host = self_part.is_some_and(|p| p.role.is_human_gm_or_co_gm());
     is_gm_or_host || (!has_human_gm && human_count <= 1)
 }
 

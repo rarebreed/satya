@@ -152,7 +152,7 @@ pub async fn session_generate_or_edit_map_handler(
         })
         .count();
     let is_session_host = state.auth.is_session_host(&session_id, &user.user_id).await;
-    let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+    let caller_is_gm_or_solo = caller_part.role.is_human_gm_or_co_gm()
         || (!has_human_gm
             && caller_part.role == SessionRole::Player
             && is_session_host

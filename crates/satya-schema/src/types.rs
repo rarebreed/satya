@@ -26,11 +26,13 @@ crate::define_wire_enum! {
 
 crate::define_wire_enum! {
     /// Role assigned to a [`Participant`] within a TTRPG or Meeting session.
-    pub enum SessionRole [count = 6] {
+    pub enum SessionRole [count = 7] {
         /// Human Game Master adjudicating a TTRPG session.
         Gm => ("GM", "Game Master"),
         /// Autonomous AI Game Master adjudicating a TTRPG session.
         AiGm => ("AI_GM", "AI Game Master"),
+        /// Solo tabletop player acting as both Player Character and Co-GM alongside the AI Game Master.
+        SoloGm => ("SOLO_GM", "Solo Player (Co-GM)", aliases: ["solo_gm", "solo_player", "player_gm", "co_gm"]),
         /// Player character participant in a TTRPG session.
         Player => ("PLAYER", "Player"),
         /// Host of a Meeting session.
@@ -39,6 +41,26 @@ crate::define_wire_enum! {
         Participant => ("PARTICIPANT", "Participant"),
         /// Read/listen-only observer in a session.
         Observer => ("OBSERVER", "Observer"),
+    }
+}
+
+impl SessionRole {
+    /// Returns `true` when this role holds GM, AI GM, Host, or Solo Co-GM authority.
+    #[must_use]
+    pub const fn is_gm_or_co_gm(self) -> bool {
+        matches!(self, Self::Gm | Self::Host | Self::AiGm | Self::SoloGm)
+    }
+
+    /// Returns `true` when this role belongs to a human GM, Host, or Solo Co-GM.
+    #[must_use]
+    pub const fn is_human_gm_or_co_gm(self) -> bool {
+        matches!(self, Self::Gm | Self::Host | Self::SoloGm)
+    }
+
+    /// Returns `true` when this role participates as a player character actor (`Player` or `SoloGm`).
+    #[must_use]
+    pub const fn is_player_actor(self) -> bool {
+        matches!(self, Self::Player | Self::SoloGm)
     }
 }
 

@@ -579,12 +579,14 @@ pub struct TabletopCanvasEvent {
 crate::define_wire_enum! {
     /// Operating mode of the AI Game Master within a TTRPG session.
     #[derive(Default)]
-    pub enum AiGmOperatingMode [count = 2] {
+    pub enum AiGmOperatingMode [count = 3] {
         /// Solo AI Game Master mode (`TTRPG_AI_GM`: AI GM + Players, no human GM).
         #[default]
         Autonomous => ("AUTONOMOUS", "Autonomous", aliases: ["autonomous"]),
         /// Co-Pilot Assistant mode (`TTRPG_GM_AI`: Human GM + AI Assistant + Players).
         CoPilot => ("CO_PILOT", "Co-Pilot", aliases: ["co_pilot", "copilot"]),
+        /// Solo Co-GM mode (`TTRPG_SOLO_AI_GM`: 1 human Solo Player/Co-GM + AI GM + optional AI Players).
+        SoloCoGm => ("SOLO_CO_GM", "Solo Co-GM", aliases: ["solo_co_gm", "solo", "solo_gm"]),
     }
 }
 

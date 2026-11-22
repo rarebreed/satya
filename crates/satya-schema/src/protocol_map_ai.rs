@@ -447,7 +447,7 @@ impl GmMapUpdateRequest {
     /// `GM_ONLY` surveillance nodes, and GM-private `notes` when `role` is a non-GM player or observer.
     #[must_use]
     pub fn filtered_for_role(&self, role: SessionRole) -> Self {
-        if matches!(role, SessionRole::Gm | SessionRole::AiGm | SessionRole::Host) {
+        if role.is_gm_or_co_gm() {
             return self.clone();
         }
         let mut filtered = self.clone();
@@ -699,7 +699,17 @@ pub struct UpdateSessionNpcRequest {
     pub is_persistent: Option<bool>,
 }
 
-/// HTTP response body for `POST /api/sessions/:session_id/npcs/generate`.
+/// Request body to load a canonical campaign starter NPC (`data/npcs/*.toml`) into the active session.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoadStarterNpcRequest {
+    pub npc_id: String,
+    #[serde(default = "default_true_flag")]
+    pub is_persistent: bool,
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
+}
+
+/// HTTP response body for `POST /api/sessions/:session_id/npcs/generate` and `/npcs/load-starter`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerateNpcResponse {
     pub npc: SessionNpcEntry,
@@ -714,6 +724,10 @@ pub struct SessionNpcsResponse {
     pub campaign_tag: String,
     pub viewer_can_see_gm_secrets: bool,
     pub npcs: Vec<SessionNpcEntry>,
+    #[serde(default)]
+    pub campaign_pack: String,
+    #[serde(default)]
+    pub campaign_npcs: Vec<SessionNpcEntry>,
 }
 
 fn default_max_rally_turns() -> u32 {

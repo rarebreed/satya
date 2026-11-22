@@ -150,12 +150,32 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             get(gm_omnisearch_lookup_handler),
         )
         .route(
+            "/api/sessions/:session_id/lore",
+            get(campaign_lore::list_session_lore_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/lore/chapter",
+            get(campaign_lore::get_session_lore_chapter_handler),
+        )
+        .route(
+            "/api/campaign/lore",
+            get(campaign_lore::list_public_lore_handler),
+        )
+        .route(
+            "/api/campaign/lore/chapter",
+            get(campaign_lore::get_public_lore_chapter_handler),
+        )
+        .route(
             "/api/sessions/:session_id/npcs",
             get(list_session_npcs_handler),
         )
         .route(
             "/api/sessions/:session_id/npcs/generate",
             post(generate_session_npc_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/npcs/load-starter",
+            post(load_starter_npc_handler),
         )
         .route(
             "/api/sessions/:session_id/npcs/:character_id",
@@ -168,6 +188,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/gm/sessions/:session_id/memories",
             get(list_session_gm_memories_handler).post(upsert_session_gm_memory_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/memories/:memory_id",
+            delete(delete_session_gm_memory_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/combat",
@@ -184,6 +208,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/gm/sessions/:session_id/npcs/generate",
             post(generate_session_npc_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/npcs/load-starter",
+            post(load_starter_npc_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/npcs/:character_id",

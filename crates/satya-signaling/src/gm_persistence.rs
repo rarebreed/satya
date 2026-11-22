@@ -16,7 +16,7 @@ use satya_schema::{
     CharacterSheetRecord, CombatTrackerState, CombatantTickEntry, GmDocumentRecord,
     GmDocumentSource, GmLookupHit, GmLookupSourceKind, GmMapUpdateRequest, GmMemoryCategory,
     GmMemoryNoteRecord, GmOmnisearchResponse, MessageVisibility, Participant, ParticipantKind,
-    ServerWsPacket, SessionGmMemoriesResponse, SessionRole, ToggleGmDocumentPersistenceRequest,
+    ServerWsPacket, SessionGmMemoriesResponse, ToggleGmDocumentPersistenceRequest,
     TokenPlacement, UpdateCombatTrackerRequest, UpsertGmMemoryRequest,
 };
 use serde::Deserialize;
@@ -195,7 +195,7 @@ impl AuthAndSessionManager {
                 session.roster.get(caller_user_id).cloned().ok_or_else(|| {
                     anyhow::anyhow!("Caller is not an active participant in '{sid}'")
                 })?;
-            let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host);
+            let is_gm = caller.role.is_human_gm_or_co_gm();
 
             if let Some(tag_override) = campaign_tag
                 .as_deref()
@@ -233,7 +233,7 @@ impl AuthAndSessionManager {
                 .values()
                 .filter(|p| {
                     p.participant_kind == ParticipantKind::Human
-                        && (matches!(p.role, SessionRole::Gm | SessionRole::Host)
+                        && (p.role.is_human_gm_or_co_gm()
                             || p.user_id == updated.uploader_user_id)
                 })
                 .map(|p| p.user_id.clone())
@@ -253,7 +253,7 @@ impl AuthAndSessionManager {
     }
 
     /// Deletes a `GM_ONLY` document from in-memory session state and SQLite `gm_documents`.
-    /// Authorized for the session's Human GM/Host, Solo host, or original uploader.
+    /// Authorized for the session's Human GM/Host, Solo Co-GM, or original uploader.
     pub async fn delete_session_gm_document(
         &self,
         session_id: &str,
@@ -262,6 +262,9 @@ impl AuthAndSessionManager {
     ) -> anyhow::Result<bool> {
         let sid = session_id.trim();
         let did = doc_id.trim();
+        if did.starts_with("default_") || did.starts_with("campaign_default_") {
+            anyhow::bail!("Built-in campaign default documents cannot be deleted");
+        }
         let (removed_in_mem, is_gm, session_ctag, host_uid) = {
             let mut guard = self.sessions.write().await;
             let session = guard
@@ -271,7 +274,7 @@ impl AuthAndSessionManager {
                 .roster
                 .get(caller_user_id)
                 .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
-            let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host);
+            let is_gm = caller.role.is_human_gm_or_co_gm();
             let ctag = session.campaign_tag.clone();
             let huid = session.host_user_id.clone();
 
@@ -441,7 +444,7 @@ impl AuthAndSessionManager {
                     let caller = session.roster.get(author_user_id).ok_or_else(|| {
                         anyhow::anyhow!("Caller is not an active participant in '{sid}'")
                     })?;
-                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    if !caller.role.is_human_gm_or_co_gm() {
                         anyhow::bail!("Only the session Game Master can edit GM memory notes");
                     }
                 }
@@ -687,7 +690,7 @@ impl AuthAndSessionManager {
                         .roster
                         .get(uid)
                         .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    if !caller.role.is_human_gm_or_co_gm() {
                         anyhow::bail!(
                             "Only the session Game Master can modify GM memory persistence"
                         );
@@ -807,7 +810,7 @@ impl AuthAndSessionManager {
                     .roster
                     .get(uid)
                     .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                if !caller.role.is_human_gm_or_co_gm() {
                     return Ok((session.campaign_tag.clone(), Vec::new()));
                 }
             }
@@ -835,6 +838,9 @@ impl AuthAndSessionManager {
         if mid == "mem-scenario-director" {
             mid = format!("mem-scenario-director-{sid}");
         }
+        if mid.starts_with("default_") || mid.starts_with("campaign_default_") {
+            anyhow::bail!("Built-in campaign default memory notes cannot be deleted");
+        }
         if !self.sessions.read().await.contains_key(sid) {
             let _ = self.rehydrate_session_from_db(sid).await;
         }
@@ -849,7 +855,7 @@ impl AuthAndSessionManager {
                     .roster
                     .get(uid)
                     .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                if !caller.role.is_human_gm_or_co_gm() {
                     anyhow::bail!("Only the session Game Master can delete GM memory notes");
                 }
             }
@@ -928,7 +934,7 @@ impl AuthAndSessionManager {
 
     /// Synchronizes a [`Participant`] into a [`CombatTrackerState`] if not already listed.
     pub fn sync_combatant_into_tracker(tracker: &mut CombatTrackerState, part: &Participant) {
-        if part.role != SessionRole::Player {
+        if !part.role.is_player_actor() {
             return;
         }
         if tracker
@@ -1174,7 +1180,7 @@ impl AuthAndSessionManager {
                 && let Some(player_part) = session
                     .roster
                     .get(eid)
-                    .filter(|p| p.role == SessionRole::Player)
+                    .filter(|p| p.role.is_player_actor())
                     .cloned()
             {
                 Self::sync_combatant_into_tracker(&mut session.combat_tracker, &player_part);
@@ -1320,7 +1326,7 @@ impl AuthAndSessionManager {
         &self,
         session_id: &str,
         caller_user_id: Option<&str>,
-        is_gm_service: bool,
+        access: crate::campaign_lore::OmnisearchAccess,
         query: &str,
         scope: &str,
     ) -> anyhow::Result<GmOmnisearchResponse> {
@@ -1337,24 +1343,25 @@ impl AuthAndSessionManager {
             .map(str::to_lowercase)
             .collect();
 
-        let (campaign_tag, roster, gm_docs, gm_memories, combat_tracker, active_map, caller_is_gm) = {
+        let (
+            campaign_tag,
+            roster,
+            gm_docs,
+            gm_memories,
+            combat_tracker,
+            active_map,
+            caller_is_gm,
+            caller_can_manage,
+        ) = {
             let guard = self.sessions.read().await;
             if let Some(session) = guard.get(sid) {
                 let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
-                let is_gm = if is_gm_service {
-                    true
-                } else if let Some(uid) = caller_user_id {
-                    let caller = session
+                if let Some(uid) = caller_user_id {
+                    let _ = session
                         .roster
                         .get(uid)
                         .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    matches!(
-                        caller.role,
-                        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
-                    )
-                } else {
-                    false
-                };
+                }
                 (
                     session.campaign_tag.clone(),
                     roster_vec,
@@ -1362,13 +1369,23 @@ impl AuthAndSessionManager {
                     session.gm_memories.clone(),
                     session.combat_tracker.clone(),
                     session.active_map.clone(),
-                    is_gm,
+                    access.can_see_secrets,
+                    access.can_manage,
                 )
-            } else if is_gm_service {
+            } else if caller_user_id.is_none() && access.can_see_secrets {
                 let docs = self.load_persistent_gm_docs_from_db(sid, None).await;
                 let mems = self.load_persistent_gm_memories_from_db(sid, None).await;
                 let tracker = self.load_or_init_combat_tracker(sid, &[]).await;
-                (sid.to_string(), Vec::new(), docs, mems, tracker, None, true)
+                (
+                    sid.to_string(),
+                    Vec::new(),
+                    docs,
+                    mems,
+                    tracker,
+                    None,
+                    true,
+                    true,
+                )
             } else {
                 anyhow::bail!("Session '{sid}' does not exist");
             }
@@ -1406,6 +1423,9 @@ impl AuthAndSessionManager {
                     snippet: excerpt,
                     is_persistent: true,
                     score: r.score + 15,
+                    section_anchor: Some(satya_rules_book::slugify_heading(&r.section_heading)),
+                    can_delete: false,
+                    is_campaign_default: true,
                 });
             }
         }
@@ -1419,6 +1439,8 @@ impl AuthAndSessionManager {
                 let sc = score_text(&doc.sanitized_content, &doc.title);
                 if sc > 0 {
                     let excerpt: String = doc.sanitized_content.chars().take(420).collect();
+                    let is_default_doc = doc.doc_id.starts_with("default_")
+                        || doc.doc_id.starts_with("campaign_default_");
                     hits.push(GmLookupHit {
                         source_kind: GmLookupSourceKind::GmDocument,
                         item_id: doc.doc_id.clone(),
@@ -1436,6 +1458,11 @@ impl AuthAndSessionManager {
                         snippet: excerpt,
                         is_persistent: doc.is_persistent,
                         score: sc + 20,
+                        section_anchor: None,
+                        can_delete: !is_default_doc
+                            && (caller_can_manage
+                                || Some(doc.uploader_user_id.as_str()) == caller_user_id),
+                        is_campaign_default: is_default_doc,
                     });
                 }
             }
@@ -1451,6 +1478,8 @@ impl AuthAndSessionManager {
             for mem in &gm_memories {
                 let sc = score_text(&mem.content, &mem.title);
                 if sc > 0 {
+                    let is_default_mem = mem.memory_id.starts_with("default_")
+                        || mem.memory_id.starts_with("campaign_default_");
                     hits.push(GmLookupHit {
                         source_kind: GmLookupSourceKind::GmMemory,
                         item_id: mem.memory_id.clone(),
@@ -1464,6 +1493,9 @@ impl AuthAndSessionManager {
                         snippet: mem.content.chars().take(420).collect(),
                         is_persistent: mem.is_persistent,
                         score: sc + if mem.is_pinned { 35 } else { 25 },
+                        section_anchor: None,
+                        can_delete: !is_default_mem && caller_can_manage,
+                        is_campaign_default: is_default_mem,
                     });
                 }
             }
@@ -1509,6 +1541,9 @@ impl AuthAndSessionManager {
                         snippet: summary,
                         is_persistent: true,
                         score: sc + 22,
+                        section_anchor: None,
+                        can_delete: false,
+                        is_campaign_default: false,
                     });
                 }
             }
@@ -1559,6 +1594,9 @@ impl AuthAndSessionManager {
                     snippet: combat_summary,
                     is_persistent: true,
                     score: sc.max(15),
+                    section_anchor: None,
+                    can_delete: false,
+                    is_campaign_default: false,
                 });
             }
 
@@ -1592,6 +1630,9 @@ impl AuthAndSessionManager {
                         snippet: map_summary,
                         is_persistent: false,
                         score: map_sc.max(15),
+                        section_anchor: None,
+                        can_delete: false,
+                        is_campaign_default: false,
                     });
                 }
             }
@@ -1687,6 +1728,7 @@ pub async fn toggle_session_gm_doc_persistence_handler(
 pub async fn list_session_gm_memories_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
+    axum::extract::Query(shield): axum::extract::Query<crate::npcs::SpoilerShieldQuery>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let (user_opt, is_gm_service) = match resolve_user_or_gm_service(&state, &headers).await {
@@ -1699,15 +1741,30 @@ pub async fn list_session_gm_memories_handler(
         .list_session_gm_memories(&session_id, uid, is_gm_service)
         .await
     {
-        Ok((campaign_tag, memories)) => (
-            StatusCode::OK,
-            Json(SessionGmMemoriesResponse {
-                session_id,
-                campaign_tag,
-                memories,
-            }),
-        )
-            .into_response(),
+        Ok((campaign_tag, mut memories)) => {
+            if !is_gm_service && shield.spoiler_shield {
+                let can_see = crate::npcs::can_caller_view_gm_secrets_with_shield(
+                    &state,
+                    &session_id,
+                    user_opt.as_ref(),
+                    false,
+                    true,
+                )
+                .await;
+                if !can_see {
+                    memories.clear();
+                }
+            }
+            (
+                StatusCode::OK,
+                Json(SessionGmMemoriesResponse {
+                    session_id,
+                    campaign_tag,
+                    memories,
+                }),
+            )
+                .into_response()
+        }
         Err(e) => (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": e.to_string() })),
@@ -1811,6 +1868,7 @@ pub async fn delete_session_gm_memory_handler(
 pub async fn get_session_combat_tracker_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
+    axum::extract::Query(shield): axum::extract::Query<crate::npcs::SpoilerShieldQuery>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let (user_opt, is_gm_service) = match resolve_user_or_gm_service(&state, &headers).await {
@@ -1827,11 +1885,12 @@ pub async fn get_session_combat_tracker_handler(
                 .into_response();
         }
     }
-    let can_see_gm = crate::npcs::can_caller_view_gm_secrets(
+    let can_see_gm = crate::npcs::can_caller_view_gm_secrets_with_shield(
         &state,
         &session_id,
         user_opt.as_ref(),
         is_gm_service,
+        shield.spoiler_shield,
     )
     .await;
     match state.auth.get_session_combat_tracker(&session_id).await {
@@ -1867,6 +1926,13 @@ pub async fn update_session_combat_tracker_handler(
         Ok(v) => v,
         Err(err_resp) => return err_resp.into_response(),
     };
+    let can_manage = crate::npcs::can_caller_manage_gm_table(
+        &state,
+        &session_id,
+        user_opt.as_ref(),
+        is_gm_service,
+    )
+    .await;
     let can_see_gm = crate::npcs::can_caller_view_gm_secrets(
         &state,
         &session_id,
@@ -1894,11 +1960,11 @@ pub async fn update_session_combat_tracker_handler(
             .get_session_roster(&session_id)
             .await
             .iter()
-            .any(|p| p.user_id == user.user_id && p.role == SessionRole::Player)
+            .any(|p| p.user_id == user.user_id && p.role.is_player_actor())
     } else {
         false
     };
-    if !can_see_gm && !(is_self_condition_sync && caller_is_player) {
+    if !can_manage && !(is_self_condition_sync && caller_is_player) {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Only the Game Master can update the Combat Tracker" })),
@@ -1949,6 +2015,8 @@ pub struct GmLookupQueryParams {
     pub q: String,
     #[serde(default)]
     pub scope: String,
+    #[serde(default)]
+    pub spoiler_shield: bool,
 }
 
 /// Unified GM Omnisearch handler (`GET /api/sessions/:session_id/lookup?q=...&scope=...`) for both Human GM UI lookup and AI GM RAG/MCP tools.
@@ -1963,23 +2031,35 @@ pub async fn gm_omnisearch_lookup_handler(
         Err(err_resp) => return err_resp.into_response(),
     };
     let uid = user_opt.as_ref().map(|u| u.user_id.as_str());
-    let is_gm_caller = crate::npcs::can_caller_view_gm_secrets(
+    let can_see_secrets = crate::npcs::can_caller_view_gm_secrets_with_shield(
+        &state,
+        &session_id,
+        user_opt.as_ref(),
+        is_gm_service,
+        params.spoiler_shield,
+    )
+    .await;
+    let can_manage = crate::npcs::can_caller_manage_gm_table(
         &state,
         &session_id,
         user_opt.as_ref(),
         is_gm_service,
     )
     .await;
+    let access = crate::campaign_lore::OmnisearchAccess {
+        can_see_secrets,
+        can_manage,
+    };
     match state
         .auth
-        .search_session_gm_omnisearch(&session_id, uid, is_gm_service, &params.q, &params.scope)
+        .search_session_gm_omnisearch(&session_id, uid, access, &params.q, &params.scope)
         .await
     {
         Ok(mut resp) => {
             crate::campaign_lore::append_omnisearch_lore_and_npc_hits(
                 &state,
                 &session_id,
-                is_gm_caller,
+                access,
                 &params.q,
                 &params.scope,
                 &mut resp.hits,

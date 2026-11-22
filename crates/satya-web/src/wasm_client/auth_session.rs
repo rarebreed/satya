@@ -100,6 +100,13 @@ pub fn satya_mode_changed() {
         set_display("ttrpg-drawer", "flex");
         set_display("tabletop-canvas-card", "flex");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
+    } else if mode == "TTRPG_SOLO_AI_GM" {
+        sync_role_options_for_mode("TTRPG_SOLO_AI_GM", Some("SOLO_GM"));
+        set_input_checked("enable-ai-gm", true);
+        set_display("ai-gm-config-fields", "grid");
+        set_display("ttrpg-drawer", "flex");
+        set_display("tabletop-canvas-card", "flex");
+        sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if mode == "TTRPG_GM_AI" {
         sync_role_options_for_mode("TTRPG_GM_AI", Some("GM"));
         set_input_checked("enable-ai-gm", true);
@@ -413,11 +420,10 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     }
 
     let session_mode = data.session_mode;
-    let is_gm = data.self_participant.role == SessionRole::Gm;
-    let initial_can_see_secrets = matches!(
-        data.self_participant.role,
-        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
-    );
+    let role = data.self_participant.role;
+    let is_gm = role.is_human_gm_or_co_gm();
+    let is_solo_gm = role == SessionRole::SoloGm;
+    let initial_can_see_secrets = role.is_gm_or_co_gm();
     let history = data.history;
     with_state_mut(|st| {
         st.session_id = Some(data.session_id);
@@ -430,10 +436,17 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
         st.ws_reconnect_attempts = 0;
         st.ws_reconnect_scheduled = false;
         st.combat_combatants.clear();
+        st.solo_spoiler_shield = false;
         st.viewer_can_see_gm_secrets = initial_can_see_secrets;
         st.ai_rally_paused = false;
     });
 
+    set_display(
+        "btn-solo-spoiler-shield",
+        if is_solo_gm { "inline-flex" } else { "none" },
+    );
+    set_text("btn-solo-spoiler-shield", "Spoiler Shield: OFF");
+    set_class("btn-solo-spoiler-shield", "btn btn-sm btn-secondary");
     sync_gm_context_button_visibility(is_gm);
     sync_chat_options_for_mode(session_mode);
     set_display("session-card", "none");
@@ -451,9 +464,95 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     render_roster();
     set_session_buttons_enabled(true);
     replay_session_history_snapshot(history);
+    crate::wasm_client::notebook::refresh_campaign_lore_catalog();
     connect_signaling_websocket();
     satya_refresh_saved_sessions();
     satya_refresh_metrics();
+}
+
+/// Toggles the optional Solo Co-GM Spoiler Shield (`SOLO_GM`) between full Co-GM visibility
+/// (`OFF`) and player-safe redaction (`ON`) while keeping Co-GM table controls active.
+#[wasm_bindgen]
+pub fn satya_toggle_solo_spoiler_shield() {
+    let update_opt = with_state_mut(|st| {
+        if st.self_participant.as_ref().map(|p| p.role) != Some(SessionRole::SoloGm) {
+            return None;
+        }
+        st.solo_spoiler_shield = !st.solo_spoiler_shield;
+        st.viewer_can_see_gm_secrets = !st.solo_spoiler_shield;
+        Some((
+            st.solo_spoiler_shield,
+            st.session_id.clone(),
+            st.auth_token.clone(),
+            st.gm_omnisearch_active,
+        ))
+    });
+    let Some((shielded, sid_opt, tok_opt, omnisearch_active)) = update_opt else {
+        return;
+    };
+    set_text(
+        "btn-solo-spoiler-shield",
+        if shielded {
+            "Spoiler Shield: ON"
+        } else {
+            "Spoiler Shield: OFF"
+        },
+    );
+    set_class(
+        "btn-solo-spoiler-shield",
+        if shielded {
+            "btn btn-sm btn-warning"
+        } else {
+            "btn btn-sm btn-secondary"
+        },
+    );
+    set_feedback(
+        "session-feedback",
+        if shielded {
+            "Spoiler Shield enabled: hiding GM-only NPC secrets, GM notes, hidden map tokens, and spoiler campaign lore."
+        } else {
+            "Spoiler Shield disabled: full Solo Co-GM dossier and world state visible."
+        },
+        false,
+    );
+    crate::wasm_client::npcs::satya_refresh_npcs_tab();
+    crate::wasm_client::gm_memories_and_director::satya_refresh_gm_memories();
+    crate::wasm_client::notebook::refresh_campaign_lore_catalog();
+    if omnisearch_active {
+        crate::wasm_client::gm_omnisearch::satya_search_gm_omnisearch();
+    }
+    if let (Some(sid), Some(tok)) = (sid_opt, tok_opt) {
+        spawn_local(async move {
+            let suffix = if shielded { "?spoiler_shield=true" } else { "" };
+            if let Ok(map) = fetch_json::<(), satya_schema::GmMapUpdateRequest>(
+                "GET",
+                &format!("/api/sessions/{sid}/map{suffix}"),
+                Some(&tok),
+                None,
+            )
+            .await
+            {
+                crate::wasm_client::notebook::render_map_updated(&map);
+            }
+            if let Ok(ct) = fetch_json::<(), satya_schema::CombatTrackerState>(
+                "GET",
+                &format!("/api/sessions/{sid}/combat{suffix}"),
+                Some(&tok),
+                None,
+            )
+            .await
+            {
+                let round = ct.round.max(1);
+                let tick = ct.tick;
+                with_state_mut(|st| {
+                    st.combat_round = round;
+                    st.combat_tick = tick;
+                    st.combat_combatants = ct.combatants;
+                });
+                render_combat_tracker();
+            }
+        });
+    }
 }
 
 /// Closes all active WebRTC peer connections, DataChannels, local media tracks, prosody timers,
@@ -485,12 +584,19 @@ pub fn cleanup_client_session_state() {
         st.ws_reconnect_attempts = 0;
         st.ws_reconnect_scheduled = false;
         st.combat_combatants.clear();
+        st.solo_spoiler_shield = false;
         st.viewer_can_see_gm_secrets = false;
         st.ai_rally_paused = false;
         st.gm_documents.clear();
         st.gm_memories.clear();
         st.gm_omnisearch_active = false;
         st.session_npcs.clear();
+        st.campaign_pack_name = "awakened".to_string();
+        st.campaign_npcs.clear();
+        st.campaign_lore_catalog.clear();
+        st.reader_source_mode = "RULES".to_string();
+        st.last_omnisearch_hits.clear();
+        st.archivist_modal_item_id = None;
         st.selected_npc_id = None;
         st.session_id = None;
         st.join_token = None;
@@ -512,6 +618,8 @@ pub fn cleanup_client_session_state() {
         video.set_src_object(None);
     }
     set_text("local-participant-label", "Local Preview");
+    set_display("btn-solo-spoiler-shield", "none");
+    set_display("gm-archivist-modal", "none");
     sync_gm_context_button_visibility(false);
     render_roster();
     set_session_buttons_enabled(false);

@@ -7,7 +7,7 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::gm_docs::format_gm_documents_list_html;
 pub use crate::wasm_client::gm_omnisearch::*;
-use crate::wasm_client::state::with_state_mut;
+use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_schema::{
     GmMemoryCategory, GmMemoryNoteRecord, SessionGmMemoriesResponse,
     ToggleGmDocumentPersistenceRequest, UpsertGmMemoryRequest,
@@ -31,7 +31,11 @@ pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
             } else {
                 ""
             };
-            let persist_badge = if m.is_persistent {
+            let is_default = m.memory_id.starts_with("default_")
+                || m.memory_id.starts_with("campaign_default_");
+            let persist_badge = if is_default {
+                r#" <span class="pill pill-muted">Campaign Default</span>"#.to_string()
+            } else if m.is_persistent {
                 format!(
                     r#" <span class="pill pill-iggy">Persistent ({})</span>"#,
                     escape_html(&m.campaign_tag)
@@ -39,7 +43,7 @@ pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
             } else {
                 r#" <span class="pill pill-muted">Session-Only</span>"#.to_string()
             };
-            let controls_html = if show_controls {
+            let controls_html = if show_controls && !is_default {
                 let next_persist = !m.is_persistent;
                 let toggle_label = if m.is_persistent {
                     "Unmark Persistent"
@@ -49,7 +53,7 @@ pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
                 let js_id = escape_js_single_quoted_attr(&m.memory_id);
                 format!(
                     r#"<button type="button" class="btn-chip" onclick="window.satyaToggleGmMemoryPersistence('{js_id}', {next_persist})">{toggle_label}</button>
-                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmMemory('{js_id}')">Delete</button>"#
+                            <button type="button" class="btn-chip btn-chip-danger" onclick="window.satyaDeleteGmMemory('{js_id}')">Delete</button>"#
                 )
             } else {
                 String::new()
@@ -225,10 +229,32 @@ pub fn satya_toggle_gm_memory_persistence(memory_id: String, is_persistent: bool
 /// Deletes a `GM_ONLY` document via `DELETE /api/sessions/:session_id/docs/:doc_id`.
 #[wasm_bindgen]
 pub fn satya_delete_gm_document(doc_id: String) {
-    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
+    if doc_id.starts_with("default_") || doc_id.starts_with("campaign_default_") {
         set_feedback(
             "gm-doc-feedback",
-            "Only the Game Master or solo Host can delete GM documents.",
+            "Built-in campaign default documents cannot be deleted.",
+            true,
+        );
+        return;
+    }
+    let can_delete = crate::wasm_client::state::with_state(|st| {
+        let uploader = st
+            .gm_documents
+            .iter()
+            .find(|d| d.doc_id == doc_id)
+            .map(|d| d.uploader_user_id.as_str())
+            .unwrap_or("");
+        crate::wasm_client::gm_docs::viewer_can_manage_gm_doc(
+            st.session_id.as_deref(),
+            st.self_participant.as_ref(),
+            &st.roster,
+            uploader,
+        )
+    });
+    if !can_delete {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master, Solo Co-GM, or original document uploader can delete this document.",
             true,
         );
         return;
@@ -240,6 +266,7 @@ pub fn satya_delete_gm_document(doc_id: String) {
         });
         set_html("gm-docs-list", &format_gm_documents_list_html(&docs));
         set_text("gm-docs-count-pill", &format!("{} GM Docs", docs.len()));
+        close_archivist_modal_if_matching(id);
         refresh_gm_omnisearch_if_active();
     };
 
@@ -264,10 +291,18 @@ pub fn satya_delete_gm_document(doc_id: String) {
 /// Deletes a GM memory note via `DELETE /api/sessions/:session_id/memories/:memory_id`.
 #[wasm_bindgen]
 pub fn satya_delete_gm_memory(memory_id: String) {
+    if memory_id.starts_with("default_") || memory_id.starts_with("campaign_default_") {
+        set_feedback(
+            "gm-doc-feedback",
+            "Built-in campaign default notes cannot be deleted.",
+            true,
+        );
+        return;
+    }
     if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
         set_feedback(
             "gm-doc-feedback",
-            "Only the Game Master or solo Host can delete GM memory notes.",
+            "Only the Game Master, Solo Co-GM, or solo Host can delete GM memory notes.",
             true,
         );
         return;
@@ -278,6 +313,7 @@ pub fn satya_delete_gm_memory(memory_id: String) {
             st.gm_memories.clone()
         });
         sync_local_gm_memories_dom(&mems);
+        close_archivist_modal_if_matching(&memory_id);
         refresh_gm_omnisearch_if_active();
         return;
     };
@@ -286,6 +322,7 @@ pub fn satya_delete_gm_memory(memory_id: String) {
         match fetch_json::<(), serde_json::Value>("DELETE", &url, Some(&tok), None).await {
             Ok(_) => {
                 set_feedback("gm-doc-feedback", "Deleted GM memory note.", false);
+                close_archivist_modal_if_matching(&memory_id);
                 satya_refresh_gm_memories();
                 crate::wasm_client::npcs::satya_refresh_npcs_tab();
                 refresh_gm_omnisearch_if_active();
@@ -638,7 +675,9 @@ pub fn satya_refresh_gm_memories() {
             }
             return;
         };
-        let url = format!("/api/sessions/{sid}/memories");
+        let shielded = with_state(|st| st.solo_spoiler_shield);
+        let q = if shielded { "?spoiler_shield=true" } else { "" };
+        let url = format!("/api/sessions/{sid}/memories{q}");
         if let Ok(resp) =
             fetch_json::<(), SessionGmMemoriesResponse>("GET", &url, Some(&tok), None).await
         {

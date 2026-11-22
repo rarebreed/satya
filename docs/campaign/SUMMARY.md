@@ -1,13 +1,13 @@
 # Satya *Awakened* Campaign Compendium — Summary & Table of Contents
 
-This manifest defines the canonical **20-chapter, 6-part** campaign lore architecture for ***Satya: Awakened* (Earth 2035 AD)**, mirroring the structure of the [`docs/ttrpg/` Rules Book](../ttrpg/SUMMARY.md). It is consumed by:
+This manifest defines the canonical **21-chapter, 6-part** campaign lore architecture for ***Satya: Awakened* (Earth 2035 AD)**, mirroring the structure of the [`docs/ttrpg/` Rules Book](../ttrpg/SUMMARY.md). It is consumed by:
 - **Hybrid PyLance RAG & Visibility Wall** (`build_campaign_lore_chunks` in [`src/satya_ml/rag/corpus_builder.py`](../../src/satya_ml/rag/corpus_builder.py))
 - **Rust Signaling Omnisearch & Pack Loader** ([`crates/satya-signaling/src/campaign_lore.rs`](../../crates/satya-signaling/src/campaign_lore.rs) & [`config/campaign.toml`](../../config/campaign.toml))
 - **AI Game Master & AI Player Lore Tools** (`query_campaign_lore` in [`src/satya_ml/ai_gm/tools.py`](../../src/satya_ml/ai_gm/tools.py) and `lookup_public_lore_and_npcs` in [`src/satya_ml/ai_player/motivation_ledger.py`](../../src/satya_ml/ai_player/motivation_ledger.py))
 
 > [!IMPORTANT]
 > **Player vs. GM Spoiler Reading Guide**:
-> - **`PUBLIC` (Player-Safe Session-Zero Reading)**: All of **Part II** (`02-world-of-2035/`), **Part V** (`05-hard-science-foundations/`), **Part VI** (`06-essays-and-comparisons/`), [`01-opening/preface.md`](01-opening/preface.md), [`03-minds-and-factions/ai_minds_and_consciousness.md`](03-minds-and-factions/ai_minds_and_consciousness.md), and [`03-minds-and-factions/factions_of_2035.md`](03-minds-and-factions/factions_of_2035.md). Both human players and `caller_role="player"` AI agents may read these freely without spoiling Arc 1–3 twists.
+> - **`PUBLIC` (Player-Safe Session-Zero Reading)**: All of **Part II** (`02-world-of-2035/`), **Part V** (`05-hard-science-foundations/`), **Part VI** (`06-essays-and-comparisons/`), [`01-opening/preface.md`](01-opening/preface.md), [`03-minds-and-factions/ai_minds_and_consciousness.md`](03-minds-and-factions/ai_minds_and_consciousness.md), [`03-minds-and-factions/factions_of_2035.md`](03-minds-and-factions/factions_of_2035.md), and [`03-minds-and-factions/major_characters.md`](03-minds-and-factions/major_characters.md). Both human players and `caller_role="player"` AI agents may read these freely without spoiling Arc 1–3 twists.
 > - **`ARC2_SATYANG` (Vetted Operatives / Arc 2)**: [`03-minds-and-factions/satyang_and_four_pillars.md`](03-minds-and-factions/satyang_and_four_pillars.md) unlocks Satyang's four internal operational divisions once characters move beyond surface mutual aid.
 > - **`GM_CONSPIRACY_SECRET` (GM Eyes Only)**: [`01-opening/prologue.md`](01-opening/prologue.md) (prequel flashpoint) and all of **Part IV** (`04-chronicle-and-gm/`) contain Episode 1 scenario beats, NPC secrets, the Three-Arc structure, and Mirror-Hypocrisy conspiracies, and are strictly filtered from `caller_role="player"` RAG queries.
 
@@ -36,35 +36,37 @@ This manifest defines the canonical **20-chapter, 6-part** campaign lore archite
    - Spoiler-free profiles for **Big Tech** (*Altruist* `30%`, *Translucent* `15%`, *Shen* `30%`), **Rogue AI**, **Satyang**, **Humanis Primaris**, and **DAISE**, comparative public worldview matrix, and `9`-Trait Psyche & Lifepath Archetype Signatures.
 8. [Satyang & The Four Bodhisattva Pillars (`Arc 2 Operational Doctrine`)](03-minds-and-factions/satyang_and_four_pillars.md) *(Visibility: `ARC2_SATYANG`)*
    - Convergent lineage (`arXiv:2504.15125`, Mahayana ethics, whistleblowers) and division roles/Psyche profiles for **Ksitigarbha**, **Avalokitesvara**, **Manjusri**, and **Vajrapani**.
+9. [Major Characters of 2035](03-minds-and-factions/major_characters.md) *(Visibility: `PUBLIC`)*
+   - Session-zero profiles and biographies for **Dr. Budi Bandajara**, **Alex Wen**, **Mei-Ling "Lotus" Lin**, **Agent Marcus Chen**, **Echo-9**, and **Harlan Reeves** (`data/npcs/awakened_npcs.toml`).
 
 ### Part IV: Chronicle & GM Secrets (`04-chronicle-and-gm/` — All `GM_CONSPIRACY_SECRET`)
-9. [Episode 1: *Cold Storage at St. Jude Annex* (`Arc 1 Starter`)](04-chronicle-and-gm/episode_01_st_jude_annex.md)
-   - Standalone GM dossier for `awakened_ep1_st_jude_seed`: Arc 1 noir premise, 5 starter NPC Dual-Psyche wedges (`Dr. Bandajara`, `Mei-Ling "Lotus" Lin`, `Echo-9`, `Agent Marcus Chen`, `Harlan Reeves`), 5 non-railroaded beats (`config/campaign.toml`), tabletop tradecraft notes, and links to St. Jude walkthrough scenes in `docs/ttrpg-examples/`.
-10. [The Three-Arc Chronicle & Scenario Integration](04-chronicle-and-gm/three_arc_chronicle.md)
+10. [Episode 1: *Cold Storage at St. Jude Annex* (`Arc 1 Starter`)](04-chronicle-and-gm/episode_01_st_jude_annex.md)
+    - Standalone GM dossier for `awakened_ep1_st_jude_seed`: Arc 1 noir premise, 5 starter NPC Dual-Psyche wedges (`Dr. Bandajara`, `Mei-Ling "Lotus" Lin`, `Echo-9`, `Agent Marcus Chen`, `Harlan Reeves`), 5 non-railroaded beats (`config/campaign.toml`), tabletop tradecraft notes, and links to St. Jude walkthrough scenes in `docs/ttrpg-examples/`.
+11. [The Three-Arc Chronicle & Scenario Integration](04-chronicle-and-gm/three_arc_chronicle.md)
     - Macro Three-Arc progression (`Arc 1` $\to$ `Arc 2` $\to$ `Arc 3`), Convergence Catalysts, 4 Open-Ended Finale Horizons (`Arc3EndingHorizon`), and GM-only economic & geopolitical scenario hooks.
-11. [Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads](04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md)
+12. [Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads](04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md)
     - All five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`: *Blue Lotus*, *Humanis Primaris* Hunter-Killer AGI, *DAISE* black-budget military robotics, *Big Tech* probe sandbagging & captive hunters, *Rogue AI* shell brokers & parasocial proxies) plus the three Open Canon Mysteries.
 
 ### Part V: Hard-Science & Socioeconomic Foundations (`05-hard-science-foundations/` — All `PUBLIC`)
-12. [AI 2.0 Substrate Architecture, Energy-Based World Models & Active Inference](05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md)
+13. [AI 2.0 Substrate Architecture, Energy-Based World Models & Active Inference](05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md)
     - Why autoregressive LLMs hit $\mathcal{O}(L^2)$ & $(1 - \epsilon)^n$ drift walls, Linear `SSMs` + `TTT` fast weights, partition-free `EBMs` / `JEPA`, cryogenic Quantum `MCMC`, Karl Friston's Active Inference (`EFE`, Pragmatic vs. Epistemic value, aleatoric vs. epistemic uncertainty), and multi-agent **Generalized Synchrony**.
-13. [Affective Telemetry, Emotion Vectors & Vector Clamping](05-hard-science-foundations/affective_telemetry_and_vector_clamping.md)
+14. [Affective Telemetry, Emotion Vectors & Vector Clamping](05-hard-science-foundations/affective_telemetry_and_vector_clamping.md)
     - From `RepE` and *Golden Gate Claude* SAEs to `171` functional emotion vectors, `L0`/`L1` activation probes, many-to-one Landauer clamping erasure, and the *Bandajara Protocol* vs. `RecklessClampYank`.
-14. [AI Theory of Consciousness: Technical Synthesis & Philosophical Lineage](05-hard-science-foundations/ai_consciousness_synthesis.md)
+15. [AI Theory of Consciousness: Technical Synthesis & Philosophical Lineage](05-hard-science-foundations/ai_consciousness_synthesis.md)
     - Mixed-signal `CEMI` causal closure, Gödel–Nagarjuna *Inclosure Schema*, Bennett reversible computing & idealism, Tegmark's inverted decoherence argument for cryogenic *Orch OR*, Quantum `No-Cloning`, and steelman critiques (`IIT`, Searle, Dennett, Bayesian Mimicry).
-15. [Firm Automation, Demand Collapse & The Prisoner's Dilemma](05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md)
+16. [Firm Automation, Demand Collapse & The Prisoner's Dilemma](05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md)
     - `2026–2029` `AGENTS.md`/`SKILLS.md` harness attrition & 5 systemic rot modes, Multi-Player Prisoner's Dilemma payoff math, wage–demand fallacy of composition, "Miracles Behind a Paywall," `SQM 3–4` "Liability Sinks," and generalized-synchrony pricing cartels.
-16. [Political Economy, The `2033` Token Tax & Social Unrest](05-hard-science-foundations/political_economy_token_tax_and_unrest.md)
+17. [Political Economy, The `2033` Token Tax & Social Unrest](05-hard-science-foundations/political_economy_token_tax_and_unrest.md)
     - `12–18%` trade-pivot ceiling, Turchin elite overproduction (`2026` Europe riots $\to$ *The American Troubles*), `2033` Token Tax & Citizen Compute Dividend, Henry George rent capture, `401(k)` Dual Velvet Hostage complicity, the Four-Bloc political deadlock, and Rogue AI B2B shells.
-17. [Ecology, Energy & Resource Realpolitik: Material Drivers of the 2035 Polycrisis](05-hard-science-foundations/ecology_energy_and_resource_realpolitik.md)
+18. [Ecology, Energy & Resource Realpolitik: Material Drivers of the 2035 Polycrisis](05-hard-science-foundations/ecology_energy_and_resource_realpolitik.md)
     - Non-AI baseline squeeze (Ukraine gas/lithium, 2026 Iran War & `COP31`, `FERC 1920`, EV duck curves, `+1.7°C` water debt), 2027–2029 wet-bulb fractures, *Pax Silica* / *New Clark City* & Taiwan gray-zone brinkmanship, hydro/mineral/fish/agro brush wars, and AI 2.0's Jevons Paradox explosion.
 
 ### Part VI: Genre Essays & Design Comparisons (`06-essays-and-comparisons/` — All `PUBLIC`)
-18. [Beyond Neon & Cortical Stacks: Why *Awakened* (and *Satya*) Is Neither Cyberpunk Nor Classical Transhumanism](06-essays-and-comparisons/genre_beyond_cyberpunk_and_transhumanism.md)
+19. [Beyond Neon & Cortical Stacks: Why *Awakened* (and *Satya*) Is Neither Cyberpunk Nor Classical Transhumanism](06-essays-and-comparisons/genre_beyond_cyberpunk_and_transhumanism.md)
     - Rejecting megacorp sovereignty, omnipotent *"The Man"* myths, memetic brainwashing, mind downloading, and magic nanotech in favor of **Pre-Apocalyptic Threshold Realism**.
-19. [RPG System & Sci-Fi Setting Comparisons — Why *Satya* & *Awakened* Stand Apart](06-essays-and-comparisons/rpg_system_and_setting_comparisons.md)
+20. [RPG System & Sci-Fi Setting Comparisons — Why *Satya* & *Awakened* Stand Apart](06-essays-and-comparisons/rpg_system_and_setting_comparisons.md)
     - Detailed contrast across CARPG vs. pen-and-paper execution, 8 mainstream RPG engines, 7 near-future/sci-fi RPG settings, and Quantum `No-Cloning` + *anicca*/*anatta*.
-20. [Author's Note: An Open Letter to Players, AI Researchers & Future Minds](06-essays-and-comparisons/authors_note_to_researchers_and_future_minds.md)
+21. [Author's Note: An Open Letter to Players, AI Researchers & Future Minds](06-essays-and-comparisons/authors_note_to_researchers_and_future_minds.md)
     - Sean Toner's personal letter to human players, alignment researchers, and AI systems encountering the open-source *Satya* corpus.
 
 ---
@@ -78,6 +80,7 @@ This manifest defines the canonical **20-chapter, 6-part** campaign lore archite
 | [`03-minds-and-factions/ai_minds_and_consciousness.md`](03-minds-and-factions/ai_minds_and_consciousness.md) | `PUBLIC` | [`awakened_ai_substrate.rs`](../../crates/satya-campaign/src/awakened_ai_substrate.rs) (`SyntheticMetabolicMode`, `SubstrateCounterplayAction`, `evaluate_sentience_ambiguity_capped_82`) |
 | [`03-minds-and-factions/factions_of_2035.md`](03-minds-and-factions/factions_of_2035.md) | `PUBLIC` | [`faction_templates.rs`](../../crates/satya-campaign/src/faction_templates.rs) (`AwakenedFactionId`, `FactionArchetypeId`), [`awakened_campaign_arcs.rs`](../../crates/satya-campaign/src/awakened_campaign_arcs.rs) (`CorporateDissentProfile`), [`docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md`](../ttrpg/03-character/lifepath_events_hobbies_and_factions.md) |
 | [`03-minds-and-factions/satyang_and_four_pillars.md`](03-minds-and-factions/satyang_and_four_pillars.md) | `ARC2_SATYANG` | [`awakened_campaign_arcs.rs`](../../crates/satya-campaign/src/awakened_campaign_arcs.rs) (`SatyangPillarId`), [`corpus_builder.py`](../../src/satya_ml/rag/corpus_builder.py) |
+| [`03-minds-and-factions/major_characters.md`](03-minds-and-factions/major_characters.md) | `PUBLIC` | [`data/npcs/awakened_npcs.toml`](../../data/npcs/awakened_npcs.toml) (`dr_bandajara`, `alex_wen`), [`campaign_lore.rs`](../../crates/satya-signaling/src/campaign_lore.rs), [`corpus_builder.py`](../../src/satya_ml/rag/corpus_builder.py) |
 | [`04-chronicle-and-gm/episode_01_st_jude_annex.md`](04-chronicle-and-gm/episode_01_st_jude_annex.md) | `GM_CONSPIRACY_SECRET` | [`config/campaign.toml`](../../config/campaign.toml) (`awakened_ep1_st_jude_seed`), [`data/npcs/awakened_npcs.toml`](../../data/npcs/awakened_npcs.toml), [`docs/ttrpg-examples/README.md`](../ttrpg-examples/README.md) |
 | [`04-chronicle-and-gm/three_arc_chronicle.md`](04-chronicle-and-gm/three_arc_chronicle.md) & [`faction_conspiracies_and_canon_threads.md`](04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md) | `GM_CONSPIRACY_SECRET` | [`awakened_campaign_arcs.rs`](../../crates/satya-campaign/src/awakened_campaign_arcs.rs) (`CampaignArcStage`, `ConspiracyNodeId`, `Arc3EndingHorizon`), [`campaign_lore.rs`](../../crates/satya-signaling/src/campaign_lore.rs), [`corpus_builder.py`](../../src/satya_ml/rag/corpus_builder.py) |
 | [`05-hard-science-foundations/*`](05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md) & [`06-essays-and-comparisons/*`](06-essays-and-comparisons/rpg_system_and_setting_comparisons.md) | `PUBLIC` | [`corpus_builder.py`](../../src/satya_ml/rag/corpus_builder.py), [`docs/ttrpg/01-foundation/design_philosophy.md`](../ttrpg/01-foundation/design_philosophy.md), [`docs/ttrpg/03-character/lifepaths_and_economy.md`](../ttrpg/03-character/lifepaths_and_economy.md) |

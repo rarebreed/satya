@@ -5,19 +5,20 @@
 use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
 pub use crate::wasm_client::combat_tracker::*;
 use crate::wasm_client::dom::{
-    document, escape_html, escape_js_single_quoted_attr, get_element, input_value,
-    roll_browser_die_i64, select_value, set_class, set_display, set_input_value, set_select_value,
-    set_text,
+    document, escape_html, escape_js_single_quoted_attr, fetch_json, get_element, input_value,
+    roll_browser_die_i64, select_value, set_class, set_display, set_html, set_input_value,
+    set_select_value, set_text,
 };
 pub use crate::wasm_client::gm_docs::*;
 use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
 use crate::wasm_client::webrtc::{send_ws_packet, sync_workspace_drawers_dom};
 use satya_schema::{
-    ChannelContext, ClientWsPacket, GmMapUpdateRequest, MessageVisibility, Participant,
-    SessionRole, WgpuDiceSpec,
+    CampaignLoreCatalogResponse, CampaignLoreChapterDocument, ChannelContext, ClientWsPacket,
+    GmMapUpdateRequest, MessageVisibility, Participant, SessionRole, WgpuDiceSpec,
 };
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 /// Canonical list of the 10 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
 pub const NOTEBOOK_TABS: &[(&str, &str, &str)] = &[
@@ -61,7 +62,7 @@ pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
         "rules",
         "tab-btn-rules",
         "notebook-pane-rules",
-        "Rules Book",
+        "Rules & Lore",
     ),
     (
         "docs",
@@ -420,16 +421,255 @@ pub fn format_rules_chapter_html(chapter_id: &str) -> (String, String) {
     (doc.rendered_html, pill)
 }
 
-/// Switches the displayed chapter in the `Rules Book` notebook tab (`#rules-book-viewport`).
+fn scroll_and_highlight_anchor(anchor: &str) {
+    let trimmed = anchor.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    if let Some(el) = get_element(trimmed) {
+        el.scroll_into_view();
+        let prev = el.class_name();
+        if !prev.split_whitespace().any(|c| c == "archivist-jump-highlight") {
+            let next = if prev.trim().is_empty() {
+                "archivist-jump-highlight".to_string()
+            } else {
+                format!("{prev} archivist-jump-highlight")
+            };
+            el.set_class_name(&next);
+        }
+    }
+}
+
+fn render_rules_chapters_dropdown(selected: &str) {
+    let html: String = satya_rules_book::list_rules_chapters()
+        .into_iter()
+        .enumerate()
+        .map(|(idx, ch)| {
+            let sel = if ch.chapter_id == selected {
+                " selected"
+            } else {
+                ""
+            };
+            format!(
+                r#"<option value="{}"{sel}>{}. {}</option>"#,
+                escape_html(&ch.chapter_id),
+                idx + 1,
+                escape_html(&ch.title),
+            )
+        })
+        .collect();
+    set_html("rules-chapter-select", &html);
+}
+
+fn render_campaign_lore_chapters_dropdown(selected: &str) {
+    let chapters = with_state(|st| st.campaign_lore_catalog.clone());
+    if chapters.is_empty() {
+        set_html(
+            "rules-chapter-select",
+            r#"<option value="">No Campaign Lore chapters loaded for current clearance</option>"#,
+        );
+        return;
+    }
+    let eff_selected = if chapters.iter().any(|c| c.relative_path == selected) {
+        selected.to_string()
+    } else {
+        chapters[0].relative_path.clone()
+    };
+    let html: String = chapters
+        .iter()
+        .enumerate()
+        .map(|(idx, ch)| {
+            let sel = if ch.relative_path == eff_selected {
+                " selected"
+            } else {
+                ""
+            };
+            let vis_tag = if ch.visibility == "PUBLIC" {
+                ""
+            } else {
+                " [GM]"
+            };
+            format!(
+                r#"<option value="{}"{sel}>{}. {}{}</option>"#,
+                escape_html(&ch.relative_path),
+                idx + 1,
+                escape_html(&ch.title),
+                vis_tag,
+            )
+        })
+        .collect();
+    set_html("rules-chapter-select", &html);
+    set_select_value("rules-chapter-select", &eff_selected);
+}
+
+/// Fetches the role- and Spoiler-Shield-filtered Campaign Lore catalog and updates `#rules-chapter-select`
+/// if Campaign Lore mode is active.
+pub(crate) fn refresh_campaign_lore_catalog() {
+    let ctx = with_state(|st| {
+        (
+            st.session_id.clone(),
+            st.auth_token.clone(),
+            st.solo_spoiler_shield,
+        )
+    });
+    spawn_local(async move {
+        let (url, tok_opt) = match ctx {
+            (Some(sid), Some(tok), shielded) => {
+                let q = if shielded { "?spoiler_shield=true" } else { "" };
+                (format!("/api/sessions/{sid}/lore{q}"), Some(tok))
+            }
+            _ => ("/api/campaign/lore".to_string(), None),
+        };
+        if let Ok(resp) =
+            fetch_json::<(), CampaignLoreCatalogResponse>("GET", &url, tok_opt.as_deref(), None)
+                .await
+        {
+            let active_mode = with_state_mut(|st| {
+                st.campaign_pack_name = resp.pack_name.clone();
+                st.campaign_lore_catalog = resp.chapters;
+                st.reader_source_mode.clone()
+            });
+            if active_mode == "CAMPAIGN_LORE" {
+                render_campaign_lore_chapters_dropdown("");
+            }
+        }
+    });
+}
+
+fn load_campaign_lore_chapter_and_scroll(rel_path: String, anchor: String) {
+    let clean_path = rel_path.split('#').next().unwrap_or(&rel_path).trim().to_string();
+    if clean_path.is_empty() {
+        return;
+    }
+    let ctx = with_state(|st| {
+        (
+            st.session_id.clone(),
+            st.auth_token.clone(),
+            st.solo_spoiler_shield,
+        )
+    });
+    spawn_local(async move {
+        let encoded: String = js_sys::encode_uri_component(&clean_path).into();
+        let (url, tok_opt) = match ctx {
+            (Some(sid), Some(tok), shielded) => {
+                let shield_q = if shielded { "&spoiler_shield=true" } else { "" };
+                (
+                    format!("/api/sessions/{sid}/lore/chapter?path={encoded}{shield_q}"),
+                    Some(tok),
+                )
+            }
+            _ => (format!("/api/campaign/lore/chapter?path={encoded}"), None),
+        };
+        match fetch_json::<(), CampaignLoreChapterDocument>("GET", &url, tok_opt.as_deref(), None)
+            .await
+        {
+            Ok(doc) => {
+                set_select_value("rules-chapter-select", &doc.summary.relative_path);
+                let pill = format!(
+                    "{} · {} ({} sections · {})",
+                    doc.summary.part,
+                    doc.summary.relative_path,
+                    doc.summary.headings.len(),
+                    doc.summary.visibility
+                );
+                set_text("rules-chapter-pill", &pill);
+                if let Some(vp) = get_element("rules-book-viewport") {
+                    vp.set_inner_html(&doc.rendered_html);
+                    if anchor.trim().is_empty() {
+                        vp.set_scroll_top(0);
+                    }
+                }
+                scroll_and_highlight_anchor(&anchor);
+            }
+            Err(err) => {
+                set_text("rules-chapter-pill", &format!("Lore restricted: {err}"));
+            }
+        }
+    });
+}
+
+/// Switches the active source inside `#notebook-pane-rules` between `"RULES"` (24-Ch. TTRPG Rules Book)
+/// and `"CAMPAIGN_LORE"` (Awakened Campaign Lore chapters).
+#[wasm_bindgen]
+pub fn satya_select_reader_source(source: String) {
+    let raw = if source.trim().is_empty() {
+        select_value("rules-lore-source-select")
+    } else {
+        set_select_value("rules-lore-source-select", &source);
+        source
+    };
+    let mode = if raw.trim().eq_ignore_ascii_case("CAMPAIGN_LORE") {
+        "CAMPAIGN_LORE".to_string()
+    } else {
+        "RULES".to_string()
+    };
+    with_state_mut(|st| {
+        st.reader_source_mode = mode.clone();
+    });
+    if mode == "CAMPAIGN_LORE" {
+        let first_path = with_state(|st| {
+            st.campaign_lore_catalog
+                .first()
+                .map(|c| c.relative_path.clone())
+        });
+        render_campaign_lore_chapters_dropdown(first_path.as_deref().unwrap_or(""));
+        if let Some(path) = first_path {
+            load_campaign_lore_chapter_and_scroll(path, String::new());
+        } else {
+            refresh_campaign_lore_catalog();
+            load_campaign_lore_chapter_and_scroll(
+                "docs/campaign/03-minds-and-factions/major_characters.md".to_string(),
+                String::new(),
+            );
+        }
+    } else {
+        render_rules_chapters_dropdown("tasks");
+        satya_select_rules_chapter("tasks".to_string());
+    }
+}
+
+/// Opens a specific canonical Rules Book chapter in `#notebook-pane-rules` and scrolls/highlights `anchor`.
+#[wasm_bindgen]
+pub fn satya_open_rules_section(chapter_id: String, anchor: String) {
+    with_state_mut(|st| {
+        st.reader_source_mode = "RULES".to_string();
+    });
+    set_select_value("rules-lore-source-select", "RULES");
+    render_rules_chapters_dropdown(&chapter_id);
+    satya_select_notebook_tab("rules".to_string());
+    satya_select_rules_chapter(chapter_id);
+    scroll_and_highlight_anchor(&anchor);
+}
+
+/// Opens a Campaign Lore chapter in `#notebook-pane-rules` and scrolls/highlights `anchor`.
+#[wasm_bindgen]
+pub fn satya_open_campaign_lore_section(rel_path: String, anchor: String) {
+    with_state_mut(|st| {
+        st.reader_source_mode = "CAMPAIGN_LORE".to_string();
+    });
+    set_select_value("rules-lore-source-select", "CAMPAIGN_LORE");
+    let clean_path = rel_path.split('#').next().unwrap_or(&rel_path).trim().to_string();
+    render_campaign_lore_chapters_dropdown(&clean_path);
+    refresh_campaign_lore_catalog();
+    satya_select_notebook_tab("rules".to_string());
+    load_campaign_lore_chapter_and_scroll(clean_path, anchor);
+}
+
+/// Switches the displayed chapter in the `Rules & Lore` notebook tab (`#rules-book-viewport`).
 #[wasm_bindgen]
 pub fn satya_select_rules_chapter(chapter_id: String) {
-    let target = if chapter_id.trim().is_empty() {
+    let active_mode = with_state(|st| st.reader_source_mode.clone());
+    let chosen = if chapter_id.trim().is_empty() {
         select_value("rules-chapter-select")
     } else {
         set_select_value("rules-chapter-select", &chapter_id);
         chapter_id
     };
-    let (html, pill) = format_rules_chapter_html(&target);
+    if active_mode == "CAMPAIGN_LORE" {
+        load_campaign_lore_chapter_and_scroll(chosen, String::new());
+        return;
+    }
+    let (html, pill) = format_rules_chapter_html(&chosen);
     set_text("rules-chapter-pill", &pill);
     if let Some(vp) = get_element("rules-book-viewport") {
         vp.set_inner_html(&html);
@@ -437,7 +677,7 @@ pub fn satya_select_rules_chapter(chapter_id: String) {
     }
 }
 
-/// Searches across all 17 canonical Satya TTRPG Rules Book chapters and renders clickable hits
+/// Searches across all 24 canonical Satya TTRPG Rules Book chapters and renders clickable hits
 /// inside `#rules-search-results`.
 #[wasm_bindgen]
 pub fn satya_search_rules_book() {
@@ -462,9 +702,11 @@ pub fn satya_search_rules_book() {
     let items: String = hits
         .iter()
         .map(|hit| {
+            let anchor = satya_rules_book::slugify_heading(&hit.section_heading);
             format!(
-                r#"<div class="gm-doc-card rules-search-hit"><div class="gm-doc-header"><button type="button" class="btn-chip" onclick="window.satyaSelectRulesChapter('{}')">{}</button><span class="mono">{}</span></div><div class="gm-doc-preview">{}</div></div>"#,
+                r#"<div class="gm-doc-card rules-search-hit"><div class="gm-doc-header"><button type="button" class="btn-chip" onclick="window.satyaOpenRulesSection('{}', '{}')">{}</button><span class="mono">{}</span></div><div class="gm-doc-preview">{}</div></div>"#,
                 escape_js_single_quoted_attr(&hit.chapter_id),
+                escape_js_single_quoted_attr(&anchor),
                 escape_html(&hit.chapter_title),
                 escape_html(&hit.section_heading),
                 escape_html(&hit.snippet),

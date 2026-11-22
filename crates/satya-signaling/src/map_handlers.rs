@@ -3,10 +3,11 @@
 
 pub use crate::map_authoring_handlers::*;
 
+use crate::npcs::SpoilerShieldQuery;
 use crate::state::SignalingAppState;
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -33,10 +34,7 @@ use uuid::Uuid;
 /// Returns `true` when `role` is authorized to view `MessageVisibility::GmOnly` map tokens.
 #[must_use]
 pub fn can_role_see_gm_only_tokens(role: SessionRole) -> bool {
-    matches!(
-        role,
-        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
-    )
+    role.is_gm_or_co_gm()
 }
 
 /// Returns `true` when crossing between `from_floor` and `to_floor` has a vertical portal
@@ -164,7 +162,7 @@ pub async fn dispatch_passive_movement_whispers(
         }
         let mut recipient_ids = vec![target.user_id.clone()];
         for p in ctx.roster {
-            if matches!(p.role, SessionRole::Gm | SessionRole::Host)
+            if p.role.is_human_gm_or_co_gm()
                 && !recipient_ids.contains(&p.user_id)
             {
                 recipient_ids.push(p.user_id.clone());
@@ -412,6 +410,7 @@ pub(crate) async fn log_map_canvas_event(
 pub async fn get_session_map_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
+    Query(shield): Query<SpoilerShieldQuery>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
@@ -453,7 +452,11 @@ pub async fn get_session_map_handler(
             )
                 .into_response();
         };
-        p.role
+        if p.role == SessionRole::SoloGm && shield.spoiler_shield {
+            SessionRole::Player
+        } else {
+            p.role
+        }
     } else {
         SessionRole::Player
     };
@@ -536,7 +539,7 @@ pub async fn session_move_map_token_handler(
         })
         .count();
     let is_session_host = state.auth.is_session_host(&session_id, &user.user_id).await;
-    let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+    let caller_is_gm_or_solo = caller_part.role.is_human_gm_or_co_gm()
         || (!has_human_gm
             && caller_part.role == SessionRole::Player
             && is_session_host
@@ -633,8 +636,7 @@ pub async fn session_move_map_token_handler(
             }
         };
 
-        if target_floor != current_floor
-            && !matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+        if target_floor != current_floor && !caller_part.role.is_human_gm_or_co_gm()
             && !is_near_vertical_portal(
                 &map,
                 current_floor,

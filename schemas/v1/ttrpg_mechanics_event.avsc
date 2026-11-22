@@ -95,7 +95,7 @@
               "type": "enum",
               "name": "SessionRole",
               "namespace": "com.satya.types",
-              "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
+              "symbols": ["GM", "AI_GM", "SOLO_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
             }
           },
           {

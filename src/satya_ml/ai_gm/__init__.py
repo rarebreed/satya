@@ -55,6 +55,11 @@ from satya_ml.ai_gm.tool_registry import (
     OOC_READONLY_TOOL_NAMES,
     load_gm_tools,
 )
+from satya_ml.ai_gm.tools import (
+    delete_gm_memory,
+    get_persisted_session_npcs,
+    load_campaign_npc,
+)
 
 __all__ = [
     "CORE_GM_TOOL_NAMES",
@@ -65,6 +70,7 @@ __all__ = [
     "build_gm_chat_model",
     "compute_token_reachable_zone",
     "continue_tactical_map",
+    "delete_gm_memory",
     "edit_tactical_map_feature",
     "evaluate_ballistic_shot_on_map",
     "evaluate_npc_morale_or_trigger",
@@ -73,11 +79,13 @@ __all__ = [
     "execute_ready_npc_actions",
     "extract_active_human_players",
     "generate_tactical_map",
+    "get_persisted_session_npcs",
     "get_session_map",
     "inspect_synthetic_or_proxy_telemetry",
     "inspect_tactical_map",
     "inspect_tactical_map_point",
     "intervene_ai_cage_or_hunter_ai",
+    "load_campaign_npc",
     "load_gm_tools",
     "manage_polycrisis_grid_and_strain",
     "manage_synthetic_substrate_and_embodiment",
