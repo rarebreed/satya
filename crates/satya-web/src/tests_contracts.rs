@@ -244,6 +244,73 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
         },
         true,
     );
+    let combat_sheet = sheet.clone();
+    let combat_tracker_html = crate::wasm_client::format_combat_tracker_rich_html(
+        &crate::wasm_client::CombatTrackerRenderContext {
+            in_session: true,
+            round: 1,
+            tick: 5,
+            combatants: &[
+                satya_schema::CombatantTickEntry {
+                    entity_id: "u-demo-sara".to_string(),
+                    display_name: "Sara (Valkyrie)".to_string(),
+                    role_or_faction: "Player".to_string(),
+                    ooda_score: 13,
+                    next_action_tick: 6,
+                    active_stance: Some("PUNCH".to_string()),
+                    fatigue_level: 1,
+                    wound_shock: 0,
+                    grid_x: Some(4),
+                    grid_y: Some(6),
+                    zone_label: Some("Core".to_string()),
+                    visibility: satya_schema::MessageVisibility::Public,
+                },
+                satya_schema::CombatantTickEntry {
+                    entity_id: "npc_contract".to_string(),
+                    display_name: "Sammat".to_string(),
+                    role_or_faction: "NPC".to_string(),
+                    ooda_score: 11,
+                    next_action_tick: 10,
+                    active_stance: None,
+                    fatigue_level: 0,
+                    wound_shock: 0,
+                    grid_x: None,
+                    grid_y: None,
+                    zone_label: None,
+                    visibility: satya_schema::MessageVisibility::Public,
+                },
+            ],
+            roster: &sample_roster,
+            self_participant: sample_roster.get(1),
+            character_sheet: &combat_sheet,
+            session_npcs: &[satya_schema::SessionNpcEntry {
+                character_id: "npc_contract".to_string(),
+                character_name: "Sammat".to_string(),
+                callsign_or_role: "Broker".to_string(),
+                age_years: 34,
+                public_summary: "Broker".to_string(),
+                apparent_condition: "Healthy & Alert".to_string(),
+                is_persistent: true,
+                ..Default::default()
+            }],
+            can_see_gm_secrets: true,
+            planned_action: &crate::wasm_client::PlannedCombatActionState::default(),
+        },
+    );
+    let triad_warn_html = crate::wasm_client::evaluate_drawer_triad_preview(
+        &crate::wasm_client::DrawerTriadInputs {
+            technique_raw: "punch",
+            tempo: 25,
+            control: 25,
+            force: 25,
+            skill_c: 12,
+            skill_n: 3,
+            fatigue_level: 0,
+            wound_shock_index: 0.0,
+        },
+    )
+    .drawer_warning_html
+    .unwrap_or_default();
     combined_html.push('\n');
     combined_html.push_str(&gm_docs_html);
     combined_html.push('\n');
@@ -252,6 +319,10 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
     combined_html.push_str(&omnisearch_html);
     combined_html.push('\n');
     combined_html.push_str(&npc_card_html);
+    combined_html.push('\n');
+    combined_html.push_str(&combat_tracker_html);
+    combined_html.push('\n');
+    combined_html.push_str(&triad_warn_html);
 
     let referenced = extract_window_satya_calls(&combined_html);
     assert!(
@@ -352,6 +423,18 @@ fn test_workspace_float_controls_and_collapsed_grid_contracts() {
             "missing CSS layout rule fragment '{css_fragment}'"
         );
     }
+
+    // Verify Action Mode & Triad readout moved to Combat Tracker while Task Roller keeps compact warning
+    let combat_pane_idx = html.find(r#"id="notebook-pane-combat""#).unwrap();
+    let rules_pane_idx = html.find(r#"id="notebook-pane-rules""#).unwrap();
+    let combat_readout_idx = html.find(r#"id="combat-action-mode-readout""#).unwrap();
+    assert!(combat_readout_idx > combat_pane_idx && combat_readout_idx < rules_pane_idx);
+
+    let ttrpg_drawer_idx = html.find(r#"id="ttrpg-drawer""#).unwrap();
+    let triad_warn_idx = html.find(r#"id="ttrpg-triad-warning""#).unwrap();
+    assert!(triad_warn_idx > ttrpg_drawer_idx);
+    assert!(!html.contains(r#"id="ttrpg-triad-readout""#));
+    assert!(html.contains(r#"id="btn-toggle-ttrpg-odds-table""#));
 }
 
 #[test]

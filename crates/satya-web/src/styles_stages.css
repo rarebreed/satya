@@ -516,6 +516,44 @@ input[type="range"].dice-opacity-slider:focus-visible {
     flex-direction: column;
     gap: 6px;
 }
+.combat-action-mode-card {
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+.combatant-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 10px;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    font-size: 0.75rem;
+}
+.combatant-row.ai {
+    border-color: var(--purple);
+    color: #d8b4fe;
+}
+.combatant-row.is-self {
+    border-left: 3px solid var(--accent);
+}
+.combatant-main {
+    flex: 1 1 220px;
+    min-inline-size: 0;
+    line-height: 1.35;
+}
+.combatant-status-pills {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+.combatant-inspect-btn {
+    padding: 2px 7px;
+    font-size: 0.71rem;
+}
 .inspector-card-inner {
     display: flex;
     flex-direction: column;

@@ -1158,6 +1158,27 @@ impl AuthAndSessionManager {
             let session = guard
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            let is_condition_only_update = req.tick_delta.is_none()
+                && req.combat_active.is_none()
+                && req.active_stance.is_none()
+                && req.next_action_tick.is_none()
+                && req.grid_x.is_none()
+                && req.grid_y.is_none()
+                && req.zone_label.is_none();
+            if let Some(ref eid) = req.entity_id
+                && !session
+                    .combat_tracker
+                    .combatants
+                    .iter()
+                    .any(|c| c.entity_id == *eid || c.display_name.eq_ignore_ascii_case(eid))
+                && let Some(player_part) = session
+                    .roster
+                    .get(eid)
+                    .filter(|p| p.role == SessionRole::Player)
+                    .cloned()
+            {
+                Self::sync_combatant_into_tracker(&mut session.combat_tracker, &player_part);
+            }
             let tracker = &mut session.combat_tracker;
             if let Some(active) = req.combat_active {
                 tracker.combat_active = active;
@@ -1233,7 +1254,10 @@ impl AuthAndSessionManager {
             }
             tracker.updated_at_us = now_us;
             let snap = tracker.clone();
-            let _ = Self::sync_or_generate_tactical_map_stub(sid, &snap, &mut session.active_map);
+            if !is_condition_only_update {
+                let _ =
+                    Self::sync_or_generate_tactical_map_stub(sid, &snap, &mut session.active_map);
+            }
             snap
         };
 
@@ -1843,14 +1867,38 @@ pub async fn update_session_combat_tracker_handler(
         Ok(v) => v,
         Err(err_resp) => return err_resp.into_response(),
     };
-    if !crate::npcs::can_caller_view_gm_secrets(
+    let can_see_gm = crate::npcs::can_caller_view_gm_secrets(
         &state,
         &session_id,
         user_opt.as_ref(),
         is_gm_service,
     )
-    .await
+    .await;
+    let is_self_condition_sync = !is_gm_service
+        && user_opt.as_ref().is_some_and(|user| {
+            req.entity_id.as_deref() == Some(user.user_id.as_str())
+                && (req.fatigue_level.is_some() || req.wound_shock.is_some())
+                && req.tick_delta.is_none()
+                && req.combat_active.is_none()
+                && req.active_stance.is_none()
+                && req.next_action_tick.is_none()
+                && req.grid_x.is_none()
+                && req.grid_y.is_none()
+                && req.zone_label.is_none()
+        });
+    let caller_is_player = if is_self_condition_sync
+        && let Some(ref user) = user_opt
     {
+        state
+            .auth
+            .get_session_roster(&session_id)
+            .await
+            .iter()
+            .any(|p| p.user_id == user.user_id && p.role == SessionRole::Player)
+    } else {
+        false
+    };
+    if !can_see_gm && !(is_self_condition_sync && caller_is_player) {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Only the Game Master can update the Combat Tracker" })),
@@ -1863,18 +1911,28 @@ pub async fn update_session_combat_tracker_handler(
         .await
     {
         Ok(tracker) => {
-            if let Some((ctx, _)) = state.auth.get_session_gm_context(&session_id).await
-                && let Some(map) = ctx.active_map
+            let ctx_opt = state.auth.get_session_gm_context(&session_id).await;
+            let active_map = ctx_opt
+                .as_ref()
+                .and_then(|(ctx, _)| ctx.active_map.as_ref());
+            if can_see_gm
+                && let Some((ctx, _)) = ctx_opt.as_ref()
+                && let Some(map) = ctx.active_map.as_ref()
             {
                 crate::map_handlers::broadcast_role_filtered_map(
                     &state,
                     &session_id,
                     &ctx.roster,
-                    &map,
+                    map,
                 )
                 .await;
             }
-            (StatusCode::OK, Json(tracker)).into_response()
+            let filtered = AuthAndSessionManager::filter_combat_tracker_for_viewer(
+                &tracker,
+                active_map,
+                can_see_gm,
+            );
+            (StatusCode::OK, Json(filtered)).into_response()
         }
         Err(e) => (
             StatusCode::BAD_REQUEST,

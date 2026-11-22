@@ -1663,3 +1663,214 @@ async fn test_wave5_gm_only_surveillance_filter_and_passive_movement_whisper() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_combat_tracker_player_self_condition_sync_and_rbac() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir =
+        std::env::temp_dir().join(format!("satya_sig_combat_sync_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_combat_sync.db")
+        .to_string_lossy()
+        .to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .register_user("gm_combat", "satya-truth-2026", "GM Combat")
+        .await
+        .unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let p1_auth = state
+        .auth
+        .register_user("p1_combat", "satya-truth-2026", "Player One")
+        .await
+        .unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
+    let obs_auth = state
+        .auth
+        .register_user("obs_combat", "satya-truth-2026", "Observer Combat")
+        .await
+        .unwrap();
+    let obs_user = state
+        .auth
+        .verify_auth_token(&obs_auth.auth_token)
+        .await
+        .unwrap();
+
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "ep-combat-sync",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            Some("GM".to_string()),
+            true,
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .join_session(
+            &p1_user,
+            "ep-combat-sync",
+            "room-pass",
+            SessionRole::Player,
+            Some("Player One".to_string()),
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .join_session(
+            &obs_user,
+            "ep-combat-sync",
+            "room-pass",
+            SessionRole::Observer,
+            Some("Observer".to_string()),
+        )
+        .await
+        .unwrap();
+
+    // Seed a hidden GM_ONLY combatant directly in the session tracker
+    {
+        let mut sessions = state.auth.sessions.write().await;
+        let sess = sessions.get_mut("ep-combat-sync").unwrap();
+        sess.combat_tracker
+            .combatants
+            .push(satya_schema::CombatantTickEntry {
+                entity_id: "hidden-stalker".to_string(),
+                display_name: "Hidden Stalker".to_string(),
+                role_or_faction: "Enemy".to_string(),
+                ooda_score: 14,
+                next_action_tick: 3,
+                active_stance: None,
+                fatigue_level: 1,
+                wound_shock: 0,
+                grid_x: Some(8),
+                grid_y: Some(8),
+                zone_label: Some("Vent".to_string()),
+                visibility: MessageVisibility::GmOnly,
+            });
+    }
+
+    // 1. Player self-only condition sync returns 200 OK, updates their own fatigue/shock, and strips GM_ONLY combatants
+    let p1_sync_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-combat-sync/combat")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::UpdateCombatTrackerRequest {
+                    entity_id: Some(p1_auth.user_id.clone()),
+                    fatigue_level: Some(2),
+                    wound_shock: Some(1),
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(p1_sync_resp.status(), axum::http::StatusCode::OK);
+    let p1_bytes = axum::body::to_bytes(p1_sync_resp.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let p1_tracker: satya_schema::CombatTrackerState =
+        serde_json::from_slice(&p1_bytes).unwrap();
+    let self_entry = p1_tracker
+        .combatants
+        .iter()
+        .find(|c| c.entity_id == p1_auth.user_id)
+        .expect("player combatant entry present");
+    assert_eq!(self_entry.fatigue_level, 2);
+    assert_eq!(self_entry.wound_shock, 1);
+    assert!(
+        p1_tracker
+            .combatants
+            .iter()
+            .all(|c| c.entity_id != "hidden-stalker"),
+        "GM_ONLY combatant must be stripped from player response"
+    );
+
+    // 2. Player attempting tick_delta, active_stance, or another entity_id is rejected with 403 FORBIDDEN
+    for bad_req in [
+        satya_schema::UpdateCombatTrackerRequest {
+            tick_delta: Some(1),
+            entity_id: Some(p1_auth.user_id.clone()),
+            fatigue_level: Some(1),
+            ..Default::default()
+        },
+        satya_schema::UpdateCombatTrackerRequest {
+            entity_id: Some(p1_auth.user_id.clone()),
+            active_stance: Some("POWER".to_string()),
+            fatigue_level: Some(1),
+            ..Default::default()
+        },
+        satya_schema::UpdateCombatTrackerRequest {
+            entity_id: Some("hidden-stalker".to_string()),
+            fatigue_level: Some(4),
+            ..Default::default()
+        },
+    ] {
+        let bad_resp = tower::ServiceExt::oneshot(
+            app.clone(),
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/sessions/ep-combat-sync/combat")
+                .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(axum::body::Body::from(serde_json::to_vec(&bad_req).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(bad_resp.status(), axum::http::StatusCode::FORBIDDEN);
+    }
+
+    // 3. Observer attempting self-condition sync is rejected with 403 FORBIDDEN
+    let obs_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-combat-sync/combat")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::UpdateCombatTrackerRequest {
+                    entity_id: Some(obs_auth.user_id.clone()),
+                    fatigue_level: Some(1),
+                    wound_shock: Some(0),
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(obs_resp.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

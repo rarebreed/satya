@@ -224,6 +224,7 @@ pub(crate) fn replay_session_history_snapshot(history: Option<SessionHistorySnap
                 st.character_sheet.apply_character_sheet_record(sheet);
             });
             render_character_sheet();
+            crate::wasm_client::combat_tracker::sync_character_sheet_conditions_locally();
         }
 
         if !hist.chat_events.is_empty() || !hist.mechanics_events.is_empty() {

@@ -7,7 +7,7 @@ use crate::wasm_client::dom::{
     set_html, set_input_value, set_text, toggle_element_display,
 };
 use crate::wasm_client::options::parse_combat_stance;
-use crate::wasm_client::state::with_state;
+use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::webrtc::send_ws_packet;
 use satya_schema::ClientWsPacket;
 use wasm_bindgen::prelude::*;
@@ -27,18 +27,25 @@ pub fn format_cascade_odds_preview(params: &satya_engine::CascadeTaskParams) -> 
     )
 }
 
+/// Configuration for [`format_contested_cascade_odds_summary_ex`].
+#[derive(Debug, Clone, Copy)]
+pub struct CascadeOddsPreviewRequest<'a> {
+    pub skill_level_n: usize,
+    pub control_c: i32,
+    pub delta_tool: i32,
+    pub delta_ext: i32,
+    pub delta_int: i32,
+    pub carry_mode_raw: &'a str,
+    pub botch_rule_raw: &'a str,
+    pub table_expanded: bool,
+}
+
 /// Computes and formats the live exact Contested (`1-Pair Tiered GM Resistance`) and Uncontested
 /// Combinatorial & DP probability readout for the Satya `2d20xN` Cascade
 /// task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
 #[must_use]
-pub fn format_contested_cascade_odds_summary(
-    skill_level_n: usize,
-    control_c: i32,
-    delta_tool: i32,
-    delta_ext: i32,
-    delta_int: i32,
-    carry_mode_raw: &str,
-    botch_rule_raw: &str,
+pub fn format_contested_cascade_odds_summary_ex(
+    req: &CascadeOddsPreviewRequest<'_>,
 ) -> (String, String) {
     use satya_engine::{
         BotchRule, CarryMode, CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule,
@@ -46,13 +53,13 @@ pub fn format_contested_cascade_odds_summary(
     };
     use std::str::FromStr;
 
-    let n = skill_level_n.clamp(1, 10);
-    let c = control_c.clamp(1, 20);
-    let d_tool = delta_tool.clamp(-4, 12);
-    let d_ext = delta_ext.clamp(-10, 16);
-    let d_int = delta_int.clamp(-2, 10);
-    let carry_mode = CarryMode::from_str(carry_mode_raw).unwrap_or(CarryMode::MarkovStep);
-    let botch_rule = BotchRule::from_str(botch_rule_raw).unwrap_or(BotchRule::ClosestMiss);
+    let n = req.skill_level_n.clamp(1, 10);
+    let c = req.control_c.clamp(1, 20);
+    let d_tool = req.delta_tool.clamp(-4, 12);
+    let d_ext = req.delta_ext.clamp(-10, 16);
+    let d_int = req.delta_int.clamp(-2, 10);
+    let carry_mode = CarryMode::from_str(req.carry_mode_raw).unwrap_or(CarryMode::MarkovStep);
+    let botch_rule = BotchRule::from_str(req.botch_rule_raw).unwrap_or(BotchRule::ClosestMiss);
 
     let mut contested = ContestedCascadeTaskParams::new_tiered_environment(
         n,
@@ -98,6 +105,22 @@ pub fn format_contested_cascade_odds_summary(
         "TN_P: {tn_p} vs TN_GM: {tn_gm} · P(Win): {p_win:.1}% · TN_eff: {tn_eff} · P(Succ≥1): {p_succ:.1}%"
     );
 
+    let (expanded_attr, toggle_label, toggle_title, table_display) = if req.table_expanded {
+        (
+            "true",
+            "Hide ▴",
+            "Collapse Outcome Tier breakdown table",
+            "block",
+        )
+    } else {
+        (
+            "false",
+            "Details ▾",
+            "Expand Outcome Tier breakdown table",
+            "none",
+        )
+    };
+
     let seg = |cls: &str, label: &str, pct: f64| -> String {
         if pct <= 0.05 {
             return String::new();
@@ -127,10 +150,9 @@ pub fn format_contested_cascade_odds_summary(
             r#"<div class="ttrpg-odds-kpi"><span class="kpi-label">Expected Net Margin</span><strong>E[ΔM]: {c_mean:+.2} vs GM</strong><span class="kpi-sub">Uncontested E[Margin]: {u_mean:+.2}</span></div>"#,
             r#"</div>"#,
             r#"<div class="ttrpg-odds-stacked-wrap">"#,
-            r#"<div class="ttrpg-odds-stacked-header"><span><strong>Outcome Distribution Graph</strong> (Contested P(Win): {p_win:.2}%)</span><span class="kpi-sub">Extraordinary {c_extra:.1}% · Clean {c_clean:.1}% · Partial {c_partial:.1}% · Fail {c_fail:.1}% · Botch {c_botch:.1}%</span></div>"#,
+            r#"<div class="ttrpg-odds-stacked-header"><span><strong>Outcome Distribution Graph</strong> (Contested P(Win): {p_win:.2}%)</span><div class="ttrpg-odds-stacked-actions"><span class="kpi-sub">Extraordinary {c_extra:.1}% · Clean {c_clean:.1}% · Partial {c_partial:.1}% · Fail {c_fail:.1}% · Botch {c_botch:.1}%</span><button type="button" id="btn-toggle-ttrpg-odds-table" class="btn btn-sm btn-secondary ttrpg-odds-toggle-btn" aria-expanded="{expanded_attr}" aria-controls="ttrpg-odds-table-wrap" title="{toggle_title}" onclick="window.satyaToggleTtrpgOddsGraph()">{toggle_label}</button></div></div>"#,
             r#"<div class="ttrpg-odds-stacked-bar" role="img" aria-label="Outcome probability distribution bar">{seg_extra}{seg_clean}{seg_partial}{seg_fail}{seg_botch}</div>"#,
-            r#"</div>"#,
-            r#"<div class="metrics-table-wrap"><table class="metrics-table ttrpg-odds-table">"#,
+            r#"<div id="ttrpg-odds-table-wrap" class="metrics-table-wrap ttrpg-odds-table-collapse" style="display: {table_display};"><table class="metrics-table ttrpg-odds-table">"#,
             r#"<thead><tr><th>Outcome Tier</th><th>What It Means</th><th>Contested (vs. GM)</th><th>Uncontested (Static TN)</th></tr></thead>"#,
             r#"<tbody>"#,
             r#"<tr><td><span class="odds-dot seg-extraordinary"></span><strong>Extraordinary Win</strong></td><td class="kpi-sub">Beat GM by ≥3 net successes (-15% time, -4 next TN)</td><td>{cell_c_extra}</td><td><span class="kpi-sub">Included in Clean</span></td></tr>"#,
@@ -141,6 +163,7 @@ pub fn format_contested_cascade_odds_summary(
             r#"</tbody>"#,
             r#"<tfoot><tr class="ttrpg-odds-total-row"><td><strong>Total Success Rate</strong></td><td class="kpi-sub">All winning outcomes combined (P(Win): {p_win:.2}% · P(Succ ≥ 1): {p_succ:.2}%)</td><td><strong>{p_win:.2}%</strong> <span class="kpi-sub">(E[ΔM]: {c_mean:+.2})</span></td><td><strong>{p_succ:.2}%</strong> <span class="kpi-sub">(E[Margin]: {u_mean:+.2})</span></td></tr></tfoot>"#,
             r#"</table></div>"#,
+            r#"</div>"#,
         ),
         tn_p = tn_p,
         tn_p_min = (tn_p + 1).clamp(2, 40),
@@ -172,6 +195,10 @@ pub fn format_contested_cascade_odds_summary(
         u_comp = u_comp,
         u_fail = u_fail,
         u_botch = u_botch,
+        expanded_attr = expanded_attr,
+        toggle_label = toggle_label,
+        toggle_title = toggle_title,
+        table_display = table_display,
         seg_extra = seg("seg-extraordinary", "Extraordinary Win", c_extra),
         seg_clean = seg("seg-clean", "Clean Success", c_clean),
         seg_partial = seg("seg-partial", "Partial / Grazing Win", c_partial),
@@ -189,6 +216,31 @@ pub fn format_contested_cascade_odds_summary(
     );
 
     (pill_text, readout_html)
+}
+
+/// Computes and formats the live exact Contested (`1-Pair Tiered GM Resistance`) and Uncontested
+/// Combinatorial & DP probability readout for the Satya `2d20xN` Cascade
+/// task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`, collapsed by default).
+#[must_use]
+pub fn format_contested_cascade_odds_summary(
+    skill_level_n: usize,
+    control_c: i32,
+    delta_tool: i32,
+    delta_ext: i32,
+    delta_int: i32,
+    carry_mode_raw: &str,
+    botch_rule_raw: &str,
+) -> (String, String) {
+    format_contested_cascade_odds_summary_ex(&CascadeOddsPreviewRequest {
+        skill_level_n,
+        control_c,
+        delta_tool,
+        delta_ext,
+        delta_int,
+        carry_mode_raw,
+        botch_rule_raw,
+        table_expanded: false,
+    })
 }
 
 /// Computes and formats the live exact Combinatorial & DP probability readout for the
@@ -231,6 +283,32 @@ pub fn format_cascade_odds_summary(
     (pill, readout)
 }
 
+/// Toggles the collapsible Outcome Tier breakdown table (`#ttrpg-odds-table-wrap`) inside `#ttrpg-odds-readout`.
+#[wasm_bindgen]
+pub fn satya_toggle_ttrpg_odds_graph() {
+    let expanded = with_state_mut(|st| {
+        st.ttrpg_odds_table_expanded = !st.ttrpg_odds_table_expanded;
+        st.ttrpg_odds_table_expanded
+    });
+    set_display("ttrpg-odds-table-wrap", if expanded { "block" } else { "none" });
+    if let Some(btn) = get_element("btn-toggle-ttrpg-odds-table") {
+        let _ = btn.set_attribute("aria-expanded", if expanded { "true" } else { "false" });
+        let _ = btn.set_attribute(
+            "title",
+            if expanded {
+                "Collapse Outcome Tier breakdown table"
+            } else {
+                "Expand Outcome Tier breakdown table"
+            },
+        );
+        btn.set_text_content(Some(if expanded {
+            "Hide ▴"
+        } else {
+            "Details ▾"
+        }));
+    }
+}
+
 /// Reads the current Cascade inputs in `#ttrpg-drawer` and updates `#ttrpg-odds-pill`
 /// and `#ttrpg-odds-readout` with live exact Contested & Uncontested probabilities from `satya-engine`.
 #[wasm_bindgen]
@@ -257,15 +335,18 @@ pub fn satya_update_cascade_preview() {
         .clamp(-10, 16);
     let mode_raw = select_value("ttrpg-carry-mode");
     let botch_raw = select_value("ttrpg-botch-rule");
-    let (pill_text, readout_text) = format_contested_cascade_odds_summary(
-        skill_level,
-        control_c,
-        tool_mod,
-        external_mod,
-        internal_mod,
-        &mode_raw,
-        &botch_raw,
-    );
+    let table_expanded = with_state(|st| st.ttrpg_odds_table_expanded);
+    let (pill_text, readout_text) =
+        format_contested_cascade_odds_summary_ex(&CascadeOddsPreviewRequest {
+            skill_level_n: skill_level,
+            control_c,
+            delta_tool: tool_mod,
+            delta_ext: external_mod,
+            delta_int: internal_mod,
+            carry_mode_raw: &mode_raw,
+            botch_rule_raw: &botch_raw,
+            table_expanded,
+        });
     set_text("ttrpg-odds-pill", &pill_text);
     set_html("ttrpg-odds-readout", &readout_text);
     crate::wasm_client::ttrpg_drawer_triad::satya_update_drawer_triad_preview();
@@ -690,5 +771,40 @@ mod tests {
             format_contested_cascade_odds_summary(99, 99, -99, 99, 99, "invalid", "invalid");
         assert!(clamped_pill.contains("TN_P:"));
         assert!(clamped_html.contains("10 × 2d20"));
+    }
+
+    #[test]
+    fn test_outcome_distribution_graph_collapsible_table_states() {
+        let (_, collapsed) = format_contested_cascade_odds_summary_ex(&CascadeOddsPreviewRequest {
+            skill_level_n: 3,
+            control_c: 12,
+            delta_tool: 0,
+            delta_ext: 0,
+            delta_int: 0,
+            carry_mode_raw: "markov_step",
+            botch_rule_raw: "closest_miss",
+            table_expanded: false,
+        });
+        assert!(collapsed.contains("ttrpg-odds-stacked-bar"));
+        assert!(collapsed.contains(r#"id="btn-toggle-ttrpg-odds-table""#));
+        assert!(collapsed.contains(r#"aria-expanded="false""#));
+        assert!(collapsed.contains("Details ▾"));
+        assert!(collapsed.contains(r#"id="ttrpg-odds-table-wrap""#));
+        assert!(collapsed.contains(r#"style="display: none;""#));
+
+        let (_, expanded) = format_contested_cascade_odds_summary_ex(&CascadeOddsPreviewRequest {
+            skill_level_n: 3,
+            control_c: 12,
+            delta_tool: 0,
+            delta_ext: 0,
+            delta_int: 0,
+            carry_mode_raw: "markov_step",
+            botch_rule_raw: "closest_miss",
+            table_expanded: true,
+        });
+        assert!(expanded.contains("ttrpg-odds-stacked-bar"));
+        assert!(expanded.contains(r#"aria-expanded="true""#));
+        assert!(expanded.contains("Hide ▴"));
+        assert!(expanded.contains(r#"style="display: block;""#));
     }
 }

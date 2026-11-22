@@ -482,6 +482,7 @@ pub fn satya_char_sheet_import_file() {
                         name, fname, status
                     ));
                     render_character_sheet();
+                    crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
                     return;
                 }
                 Err(err) => {
@@ -502,6 +503,7 @@ pub fn satya_char_sheet_import_file() {
             });
         }
         render_character_sheet();
+        crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
     });
 }
 
@@ -560,6 +562,7 @@ pub fn satya_char_sheet_load_saved(character_id: String) {
         }
     });
     render_character_sheet();
+    crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
 }
 
 /// Binds the current character sheet to the active session (`POST /api/characters/{id}/bind-session`)

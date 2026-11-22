@@ -474,10 +474,11 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                         )}
                     </div>
                     <div
-                        id="ttrpg-triad-readout"
-                        class="ttrpg-odds-readout"
+                        id="ttrpg-triad-warning"
+                        class="ttrpg-triad-warning"
+                        role="alert"
                         aria-live="polite"
-                        inner_html=wasm_client::default_ttrpg_triad_readout_html()
+                        style="display: none;"
                     ></div>
                     <div
                         id="ttrpg-odds-readout"
