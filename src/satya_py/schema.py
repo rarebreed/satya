@@ -36,6 +36,9 @@ class CharacterCharacteristicsRecordDict(TypedDict):
     com: int
     pre: int
     elo: int
+    sav: int
+    bea: int
+    wrm: int
     sig: int
     hea: int
     tac: int
@@ -99,6 +102,9 @@ class CharacterSheetRecordDict(TypedDict):
     age_years: int
     origin_label: str
     campaign_sqm: int
+    institutional_status: int
+    street_cred: int
+    debt_tier: int
     operational_heat: int
     granted_access_tags: list[str]
     stage_history: list[str]

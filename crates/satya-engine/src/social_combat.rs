@@ -8,8 +8,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::characteristics::compute_social_composure_score;
+use crate::characteristics::{compute_social_composure_score, compute_social_composure_with_bearing};
 use crate::combat::MoraleState;
+use crate::define_coded_enum;
 use crate::psyche_social::{HasPsyche, PsycheTraitId};
 // ============================================================================
 // §4 Social Combat, Debate & Cognitive Dissonance ("Mental Wounds")
@@ -252,6 +253,179 @@ pub fn compute_social_composure_threshold(dis: i32, foc: i32) -> i32 {
     compute_social_composure_score(dis, foc)
 }
 
+/// Computes the Bearing-weighted **Social Composure Threshold (`CMP`)**:
+/// $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC} + \text{BEA}}{6} \right\rfloor$$
+#[must_use]
+pub fn compute_social_composure_threshold_with_bearing(dis: i32, foc: i32, bea: i32) -> i32 {
+    compute_social_composure_with_bearing(dis, foc, bea)
+}
+
+define_coded_enum! {
+    /// Social arena governing whether Institutional Status or Street Cred acts as leverage or backlash.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum SocialArenaKind [count = 4] {
+        InstitutionalFormal => {
+            code: "INSTITUTIONAL_FORMAL",
+            label: "Institutional / Corporate / Legal",
+            aliases: ["INSTITUTIONAL", "CORPORATE", "FORMAL"],
+        },
+        StreetUnderworld => {
+            code: "STREET_UNDERWORLD",
+            label: "Street / Underworld / Syndicate",
+            aliases: ["STREET", "UNDERWORLD"],
+        },
+        GrassrootsCommunity => {
+            code: "GRASSROOTS_COMMUNITY",
+            label: "Grassroots / Union / Community",
+            aliases: ["GRASSROOTS", "COMMUNITY"],
+        },
+        MixedPublic => {
+            code: "MIXED_PUBLIC",
+            label: "Mixed Public Sphere",
+            aliases: ["MIXED", "PUBLIC"],
+        },
+    }
+}
+
+/// Evaluation of how Dual-Standing Social Status (`institutional_status`, `street_cred`)
+/// modifies a Social Combat or persuasion check against `target_psyche` in `arena`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocialStandingLeverageEval {
+    pub arena: SocialArenaKind,
+    /// Net external task modifier ($\Delta_{\text{ext}}$: negative eases check, positive penalizes).
+    pub delta_ext: i32,
+    /// True when target's High `CNF` or High `EGO` amplified Institutional Status leverage.
+    pub psyche_amplified: bool,
+    /// True when high institutional privilege triggered distrust/outsider backlash in Street or Grassroots arenas.
+    pub inverted_backlash: bool,
+    pub rationale: String,
+}
+
+/// Computes situational $\Delta_{\text{ext}}$ leverage from Institutional Status (`1..=10`) and Street Cred (`0..=5`)
+/// filtered by target Psyche (`CNF`, `EGO`, `TRS`) and social arena.
+#[must_use]
+pub fn evaluate_social_standing_modifier(
+    speaker_inst_status: u8,
+    speaker_street_cred: u8,
+    target_inst_status: u8,
+    target_street_cred: u8,
+    target_psyche: &impl HasPsyche,
+    arena: SocialArenaKind,
+) -> SocialStandingLeverageEval {
+    let sp_inst = i32::from(speaker_inst_status.clamp(1, 10));
+    let tg_inst = i32::from(target_inst_status.clamp(1, 10));
+    let sp_cred = i32::from(speaker_street_cred.min(5));
+    let tg_cred = i32::from(target_street_cred.min(5));
+    let p = target_psyche.as_psyche_profile();
+
+    match arena {
+        SocialArenaKind::InstitutionalFormal => {
+            let gap = (sp_inst - tg_inst).div_euclid(2).clamp(-3, 3);
+            if p.cnf <= 7 && gap > 0 {
+                let delta = if gap >= 2 { 2 } else { 0 };
+                SocialStandingLeverageEval {
+                    arena,
+                    delta_ext: delta,
+                    psyche_amplified: false,
+                    inverted_backlash: delta > 0,
+                    rationale: format!(
+                        "Low-CNF maverick (CNF={}) rejects rank gap +{gap} -> Δ_ext={delta:+}",
+                        p.cnf
+                    ),
+                }
+            } else if p.cnf >= 13 || p.ego >= 13 {
+                let delta = (-2 * gap).clamp(-6, 6);
+                SocialStandingLeverageEval {
+                    arena,
+                    delta_ext: delta,
+                    psyche_amplified: gap != 0,
+                    inverted_backlash: false,
+                    rationale: format!(
+                        "High CNF/EGO target (CNF={}, EGO={}) amplifies institutional rank gap {gap:+} -> Δ_ext={delta:+}",
+                        p.cnf, p.ego
+                    ),
+                }
+            } else {
+                let delta = (-gap).clamp(-4, 4);
+                SocialStandingLeverageEval {
+                    arena,
+                    delta_ext: delta,
+                    psyche_amplified: false,
+                    inverted_backlash: false,
+                    rationale: format!(
+                        "Institutional status gap ({sp_inst} vs {tg_inst}) -> Δ_ext={delta:+}"
+                    ),
+                }
+            }
+        }
+        SocialArenaKind::StreetUnderworld => {
+            let cred_gap = sp_cred - tg_cred;
+            let mut delta = (-cred_gap).clamp(-4, 4);
+            let mut backlash = false;
+            if sp_inst >= 7 && sp_cred <= 1 {
+                delta += 3;
+                backlash = true;
+            }
+            SocialStandingLeverageEval {
+                arena,
+                delta_ext: delta,
+                psyche_amplified: false,
+                inverted_backlash: backlash,
+                rationale: if backlash {
+                    format!(
+                        "Street cred gap ({sp_cred} vs {tg_cred}) + outsider/suit backlash (InstStatus={sp_inst}) -> Δ_ext={delta:+}"
+                    )
+                } else {
+                    format!("Street cred gap ({sp_cred} vs {tg_cred}) -> Δ_ext={delta:+}")
+                },
+            }
+        }
+        SocialArenaKind::GrassrootsCommunity => {
+            let cred_gap = sp_cred - tg_cred;
+            let mut delta = (-cred_gap).clamp(-3, 3);
+            let mut backlash = false;
+            if sp_inst >= 8 && sp_cred <= 1 && p.trs <= 8 {
+                delta += 3;
+                backlash = true;
+            }
+            SocialStandingLeverageEval {
+                arena,
+                delta_ext: delta,
+                psyche_amplified: false,
+                inverted_backlash: backlash,
+                rationale: if backlash {
+                    format!(
+                        "Grassroots cred gap ({sp_cred} vs {tg_cred}) + elite distrust (InstStatus={sp_inst}, TRS={}) -> Δ_ext={delta:+}",
+                        p.trs
+                    )
+                } else {
+                    format!("Grassroots cred gap ({sp_cred} vs {tg_cred}) -> Δ_ext={delta:+}")
+                },
+            }
+        }
+        SocialArenaKind::MixedPublic => {
+            let inst_eff = (sp_inst - tg_inst).div_euclid(3);
+            let cred_eff = (sp_cred - tg_cred).div_euclid(2);
+            let best_gap = if inst_eff.abs() >= cred_eff.abs() {
+                inst_eff
+            } else {
+                cred_eff
+            };
+            let delta = (-best_gap).clamp(-3, 3);
+            SocialStandingLeverageEval {
+                arena,
+                delta_ext: delta,
+                psyche_amplified: false,
+                inverted_backlash: false,
+                rationale: format!(
+                    "Mixed arena standing (Inst {sp_inst} vs {tg_inst}, Cred {sp_cred} vs {tg_cred}) -> Δ_ext={delta:+}"
+                ),
+            }
+        }
+    }
+}
+
 /// The 4 canonical Social Wounds from `§4.3`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -334,6 +508,21 @@ pub struct SocialComposureState {
 impl SocialComposureState {
     pub fn new(dis: i32, foc: i32) -> Self {
         let cmp = compute_social_composure_threshold(dis, foc);
+        Self {
+            max_cmp: cmp,
+            current_cmp: cmp,
+            doubt_fractures: 0,
+            dissonance_index: 0,
+            accumulated_delta_int: 0,
+            focus_penalty: 0,
+            position_demolished: false,
+            lashed_out_from_ego_wound: false,
+        }
+    }
+
+    /// Creates a [`SocialComposureState`] using Bearing-weighted $\text{CMP} = \lfloor(\text{DIS} + \text{FOC} + \text{BEA}) / 6\rfloor$.
+    pub fn new_with_bearing(dis: i32, foc: i32, bea: i32) -> Self {
+        let cmp = compute_social_composure_threshold_with_bearing(dis, foc, bea);
         Self {
             max_cmp: cmp,
             current_cmp: cmp,

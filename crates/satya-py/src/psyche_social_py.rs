@@ -4,10 +4,13 @@
 use pyo3::prelude::*;
 use satya_campaign::{apply_world_ledger_update, seed_default_world_ledger};
 use satya_engine::{
-    BattlefieldMoraleSituation, CombatMotivationKind, ConvictionPrincipleArchetype,
-    DissonanceResolutionPath, EmotionalTriggerKind, MoraleState, PsycheProfile, PsycheTraitId,
+    BattlefieldMoraleSituation, CareerEchelonTier, CareerTermConfig, CareerTermTrack,
+    CharacterAptitudes, CharacterCharacteristics, CombatMotivationKind,
+    ConvictionPrincipleArchetype, DissonanceResolutionPath, EmotionalTriggerKind,
+    LifepathBuildConfig, MoraleState, PsycheProfile, PsycheTraitId, SocialArenaKind,
     SocialArgumentVector, SocialComposureState, compute_battlefield_morale_delta,
-    evaluate_combat_motivation_modifier, evaluate_social_exchange_wounds,
+    compute_lifepath_baseline_from_config, evaluate_combat_motivation_modifier, evaluate_social_exchange_wounds,
+    evaluate_social_standing_modifier,
 };
 use satya_schema::{
     EconomicTier, SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse,
@@ -17,8 +20,9 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use super::py_bridge::{
-    PyEnum, PyJsonDict, PyJsonInput, PyJsonList, PyListInput, from_py_object, opt_from_py_object,
-    parse_coded_enum, py_to_json_value, to_py_err, to_py_object, unwrap_py_enum_or,
+    PyEnum, PyJsonDict, PyJsonInput, PyJsonList, PyListInput, from_py_object,
+    merge_object_defaults, opt_from_py_object, parse_coded_enum, py_to_json_value, to_py_err,
+    to_py_object, unwrap_py_enum_or,
 };
 
 fn read_i32(map: &Map<String, Value>, keys: &[&str], default: i32) -> i32 {
@@ -583,10 +587,145 @@ pub fn list_psyche_trait_descriptors(py: Python<'_>) -> PyResult<PyJsonList> {
     to_py_object(py, &rows)
 }
 
+fn normalize_lifepath_config_for_py(mut lp_val: Value) -> PyResult<LifepathBuildConfig> {
+    if let Some(obj) = lp_val.as_object_mut()
+        && let Some(Value::Array(raw_terms)) = obj.get_mut("career_terms")
+    {
+        let mut normalized_terms = Vec::with_capacity(raw_terms.len());
+        for entry in raw_terms.iter() {
+            match entry {
+                Value::String(code) => {
+                    let track: CareerTermTrack = parse_coded_enum(code, "CareerTermTrack")?;
+                    let term = CareerTermConfig {
+                        track,
+                        ..CareerTermConfig::default()
+                    };
+                    normalized_terms.push(serde_json::to_value(term).map_err(|e| {
+                        to_py_err(format!("CareerTermConfig serialize failed: {e}"))
+                    })?);
+                }
+                Value::Object(map) => {
+                    let mut term_obj = map.clone();
+                    if let Some(Value::String(trk_str)) = term_obj.get("track") {
+                        let trk: CareerTermTrack = parse_coded_enum(trk_str, "CareerTermTrack")?;
+                        term_obj.insert(
+                            "track".to_string(),
+                            serde_json::to_value(trk).map_err(|e| {
+                                to_py_err(format!("CareerTermTrack serialize failed: {e}"))
+                            })?,
+                        );
+                    }
+                    if let Some(Value::String(ech_str)) = term_obj.get("echelon_override") {
+                        let ech: CareerEchelonTier =
+                            parse_coded_enum(ech_str, "CareerEchelonTier")?;
+                        term_obj.insert(
+                            "echelon_override".to_string(),
+                            serde_json::to_value(ech).map_err(|e| {
+                                to_py_err(format!("CareerEchelonTier serialize failed: {e}"))
+                            })?,
+                        );
+                    }
+                    let merged: CareerTermConfig = merge_object_defaults(
+                        Some(&Value::Object(term_obj)),
+                        &[],
+                        "CareerTermConfig",
+                    )?;
+                    normalized_terms.push(serde_json::to_value(merged).map_err(|e| {
+                        to_py_err(format!("CareerTermConfig serialize failed: {e}"))
+                    })?);
+                }
+                other => normalized_terms.push(other.clone()),
+            }
+        }
+        obj.insert("career_terms".to_string(), Value::Array(normalized_terms));
+    }
+    merge_object_defaults(Some(&lp_val), &[], "LifepathBuildConfig")
+}
+
+/// Evaluates how speaker and target Institutional Status (`1..=10`) and Street Cred (`0..=5`)
+/// modify a Social Combat or persuasion check in `arena`, filtered through target Psyche (`CNF`, `EGO`, `TRS`).
+#[pyfunction]
+#[pyo3(signature = (speaker_institutional_status, speaker_street_cred, target_institutional_status, target_street_cred, target_psyche, arena = "INSTITUTIONAL_FORMAL"))]
+pub fn evaluate_social_standing_leverage(
+    py: Python<'_>,
+    speaker_institutional_status: u8,
+    speaker_street_cred: u8,
+    target_institutional_status: u8,
+    target_street_cred: u8,
+    target_psyche: PyJsonInput<'_>,
+    arena: &str,
+) -> PyResult<PyJsonDict> {
+    let arena_kind: SocialArenaKind = parse_coded_enum(arena, "SocialArenaKind")?;
+    let psyche_val = py_to_json_value(&target_psyche, "target_psyche")?;
+    let psyche = parse_psyche_profile_value(&psyche_val)?;
+    let eval = evaluate_social_standing_modifier(
+        speaker_institutional_status,
+        speaker_street_cred,
+        target_institutional_status,
+        target_street_cred,
+        &psyche,
+        arena_kind,
+    );
+    to_py_object(py, &eval)
+}
+
+/// Computes the chronological Lifepath Socio-Economic profile, Career Entry/Echelon evaluations,
+/// SQM, Operational Heat, Earned Contacts, and stage history from a partial `LifepathBuildConfig` dict.
+#[pyfunction]
+#[pyo3(signature = (lifepath_config, characteristics = None, aptitudes = None))]
+pub fn compute_lifepath_socioeconomic_profile(
+    py: Python<'_>,
+    lifepath_config: PyJsonInput<'_>,
+    characteristics: Option<PyJsonInput<'_>>,
+    aptitudes: Option<PyJsonInput<'_>>,
+) -> PyResult<PyJsonDict> {
+    let lp_val = py_to_json_value(&lifepath_config, "lifepath_config")?;
+    let cfg = normalize_lifepath_config_for_py(lp_val)?;
+    let chars_val = characteristics
+        .map(|c| py_to_json_value(&c, "characteristics"))
+        .transpose()?;
+    let chars: CharacterCharacteristics = merge_object_defaults(
+        chars_val.as_ref(),
+        &[
+            ("for", "for_stat"),
+            ("str", "for_stat"),
+            ("height_m", "hgt_m"),
+            ("mass_kg", "mas_kg"),
+            ("social_savvy", "sav"),
+            ("bearing", "bea"),
+            ("poise", "bea"),
+            ("warmth", "wrm"),
+        ],
+        "CharacterCharacteristics",
+    )?;
+    let apts_val = aptitudes
+        .map(|a| py_to_json_value(&a, "aptitudes"))
+        .transpose()?;
+    let apts: CharacterAptitudes =
+        merge_object_defaults(apts_val.as_ref(), &[], "CharacterAptitudes")?;
+
+    let baseline = compute_lifepath_baseline_from_config(&cfg, &chars, &apts);
+    to_py_object(
+        py,
+        &json!({
+            "age_years": baseline.age_years,
+            "origin_class": baseline.origin.class,
+            "origin_label": baseline.origin.label,
+            "campaign_sqm": baseline.campaign_sqm,
+            "operational_heat": baseline.operational_heat,
+            "socioeconomic": baseline.socioeconomic,
+            "term_entry_evals": baseline.term_entry_evals,
+            "stage_history": baseline.stage_history,
+        }),
+    )
+}
+
 /// Registers social combat, psyche, and world-clock helpers on the `satya_py` module.
 pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_empathy_read, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_social_exchange, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_social_standing_leverage, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_lifepath_socioeconomic_profile, m)?)?;
     m.add_function(wrap_pyfunction!(resolve_cognitive_dissonance, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_conviction_surge, m)?)?;
     m.add_function(wrap_pyfunction!(apply_psyche_drift_mark, m)?)?;
@@ -779,6 +918,31 @@ mod tests {
             assert_eq!(arr[0]["code"], "OPN");
             assert!(arr[0]["low_pole"].is_string());
             assert!(arr[0]["high_pole"].is_string());
+
+            let lev_inst = evaluate_social_standing_leverage(
+                py,
+                9,
+                0,
+                4,
+                1,
+                py_s(r#"{"cnf": 15, "ego": 13, "trs": 10}"#),
+                "INSTITUTIONAL_FORMAL",
+            )
+            .unwrap();
+            let lev_inst_v = py_to_value(lev_inst.bind(py)).unwrap();
+            assert!(lev_inst_v["delta_ext"].as_i64().unwrap() < 0);
+            assert_eq!(lev_inst_v["psyche_amplified"], true);
+
+            let lp_res = compute_lifepath_socioeconomic_profile(
+                py,
+                py_s(r#"{"origin_roll_2d20": 10, "career_terms": ["ORGANIZED_CRIME_SYNDICATE"]}"#),
+                Some(py_s(r#"{"sav": 13, "bea": 12, "elo": 12}"#)),
+                None,
+            )
+            .unwrap();
+            let lp_v = py_to_value(lp_res.bind(py)).unwrap();
+            assert!(lp_v["socioeconomic"]["street_cred"].as_u64().unwrap() >= 2);
+            assert_eq!(lp_v["term_entry_evals"].as_array().unwrap().len(), 1);
         });
     }
 }

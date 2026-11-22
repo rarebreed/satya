@@ -186,8 +186,12 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
             "Social Composure (CMP)",
             format!("{}", derived.cmp_social_composure_threshold),
             format!(
-                "floor((DIS {} + FOC {})/4) · Lost {}/{}",
-                c.dis, c.foc, sheet.social_composure_lost, derived.cmp_social_composure_threshold
+                "floor((DIS {} + FOC {} + BEA {})/6) · Lost {}/{}",
+                c.dis,
+                c.foc,
+                c.bea,
+                sheet.social_composure_lost,
+                derived.cmp_social_composure_threshold
             ),
         ),
         (
@@ -253,7 +257,7 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
             &sens_rows,
         ),
         render_table_card(
-            "Social Characteristics (3 Interpersonal Scores)",
+            "Social Characteristics (6 Interpersonal Scores)",
             std_hdrs,
             &soc_rows,
         ),

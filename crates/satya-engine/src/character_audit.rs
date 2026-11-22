@@ -40,6 +40,9 @@ pub fn characteristics_to_record(c: &CharacterCharacteristics) -> CharacterChara
         com: c.com,
         pre: c.pre,
         elo: c.elo,
+        sav: c.sav,
+        bea: c.bea,
+        wrm: c.wrm,
         sig: c.sig,
         hea: c.hea,
         tac: c.tac,
@@ -79,6 +82,9 @@ pub fn characteristics_from_record(r: &CharacterCharacteristicsRecord) -> Charac
         com: r.com.clamp(1, 20),
         pre: r.pre.clamp(1, 20),
         elo: r.elo.clamp(1, 20),
+        sav: r.sav.clamp(1, 20),
+        bea: r.bea.clamp(1, 20),
+        wrm: r.wrm.clamp(1, 20),
         sig: r.sig.clamp(1, 20),
         hea: r.hea.clamp(1, 20),
         tac: r.tac.clamp(1, 20),
@@ -134,7 +140,7 @@ pub fn aptitudes_from_record(r: &CharacterAptitudesRecord) -> CharacterAptitudes
 pub struct CharacterAuditReport {
     /// Whether the character passes all characteristic, aptitude, DAG prerequisite, and SP budget checks.
     pub is_legal: bool,
-    /// Whether all 30 scaled characteristics are in `1..=20` and height/mass/aptitudes are in range.
+    /// Whether all 33 scaled characteristics are in `1..=20`, height/mass/aptitudes and socio-economic tiers are in range.
     pub characteristics_valid: bool,
     /// Whether all trained skills satisfy `[Access]`, `Min C`, parent prerequisite, and Foundation Ceiling gates.
     pub dag_prereqs_valid: bool,
@@ -153,7 +159,7 @@ pub struct CharacterAuditReport {
 }
 
 /// Deterministically audits a [`CharacterSheetRecord`] against all Satya character creation and advancement rules:
-/// 1. All 30 scaled Characteristics in `1..=20`, `hgt_m` in `0.5..=3.0`, `mas_kg` in `20.0..=300.0`, and all 9 Domain Aptitudes in `-2..=+3`.
+/// 1. All 33 scaled Characteristics in `1..=20`, `hgt_m` in `0.5..=3.0`, `mas_kg` in `20.0..=300.0`, all 9 Domain Aptitudes in `-2..=+3`, and Socio-Economic standings in range (`institutional_status 1..=10`, `street_cred 0..=5`, `debt_tier 0..=3`).
 /// 2. All skill ranks in `0..=10` (`TAL` innate talents $\ge 1$) and valid canonical skill slugs.
 /// 3. All 4 canonical Skill Tree DAG gates (`[Access]`, `Min C`, Parent Prerequisite, and Foundation Ceiling $N_{\text{child}} \le N_{\text{parent}} + 2$).
 /// 4. If `lifepath_config_json` is provided, recomputes the Stage 1–5 lifepath baseline and 5-Factor SP Ledger and verifies
@@ -182,6 +188,9 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
         (CharacteristicCode::COM, c_rec.com),
         (CharacteristicCode::PRE, c_rec.pre),
         (CharacteristicCode::ELO, c_rec.elo),
+        (CharacteristicCode::SAV, c_rec.sav),
+        (CharacteristicCode::BEA, c_rec.bea),
+        (CharacteristicCode::WRM, c_rec.wrm),
         (CharacteristicCode::SIG, c_rec.sig),
         (CharacteristicCode::HEA, c_rec.hea),
         (CharacteristicCode::TAC, c_rec.tac),
@@ -207,6 +216,27 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
                 val
             ));
         }
+    }
+    if !(1..=10).contains(&record.institutional_status) {
+        characteristics_valid = false;
+        violations.push(format!(
+            "Institutional Status {} is outside legal range 1..=10.",
+            record.institutional_status
+        ));
+    }
+    if !(0..=5).contains(&record.street_cred) {
+        characteristics_valid = false;
+        violations.push(format!(
+            "Street Cred {} is outside legal range 0..=5.",
+            record.street_cred
+        ));
+    }
+    if !(0..=3).contains(&record.debt_tier) {
+        characteristics_valid = false;
+        violations.push(format!(
+            "Debt Tier {} is outside legal range 0..=3.",
+            record.debt_tier
+        ));
     }
     if !(0.5..=3.0).contains(&c_rec.hgt_m) {
         characteristics_valid = false;

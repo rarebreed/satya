@@ -215,7 +215,14 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
                         "MEM {} · ANA {} · INS {} · DIS {} · FOC {}",
                         c.mem, c.ana, c.ins, c.dis, c.foc
                     ),
-                    format!("COM {} · PRE {} · ELO {}", c.com, c.pre, c.elo),
+                    format!(
+                        "COM {} · PRE {} · ELO {} · SAV {} · BEA {} · WRM {}",
+                        c.com, c.pre, c.elo, c.sav, c.bea, c.wrm
+                    ),
+                    format!(
+                        "Wealth {} · Inst {} · Cred {} · Debt Tier {}",
+                        ch.campaign_sqm, ch.institutional_status, ch.street_cred, ch.debt_tier
+                    ),
                 ]
                 .join(" | ")
             },

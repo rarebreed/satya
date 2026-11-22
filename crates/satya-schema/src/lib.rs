@@ -188,7 +188,7 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 12);
+        assert_eq!(all.len(), 13);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -206,7 +206,12 @@ mod tests {
         let char_v2 = registry
             .get_by_subject_version(subjects::CHARACTER_SHEET, 2)
             .unwrap();
+        let char_v3 = registry
+            .get_by_subject_version(subjects::CHARACTER_SHEET, 3)
+            .unwrap();
         assert_ne!(char_v1.fingerprint_crc64, char_v2.fingerprint_crc64);
+        assert_ne!(char_v2.fingerprint_crc64, char_v3.fingerprint_crc64);
+        assert_ne!(char_v1.fingerprint_crc64, char_v3.fingerprint_crc64);
     }
 
     #[test]
@@ -246,12 +251,26 @@ mod tests {
                 if k == "character"
                     && let apache_avro::types::Value::Record(char_fields) = v
                 {
-                    char_fields.retain(|(cf, _)| cf != "faction_id" && cf != "faction_archetype");
+                    char_fields.retain(|(cf, _)| {
+                        !matches!(
+                            cf.as_str(),
+                            "faction_id"
+                                | "faction_archetype"
+                                | "institutional_status"
+                                | "street_cred"
+                                | "debt_tier"
+                        )
+                    });
                     for (ck, cv) in char_fields.iter_mut() {
                         if ck == "characteristics"
                             && let apache_avro::types::Value::Record(stat_fields) = cv
                         {
-                            stat_fields.retain(|(sf, _)| sf != "trs" && sf != "cps");
+                            stat_fields.retain(|(sf, _)| {
+                                !matches!(
+                                    sf.as_str(),
+                                    "trs" | "cps" | "sav" | "bea" | "wrm"
+                                )
+                            });
                         }
                     }
                 }
@@ -274,10 +293,16 @@ mod tests {
         assert_eq!(hdr.schema_id, 11);
         assert_eq!(decoded.character.characteristics.trs, 10);
         assert_eq!(decoded.character.characteristics.cps, 10);
+        assert_eq!(decoded.character.characteristics.sav, 10);
+        assert_eq!(decoded.character.characteristics.bea, 10);
+        assert_eq!(decoded.character.characteristics.wrm, 10);
         assert_eq!(decoded.character.faction_id, None);
         assert_eq!(decoded.character.faction_archetype, None);
+        assert_eq!(decoded.character.institutional_status, 5);
+        assert_eq!(decoded.character.street_cred, 0);
+        assert_eq!(decoded.character.debt_tier, 0);
 
-        // Evolve v1 character record cleanly into v2 reader schema
+        // Evolve v1 character record cleanly into v2 and v3 reader schemas
         let (hdr_evolved, evolved_v2): (_, CharacterSheetEvent) =
             registry.decode_framed(&framed, Some(2)).unwrap();
         assert_eq!(hdr_evolved.schema_version, 1);
@@ -285,8 +310,18 @@ mod tests {
         assert_eq!(evolved_v2.character.characteristics.cps, 10);
         assert_eq!(evolved_v2.character.faction_archetype, None);
 
-        // v2 encoding preserves non-equilibrium TRS/CPS and optional faction fields
-        let mut sheet_v2 = sheet;
+        let (hdr_evolved_v3, evolved_v3): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed, Some(3)).unwrap();
+        assert_eq!(hdr_evolved_v3.schema_version, 1);
+        assert_eq!(evolved_v3.character.characteristics.sav, 10);
+        assert_eq!(evolved_v3.character.characteristics.bea, 10);
+        assert_eq!(evolved_v3.character.characteristics.wrm, 10);
+        assert_eq!(evolved_v3.character.institutional_status, 5);
+        assert_eq!(evolved_v3.character.street_cred, 0);
+        assert_eq!(evolved_v3.character.debt_tier, 0);
+
+        // v2 historical payload preserves TRS/CPS and faction fields and evolves cleanly to v3
+        let mut sheet_v2 = sheet.clone();
         sheet_v2.characteristics.trs = 12;
         sheet_v2.characteristics.cps = 17;
         sheet_v2.faction_id = Some("SATYANG".to_string());
@@ -303,23 +338,102 @@ mod tests {
         let ev_v2 = CharacterSheetEvent {
             metadata: meta_v2,
             character_event_type: CharacterEventType::CharacterCreated,
-            actor: sara,
+            actor: sara.clone(),
             character: sheet_v2,
         };
-        let framed_v2 = registry
-            .encode_framed(subjects::CHARACTER_SHEET, 2, &ev_v2)
+        let char_v2_reg = registry
+            .get_by_subject_version(subjects::CHARACTER_SHEET, 2)
             .unwrap();
+        let mut raw_v2_val = apache_avro::to_value(&ev_v2).unwrap();
+        if let apache_avro::types::Value::Record(ref mut top_fields) = raw_v2_val {
+            for (k, v) in top_fields.iter_mut() {
+                if k == "character"
+                    && let apache_avro::types::Value::Record(char_fields) = v
+                {
+                    char_fields.retain(|(cf, _)| {
+                        !matches!(
+                            cf.as_str(),
+                            "institutional_status" | "street_cred" | "debt_tier"
+                        )
+                    });
+                    for (ck, cv) in char_fields.iter_mut() {
+                        if ck == "characteristics"
+                            && let apache_avro::types::Value::Record(stat_fields) = cv
+                        {
+                            stat_fields
+                                .retain(|(sf, _)| !matches!(sf.as_str(), "sav" | "bea" | "wrm"));
+                        }
+                    }
+                }
+            }
+        }
+        let avro_v2_bytes =
+            apache_avro::to_avro_datum(&char_v2_reg.avro_schema, raw_v2_val).unwrap();
+        let hdr_v2_wire = WireFrameHeader {
+            magic_byte: WIRE_MAGIC_BYTE,
+            schema_id: char_v2_reg.schema_id,
+            schema_version: char_v2_reg.version,
+            fingerprint_crc64: char_v2_reg.fingerprint_crc64,
+        };
+        let mut framed_v2 = Vec::with_capacity(WIRE_HEADER_LEN + avro_v2_bytes.len());
+        framed_v2.extend_from_slice(&hdr_v2_wire.to_bytes());
+        framed_v2.extend_from_slice(&avro_v2_bytes);
+
         let (hdr_v2, decoded_v2): (_, CharacterSheetEvent) =
             registry.decode_framed(&framed_v2, None).unwrap();
         assert_eq!(hdr_v2.schema_id, 12);
         assert_eq!(hdr_v2.schema_version, 2);
         assert_eq!(decoded_v2.character.characteristics.trs, 12);
         assert_eq!(decoded_v2.character.characteristics.cps, 17);
+        assert_eq!(decoded_v2.character.characteristics.sav, 10);
+        assert_eq!(decoded_v2.character.institutional_status, 5);
         assert_eq!(decoded_v2.character.faction_id.as_deref(), Some("SATYANG"));
         assert_eq!(
             decoded_v2.character.faction_archetype.as_deref(),
             Some("SATYANG_MANJUSRI")
         );
+        let (_, evolved_v2_to_v3): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed_v2, Some(3)).unwrap();
+        assert_eq!(evolved_v2_to_v3.character.characteristics.trs, 12);
+        assert_eq!(evolved_v2_to_v3.character.characteristics.bea, 10);
+        assert_eq!(evolved_v2_to_v3.character.debt_tier, 0);
+
+        // v3 encoding preserves SAV/BEA/WRM and Dual-Standing Socio-Economic values
+        let mut sheet_v3 = sheet;
+        sheet_v3.characteristics.sav = 15;
+        sheet_v3.characteristics.bea = 14;
+        sheet_v3.characteristics.wrm = 13;
+        sheet_v3.institutional_status = 7;
+        sheet_v3.street_cred = 3;
+        sheet_v3.debt_tier = 2;
+        let meta_v3 = registry
+            .build_metadata(
+                52,
+                subjects::CHARACTER_SHEET,
+                3,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let ev_v3 = CharacterSheetEvent {
+            metadata: meta_v3,
+            character_event_type: CharacterEventType::CharacterCreated,
+            actor: sara,
+            character: sheet_v3,
+        };
+        let framed_v3 = registry
+            .encode_framed(subjects::CHARACTER_SHEET, 3, &ev_v3)
+            .unwrap();
+        let (hdr_v3, decoded_v3): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed_v3, None).unwrap();
+        assert_eq!(hdr_v3.schema_id, 13);
+        assert_eq!(hdr_v3.schema_version, 3);
+        assert_eq!(decoded_v3.character.characteristics.sav, 15);
+        assert_eq!(decoded_v3.character.characteristics.bea, 14);
+        assert_eq!(decoded_v3.character.characteristics.wrm, 13);
+        assert_eq!(decoded_v3.character.institutional_status, 7);
+        assert_eq!(decoded_v3.character.street_cred, 3);
+        assert_eq!(decoded_v3.character.debt_tier, 2);
 
         assert_eq!(
             decoded.character_event_type,

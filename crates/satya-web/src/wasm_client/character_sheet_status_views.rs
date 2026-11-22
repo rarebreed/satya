@@ -8,7 +8,8 @@ use crate::wasm_client::dom::escape_html;
 use satya_engine::{
     AcuteMentalTraumaTier, HIT_LOCATION_TABLE, HemorrhageGrade, HypovolemicShockClass, MoraleState,
     PhysiologicalStatusCondition, SocialWoundKind, evaluate_blood_loss_progression,
-    evaluate_fatigue_level, evaluate_operational_heat, lookup_campaign_sqm, psyche_drift_threshold,
+    evaluate_fatigue_level, evaluate_operational_heat, lookup_campaign_sqm,
+    lookup_institutional_status, lookup_street_cred, psyche_drift_threshold,
 };
 
 fn zone_colors(z: &AnatomicalZoneState, is_selected: bool) -> (&'static str, &'static str) {
@@ -609,6 +610,8 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
 #[must_use]
 pub fn format_character_notes_and_lifepath_html(sheet: &CharacterSheetState) -> String {
     let sqm_spec = lookup_campaign_sqm(sheet.campaign_sqm);
+    let inst_spec = lookup_institutional_status(sheet.institutional_status);
+    let cred_spec = lookup_street_cred(sheet.street_cred);
     let heat_spec = evaluate_operational_heat(sheet.operational_heat);
     let access_pills: String = sheet
         .granted_access_tags
@@ -657,7 +660,10 @@ pub fn format_character_notes_and_lifepath_html(sheet: &CharacterSheetState) -> 
                 <span class="roster-title">Lifepath, [Access] Gates &amp; Economy:</span>
                 <div class="roster-chips">
                     <span class="pill pill-iggy">Origin: {origin}</span>
-                    <span class="pill pill-iggy">SQM {sqm}: ${usd}/mo ({tier_name})</span>
+                    <span class="pill pill-iggy">Wealth/SQM {sqm}: ${usd}/mo ({tier_name})</span>
+                    <span class="pill pill-iggy">InstStatus {inst}/10 ({inst_label})</span>
+                    <span class="pill pill-iggy">StreetCred {cred}/5 ({cred_label})</span>
+                    <span class="pill pill-iggy">Debt: {debt_label}</span>
                     <span class="pill pill-iggy">Heat {heat}/10 (+{h_delta} Δ_ext)</span>
                     {access_pills}
                 </div>
@@ -669,6 +675,11 @@ pub fn format_character_notes_and_lifepath_html(sheet: &CharacterSheetState) -> 
         sqm = sqm_spec.sqm_tier,
         usd = sqm_spec.monthly_liquid_baseline_usd,
         tier_name = escape_html(sqm_spec.tier_name),
+        inst = inst_spec.tier,
+        inst_label = escape_html(inst_spec.bracket_name),
+        cred = cred_spec.cred,
+        cred_label = escape_html(cred_spec.bracket_name),
+        debt_label = escape_html(sheet.debt_tier.label()),
         heat = heat_spec.heat_score,
         h_delta = heat_spec.public_check_delta_ext,
     )

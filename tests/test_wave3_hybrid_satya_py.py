@@ -116,6 +116,22 @@ def test_maps_campaign_psyche_and_awakened_dict_helpers() -> None:
     assert "new_morale_state" in trig
     mot = psyche.evaluate_combat_motivation(psyche_traits, "neutral_or_survival", True)
     assert isinstance(mot, dict)
+    inst_lev = psyche.evaluate_social_standing_leverage(
+        9, 0, 4, 1, {"cnf": 15, "ego": 13, "trs": 10}, arena="INSTITUTIONAL_FORMAL"
+    )
+    assert inst_lev["delta_ext"] < 0
+    assert inst_lev["psyche_amplified"] is True
+    street_lev = psyche.evaluate_social_standing_leverage(
+        9, 0, 3, 4, {"cnf": 6, "ego": 10, "trs": 4}, arena="STREET_UNDERWORLD"
+    )
+    assert street_lev["delta_ext"] > 0
+    assert street_lev["inverted_backlash"] is True
+    lp_soc = psyche.compute_lifepath_socioeconomic_profile(
+        {"origin_roll_2d20": 10, "career_terms": [{"track": "ORGANIZED_CRIME_SYNDICATE"}]},
+        {"sav": 13, "bea": 12, "elo": 12},
+    )
+    assert lp_soc["socioeconomic"]["street_cred"] >= 2
+    assert len(lp_soc["term_entry_evals"]) == 1
 
     sub = awakened.seed_synthetic_substrate_state("hunter-7", "big_tech seed", seed=4)
     step = awakened.evaluate_synthetic_substrate_action(sub, "JAM_RF_UPLINK", 70)

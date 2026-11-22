@@ -14,6 +14,130 @@ use crate::characteristics::{
 use crate::define_coded_enum;
 use crate::skills_trees::SkillAccessTier;
 
+define_coded_enum! {
+    /// Starting or attained Role Echelon within a Stage 5 Career Term (`EntryRank`, `MidSpecialist`, `SeniorLeadership`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum CareerEchelonTier [count = 3] {
+        EntryRank => {
+            code: "ENTRY_RANK",
+            label: "Entry Rank / Apprentice / Junior",
+            aliases: ["ENTRY", "ENLISTED"],
+        },
+        MidSpecialist => {
+            code: "MID_SPECIALIST",
+            label: "Mid-Tier Specialist / Junior Officer / Case Officer",
+            aliases: ["MID", "SPECIALIST", "OFFICER"],
+        },
+        SeniorLeadership => {
+            code: "SENIOR_LEADERSHIP",
+            label: "Senior Leadership / Executive / Command",
+            aliases: ["SENIOR", "LEADERSHIP", "EXECUTIVE"],
+        },
+    }
+}
+
+impl CareerEchelonTier {
+    /// Additional Formal SP granted per 4-year term for higher role echelons (`0`, `+10`, `+20`).
+    #[must_use]
+    pub const fn formal_sp_bonus(self) -> usize {
+        match self {
+            Self::EntryRank => 0,
+            Self::MidSpecialist => 10,
+            Self::SeniorLeadership => 20,
+        }
+    }
+
+    /// Bonus Contact Reach tier granted for senior leadership roles (`0`, `0`, `+1`).
+    #[must_use]
+    pub const fn contact_reach_bonus(self) -> u8 {
+        match self {
+            Self::EntryRank | Self::MidSpecialist => 0,
+            Self::SeniorLeadership => 1,
+        }
+    }
+}
+
+define_coded_enum! {
+    /// Tuition or patronage funding path used to enter a Stage 5 Career / Higher Education Term.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum CareerFundingMode [count = 5] {
+        NotApplicable => {
+            code: "NOT_APPLICABLE",
+            label: "Direct Career / Salaried / No Tuition Gate",
+        },
+        SelfOrFamilyFunded => {
+            code: "SELF_FAMILY_FUNDED",
+            label: "Self / Family Wealth Funded (No New Debt)",
+        },
+        GiBillServiceFunded => {
+            code: "GI_BILL_FUNDED",
+            label: "GI Bill / State Service Tuition Waiver",
+        },
+        MeritScholarship => {
+            code: "MERIT_SCHOLARSHIP",
+            label: "Merit Scholarship (High C_study / Honors)",
+        },
+        DebtFunded => {
+            code: "DEBT_FUNDED",
+            label: "Student / Institutional Loan (+1 Debt Tier)",
+        },
+    }
+}
+
+/// Static Socio-Economic entry/exit profile for a Stage 5 [`CareerTermTrack`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CareerEconomicProfile {
+    /// Minimum Wealth Tier (`1..=10`) to clear tuition without GI Bill, Merit Scholarship, or Debt.
+    pub requires_tuition_wealth_min: Option<u8>,
+    /// True if track favors Institutional Status (`Corporate`, `Law`, `Med`, `Intel`, `LawEnforcement`).
+    pub high_status_institutional: bool,
+    /// True if track imposes clearance/background friction when `operational_heat >= 3`.
+    pub requires_clean_clearance: bool,
+    /// True if track builds Street/Subculture Cred rather than corporate/civic standing.
+    pub underworld_or_grassroots: bool,
+    /// Target Wealth Tier (`1..=10`) this career pulls the character toward per term.
+    pub target_wealth_tier: u8,
+    /// Target Institutional Status (`1..=10`) this career pulls the character toward per term.
+    pub target_institutional_status: u8,
+    /// Street/Subculture Cred gain per successful term (`0..=2`).
+    pub street_cred_gain: i8,
+    /// Baseline Operational Heat change per term (`0` or `+1`).
+    pub heat_gain: i8,
+    /// Grounded Contact role generated on completing a term in this track.
+    pub contact_role: &'static str,
+    /// Base Reach tier (`1..=4`) of that contact.
+    pub base_contact_reach: u8,
+}
+
+/// Inputs from prior Lifepath stages used to evaluate Stage 5 Career Term entry & starting echelon.
+#[derive(Debug, Clone, Copy)]
+pub struct CareerEntryContext<'a> {
+    pub wealth_tier: u8,
+    pub institutional_status: u8,
+    pub street_cred: u8,
+    pub current_heat: u8,
+    pub academic_tree_frozen: bool,
+    pub prior_tracks: &'a [CareerTermTrack],
+    pub prior_honors_count: usize,
+    pub chars: &'a CharacterCharacteristics,
+    pub aptitudes: &'a CharacterAptitudes,
+    pub echelon_override: Option<CareerEchelonTier>,
+}
+
+/// Socio-economic evaluation of entering a specific Stage 5 Career Term (`Socio-Economic -> Lifepath`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CareerTermEntryEvaluation {
+    pub funding_mode: CareerFundingMode,
+    pub debt_added: u8,
+    /// Net TN_edu modifier (`< 0` patronage/cred edge, `> 0` glass-ceiling or clearance friction).
+    pub entry_tn_mod: i32,
+    pub resolved_echelon: CareerEchelonTier,
+    pub role_title: &'static str,
+    pub entry_notes: String,
+}
+
 /// Outcome tier of an Educational Advancement Roll (`2d20` with $N = 2$ pairs)
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -362,18 +486,18 @@ impl CareerTermTrack {
                 aptitudes.apt_lng.max(aptitudes.apt_soc),
             ),
             Self::CorporateManagementFinancePolicy => (
-                chars.ana.max(chars.elo),
+                chars.ana.max(chars.elo).max(chars.bea),
                 aptitudes.apt_qnt.max(aptitudes.apt_soc),
             ),
             Self::JournalismMediaPerformingArts => (
-                chars.cre.max(chars.elo),
+                chars.cre.max(chars.elo).max(chars.sav),
                 aptitudes
                     .apt_lng
                     .max(aptitudes.apt_soc)
                     .max(aptitudes.apt_aud),
             ),
             Self::GrassrootsActivismHumanitarianNgo => (
-                chars.ins.max(chars.elo),
+                chars.ins.max(chars.elo).max(chars.wrm),
                 aptitudes.apt_soc.max(aptitudes.apt_bio),
             ),
             Self::CybersecurityAiRedTeaming => (
@@ -385,19 +509,19 @@ impl CareerTermTrack {
                 aptitudes.apt_fin.max(aptitudes.apt_kin),
             ),
             Self::LawEnforcementSwatDetective => (
-                chars.ins.max(chars.sig),
+                chars.ins.max(chars.sig).max(chars.sav),
                 aptitudes.apt_soc.max(aptitudes.apt_fin),
             ),
             Self::CorporateSecOpsExecutiveProtection => (
-                chars.dis.max(chars.sig),
+                chars.dis.max(chars.sig).max(chars.bea),
                 aptitudes.apt_fin.max(aptitudes.apt_soc),
             ),
             Self::IntelligenceServiceClandestine => (
-                chars.ins.max(chars.elo),
+                chars.ins.max(chars.elo).max(chars.sav).max(chars.bea),
                 aptitudes.apt_soc.max(aptitudes.apt_cmp),
             ),
             Self::OrganizedCrimeCartelSyndicate => (
-                chars.pre.max(chars.ins),
+                chars.pre.max(chars.ins).max(chars.sav),
                 aptitudes.apt_soc.max(aptitudes.apt_fin),
             ),
             Self::BlueCollarTradesMerchantMarine => (chars.dex.max(chars.ana), aptitudes.apt_mec),
@@ -405,6 +529,399 @@ impl CareerTermTrack {
                 chars.ins.max(chars.sig.max(chars.fit)),
                 aptitudes.apt_bio.max(aptitudes.apt_mec),
             ),
+        }
+    }
+
+    /// Canonical Socio-Economic Entry & Exit profile for this Stage 5 Career Track.
+    #[must_use]
+    pub const fn economic_profile(self) -> CareerEconomicProfile {
+        match self {
+            Self::UniversityUndergraduateStem => CareerEconomicProfile {
+                requires_tuition_wealth_min: Some(6),
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 6,
+                target_institutional_status: 6,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "Faculty Lab Advisor / Tech Incubator Alum",
+                base_contact_reach: 2,
+            },
+            Self::MedicalSchoolAndResidency => CareerEconomicProfile {
+                requires_tuition_wealth_min: Some(7),
+                high_status_institutional: true,
+                requires_clean_clearance: true,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 7,
+                target_institutional_status: 7,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "Attending Trauma Surgeon / Hospital Chief",
+                base_contact_reach: 3,
+            },
+            Self::UniversityHumanitiesLawEthics => CareerEconomicProfile {
+                requires_tuition_wealth_min: Some(6),
+                high_status_institutional: true,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 6,
+                target_institutional_status: 7,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "Law Clerk / Ethics Review Fellow",
+                base_contact_reach: 2,
+            },
+            Self::CorporateManagementFinancePolicy => CareerEconomicProfile {
+                requires_tuition_wealth_min: Some(6),
+                high_status_institutional: true,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 8,
+                target_institutional_status: 8,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "Corporate VP / Regulatory Lobbyist",
+                base_contact_reach: 3,
+            },
+            Self::JournalismMediaPerformingArts => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: true,
+                target_wealth_tier: 5,
+                target_institutional_status: 5,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "Investigative Editor / Producer",
+                base_contact_reach: 2,
+            },
+            Self::GrassrootsActivismHumanitarianNgo => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: true,
+                target_wealth_tier: 4,
+                target_institutional_status: 4,
+                street_cred_gain: 2,
+                heat_gain: 0,
+                contact_role: "Mutual-Aid Director / Union Organizer",
+                base_contact_reach: 2,
+            },
+            Self::CybersecurityAiRedTeaming => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: true,
+                target_wealth_tier: 6,
+                target_institutional_status: 5,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "Zero-Day Broker / Red-Team Lead",
+                base_contact_reach: 2,
+            },
+            Self::MilitaryCombatArmsSpecOps => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: true,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 5,
+                target_institutional_status: 6,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "Platoon Sergeant / Arms Quartermaster",
+                base_contact_reach: 2,
+            },
+            Self::LawEnforcementSwatDetective => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: true,
+                requires_clean_clearance: true,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 5,
+                target_institutional_status: 7,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "Precinct Detective / Forensic Lab Supervisor",
+                base_contact_reach: 2,
+            },
+            Self::CorporateSecOpsExecutiveProtection => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: true,
+                requires_clean_clearance: true,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 7,
+                target_institutional_status: 7,
+                street_cred_gain: 0,
+                heat_gain: 0,
+                contact_role: "SecOps Watch Commander / Private Contractor",
+                base_contact_reach: 3,
+            },
+            Self::IntelligenceServiceClandestine => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: true,
+                requires_clean_clearance: true,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 6,
+                target_institutional_status: 8,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "Desk Handler / Signals Station Liaison",
+                base_contact_reach: 3,
+            },
+            Self::OrganizedCrimeCartelSyndicate => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: true,
+                target_wealth_tier: 6,
+                target_institutional_status: 2,
+                street_cred_gain: 2,
+                heat_gain: 1,
+                contact_role: "Syndicate Fixer / Quartermaster",
+                base_contact_reach: 2,
+            },
+            Self::BlueCollarTradesMerchantMarine => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: false,
+                target_wealth_tier: 5,
+                target_institutional_status: 4,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "Port Master / Union Master Machinist",
+                base_contact_reach: 2,
+            },
+            Self::RuralAgrarianFrontierRanger => CareerEconomicProfile {
+                requires_tuition_wealth_min: None,
+                high_status_institutional: false,
+                requires_clean_clearance: false,
+                underworld_or_grassroots: true,
+                target_wealth_tier: 4,
+                target_institutional_status: 4,
+                street_cred_gain: 1,
+                heat_gain: 0,
+                contact_role: "County Warden / Frontier Bush Pilot",
+                base_contact_reach: 2,
+            },
+        }
+    }
+
+    /// Track-specific role title for a given [`CareerEchelonTier`].
+    #[must_use]
+    pub const fn echelon_role_title(self, echelon: CareerEchelonTier) -> &'static str {
+        match (self, echelon) {
+            (Self::UniversityUndergraduateStem, CareerEchelonTier::EntryRank) => "B.S. STEM Undergraduate",
+            (Self::UniversityUndergraduateStem, CareerEchelonTier::MidSpecialist) => "M.S. / Ph.D. Research Fellow",
+            (Self::UniversityUndergraduateStem, CareerEchelonTier::SeniorLeadership) => "Principal Investigator / Lab Lead",
+            (Self::MedicalSchoolAndResidency, CareerEchelonTier::EntryRank) => "Medical Student / Clinical Intern",
+            (Self::MedicalSchoolAndResidency, CareerEchelonTier::MidSpecialist) => "Surgical / Trauma Resident",
+            (Self::MedicalSchoolAndResidency, CareerEchelonTier::SeniorLeadership) => "Attending Physician / Department Chief",
+            (Self::UniversityHumanitiesLawEthics, CareerEchelonTier::EntryRank) => "B.A. Humanities / Pre-Law Scholar",
+            (Self::UniversityHumanitiesLawEthics, CareerEchelonTier::MidSpecialist) => "J.D. Fellow / Policy Ethicist",
+            (Self::UniversityHumanitiesLawEthics, CareerEchelonTier::SeniorLeadership) => "Senior Counsel / Constitutional Scholar",
+            (Self::CorporateManagementFinancePolicy, CareerEchelonTier::EntryRank) => "Liability-Sink Junior Analyst",
+            (Self::CorporateManagementFinancePolicy, CareerEchelonTier::MidSpecialist) => "Director / Quantitative Strategist",
+            (Self::CorporateManagementFinancePolicy, CareerEchelonTier::SeniorLeadership) => "VP / Executive Fast-Track",
+            (Self::JournalismMediaPerformingArts, CareerEchelonTier::EntryRank) => "Stringer / Indie Performer",
+            (Self::JournalismMediaPerformingArts, CareerEchelonTier::MidSpecialist) => "Investigative Beat Correspondent",
+            (Self::JournalismMediaPerformingArts, CareerEchelonTier::SeniorLeadership) => "Senior Editor / Bureau Producer",
+            (Self::GrassrootsActivismHumanitarianNgo, CareerEchelonTier::EntryRank) => "Clinic Volunteer / Field Organizer",
+            (Self::GrassrootsActivismHumanitarianNgo, CareerEchelonTier::MidSpecialist) => "Relief Coordinator / Lead Mediator",
+            (Self::GrassrootsActivismHumanitarianNgo, CareerEchelonTier::SeniorLeadership) => "Coalition Director / Envoy",
+            (Self::CybersecurityAiRedTeaming, CareerEchelonTier::EntryRank) => "SOC Analyst / Bug-Bounty Hunter",
+            (Self::CybersecurityAiRedTeaming, CareerEchelonTier::MidSpecialist) => "Red-Team Exploit Engineer",
+            (Self::CybersecurityAiRedTeaming, CareerEchelonTier::SeniorLeadership) => "Zero-Day Cell Architect",
+            (Self::MilitaryCombatArmsSpecOps, CareerEchelonTier::EntryRank) => "Enlisted Specialist / Infantry",
+            (Self::MilitaryCombatArmsSpecOps, CareerEchelonTier::MidSpecialist) => "Junior Officer (O-1/O-2) or Senior NCO",
+            (Self::MilitaryCombatArmsSpecOps, CareerEchelonTier::SeniorLeadership) => "Special Operations Detachment Commander",
+            (Self::LawEnforcementSwatDetective, CareerEchelonTier::EntryRank) => "Patrol Officer / Junior Agent",
+            (Self::LawEnforcementSwatDetective, CareerEchelonTier::MidSpecialist) => "Detective / SWAT Tactical Operator",
+            (Self::LawEnforcementSwatDetective, CareerEchelonTier::SeniorLeadership) => "Task Force Commander / Bureau Chief",
+            (Self::CorporateSecOpsExecutiveProtection, CareerEchelonTier::EntryRank) => "Site Guard / Perimeter Contractor",
+            (Self::CorporateSecOpsExecutiveProtection, CareerEchelonTier::MidSpecialist) => "Executive Protection Detail Lead",
+            (Self::CorporateSecOpsExecutiveProtection, CareerEchelonTier::SeniorLeadership) => "SecOps Operations Director",
+            (Self::IntelligenceServiceClandestine, CareerEchelonTier::EntryRank) => "Junior Desk Analyst / Watch Officer",
+            (Self::IntelligenceServiceClandestine, CareerEchelonTier::MidSpecialist) => "Clandestine Field Case Officer",
+            (Self::IntelligenceServiceClandestine, CareerEchelonTier::SeniorLeadership) => "Station Chief / Directorate Handler",
+            (Self::OrganizedCrimeCartelSyndicate, CareerEchelonTier::EntryRank) => "Street Soldier / Wheelman / Runner",
+            (Self::OrganizedCrimeCartelSyndicate, CareerEchelonTier::MidSpecialist) => "Crew Enforcer / White-Collar Launderer",
+            (Self::OrganizedCrimeCartelSyndicate, CareerEchelonTier::SeniorLeadership) => "Syndicate Lieutenant / Capo",
+            (Self::BlueCollarTradesMerchantMarine, CareerEchelonTier::EntryRank) => "Apprentice Tradesperson / Deckhand",
+            (Self::BlueCollarTradesMerchantMarine, CareerEchelonTier::MidSpecialist) => "Journeyman Machinist / Chief Mate",
+            (Self::BlueCollarTradesMerchantMarine, CareerEchelonTier::SeniorLeadership) => "Master Foreman / Port Chief Engineer",
+            (Self::RuralAgrarianFrontierRanger, CareerEchelonTier::EntryRank) => "Field Hand / Trainee Tracker",
+            (Self::RuralAgrarianFrontierRanger, CareerEchelonTier::MidSpecialist) => "Licensed Frontier Ranger / Homesteader",
+            (Self::RuralAgrarianFrontierRanger, CareerEchelonTier::SeniorLeadership) => "District Game Warden / Caravan Master",
+        }
+    }
+
+    /// Evaluates how entering Socio-Economic state (`wealth`, `institutional_status`, `street_cred`, `heat`)
+    /// modifies tuition/debt, advancement TN, and starting Role Echelon for this Career Track.
+    #[must_use]
+    pub fn evaluate_socioeconomic_entry(self, ctx: &CareerEntryContext<'_>) -> CareerTermEntryEvaluation {
+        let ep = self.economic_profile();
+        let (c_career, apt_career) = self.eval_controllers(ctx.chars, ctx.aptitudes);
+        let c_study = compute_academic_study_controller(ctx.chars.dis, c_career, apt_career);
+
+        let has_military = ctx
+            .prior_tracks
+            .contains(&Self::MilitaryCombatArmsSpecOps);
+        let has_degree = ctx.prior_tracks.iter().any(|t| {
+            matches!(
+                t,
+                Self::UniversityUndergraduateStem
+                    | Self::MedicalSchoolAndResidency
+                    | Self::UniversityHumanitiesLawEthics
+            )
+        });
+        let same_track_count = ctx.prior_tracks.iter().filter(|&&t| t == self).count();
+
+        let (funding_mode, debt_added) = match ep.requires_tuition_wealth_min {
+            Some(min_w) => {
+                if ctx.wealth_tier >= min_w {
+                    (CareerFundingMode::SelfOrFamilyFunded, 0)
+                } else if has_military {
+                    (CareerFundingMode::GiBillServiceFunded, 0)
+                } else if c_study >= 13 || ctx.prior_honors_count >= 1 {
+                    (CareerFundingMode::MeritScholarship, 0)
+                } else {
+                    (CareerFundingMode::DebtFunded, 1)
+                }
+            }
+            None => (CareerFundingMode::NotApplicable, 0),
+        };
+
+        let mut entry_tn_mod = 0i32;
+        let mut notes = Vec::new();
+        if funding_mode != CareerFundingMode::NotApplicable {
+            notes.push(funding_mode.label().to_string());
+        }
+
+        if ep.high_status_institutional {
+            if ctx.institutional_status >= 7 {
+                entry_tn_mod -= 2;
+                notes.push("Elite patronage (-2 TN)".to_string());
+            } else if ctx.institutional_status <= 3 {
+                entry_tn_mod += 2;
+                notes.push("Glass-ceiling friction (+2 TN)".to_string());
+            }
+        }
+        if ep.underworld_or_grassroots {
+            if ctx.street_cred >= 2 {
+                entry_tn_mod -= 2;
+                notes.push("Street/community cred (-2 TN)".to_string());
+            } else if ctx.institutional_status >= 8 && ctx.street_cred == 0 {
+                entry_tn_mod += 2;
+                notes.push("Outsider privilege distrust (+2 TN)".to_string());
+            }
+        }
+        if ep.requires_clean_clearance && ctx.current_heat >= 3 {
+            entry_tn_mod += 3;
+            notes.push(format!("Clearance scrutiny at Heat {} (+3 TN)", ctx.current_heat));
+        }
+
+        let natural_echelon = match self {
+            Self::UniversityUndergraduateStem
+            | Self::MedicalSchoolAndResidency
+            | Self::UniversityHumanitiesLawEthics => {
+                if same_track_count >= 1 && (ctx.prior_tracks.len() >= 2 || ctx.institutional_status >= 7) {
+                    CareerEchelonTier::SeniorLeadership
+                } else if has_degree || same_track_count >= 1 {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+            Self::CorporateManagementFinancePolicy => {
+                if (has_degree || same_track_count >= 1)
+                    && (ctx.institutional_status >= 7
+                        || (ctx.chars.elo >= 12 && ctx.chars.bea >= 11))
+                {
+                    CareerEchelonTier::SeniorLeadership
+                } else if has_degree || same_track_count >= 1 || ctx.institutional_status >= 6 {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+            Self::MilitaryCombatArmsSpecOps => {
+                if same_track_count >= 1
+                    && (has_degree || ctx.institutional_status >= 7 || ctx.chars.pre >= 12)
+                {
+                    CareerEchelonTier::SeniorLeadership
+                } else if has_degree || same_track_count >= 1 {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+            Self::LawEnforcementSwatDetective
+            | Self::CorporateSecOpsExecutiveProtection
+            | Self::IntelligenceServiceClandestine => {
+                if same_track_count >= 1
+                    && (ctx.institutional_status >= 7 || ctx.chars.sav >= 12 || ctx.chars.bea >= 12)
+                {
+                    CareerEchelonTier::SeniorLeadership
+                } else if has_degree
+                    || same_track_count >= 1
+                    || has_military
+                    || ctx.institutional_status >= 6
+                {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+            Self::OrganizedCrimeCartelSyndicate => {
+                if (same_track_count >= 1 && ctx.street_cred >= 3)
+                    || (ctx.wealth_tier >= 7 && ctx.chars.sav >= 11)
+                {
+                    CareerEchelonTier::SeniorLeadership
+                } else if same_track_count >= 1
+                    || ctx.street_cred >= 2
+                    || (ctx.wealth_tier >= 6 && !ctx.academic_tree_frozen)
+                {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+            Self::JournalismMediaPerformingArts
+            | Self::GrassrootsActivismHumanitarianNgo
+            | Self::CybersecurityAiRedTeaming
+            | Self::BlueCollarTradesMerchantMarine
+            | Self::RuralAgrarianFrontierRanger => {
+                if same_track_count >= 1
+                    && (ctx.street_cred >= 3
+                        || ctx.institutional_status >= 7
+                        || ctx.chars.elo.max(ctx.chars.wrm) >= 13)
+                {
+                    CareerEchelonTier::SeniorLeadership
+                } else if same_track_count >= 1
+                    || has_degree
+                    || ctx.street_cred >= 2
+                    || ctx.institutional_status >= 6
+                {
+                    CareerEchelonTier::MidSpecialist
+                } else {
+                    CareerEchelonTier::EntryRank
+                }
+            }
+        };
+        let resolved_echelon = ctx.echelon_override.unwrap_or(natural_echelon);
+        let role_title = self.echelon_role_title(resolved_echelon);
+        if notes.is_empty() {
+            notes.push("Standard entry".to_string());
+        }
+
+        CareerTermEntryEvaluation {
+            funding_mode,
+            debt_added,
+            entry_tn_mod,
+            resolved_echelon,
+            role_title,
+            entry_notes: notes.join(" · "),
         }
     }
 

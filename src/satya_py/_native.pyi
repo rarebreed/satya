@@ -673,6 +673,11 @@ def apply_psyche_drift_mark(
     dis: int = 12,
     target_pole_score: int | None = None,
 ) -> dict[str, Any]: ...
+def compute_lifepath_socioeconomic_profile(
+    lifepath_config: Mapping[str, Any] | str,
+    characteristics: Mapping[str, Any] | str | None = None,
+    aptitudes: Mapping[str, Any] | str | None = None,
+) -> dict[str, Any]: ...
 def evaluate_combat_morale_roll(
     target_psyche: Mapping[str, Any] | str,
     dis: int,
@@ -714,6 +719,14 @@ def evaluate_social_exchange(
     target_dis: int = 12,
     target_foc: int = 12,
     ego_wound_dis_check_passed: bool | None = None,
+) -> dict[str, Any]: ...
+def evaluate_social_standing_leverage(
+    speaker_institutional_status: int,
+    speaker_street_cred: int,
+    target_institutional_status: int,
+    target_street_cred: int,
+    target_psyche: Mapping[str, Any] | str,
+    arena: str = "INSTITUTIONAL_FORMAL",
 ) -> dict[str, Any]: ...
 def list_psyche_trait_descriptors() -> list[dict[str, Any]]: ...
 def resolve_cognitive_dissonance(

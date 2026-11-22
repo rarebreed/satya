@@ -244,12 +244,11 @@ attributes is that many characters start to feel the same.
 #### How Satya Solves This
 
 As detailed in [Character Characteristics & Aptitudes](../03-character/characteristics_and_aptitudes.md), Satya
-separates attributes across five distinct taxonomy groups: **Physical** (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`,
-`MAS`, `HGT`), **Mental** (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`), **Social** (`COM`, `PRE`, `ELO`), **Sensory**
-(`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`), and **Psyche** (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`). A
-character can be lean and explosive (`Speed`), yet lacking in raw static strength (`Force`); or have superb recall
-(`Memory`), yet struggle to think outside the box (`Creativity`). This eliminates the need for bolt-on "Advantages" and
-"Disadvantages" just to describe a realistic human being.
+separates `35` innate attributes across five distinct taxonomy groups: **Physical** (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`,
+`MAS`, `HGT`), **Mental** (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`), **Social** (`COM`, `PRE`, `ELO`, `SAV`, `BEA`, `WRM`), **Sensory**
+(`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`), and **Psyche** (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`). A
+character can be lean and explosive (`Speed`), yet lacking in raw static strength (`Force`); have superb recall
+(`Memory`), yet struggle to think outside the box (`Creativity`); or exhibit icy diplomatic poise (`Bearing`) without genuine personal empathy (`Warmth`). Socio-economic variables such as Wealth Tier, Institutional Status, Street Cred, and Debt live outside innate rolled attributes as dynamic Lifepath outcomes. This eliminates the need for bolt-on "Advantages" and "Disadvantages" just to describe a realistic human being.
 
 ### 5.2 Lack of Granularity in Ratings and Skills
 

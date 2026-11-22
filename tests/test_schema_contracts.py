@@ -16,29 +16,30 @@ from satya_ml.ai_gm.tools import get_session_combat_tracker, reset_session_npcs
 from satya_py import _native, campaign, schema
 
 
-def test_character_sheet_and_nested_typed_dicts_match_rust_and_avro_v2() -> None:
+def test_character_sheet_and_nested_typed_dicts_match_rust_and_avro_v3() -> None:
     reg = schema.SchemaRegistry()
 
-    # 1. CharacterSheetRecord (41 fields across TypedDict, Rust Default, and Avro v2)
+    # 1. CharacterSheetRecord (44 fields across TypedDict, Rust Default, and Avro v3)
     rust_char_fields = set(schema.schema_default_record("CharacterSheetRecord").keys())
-    avro_char_fields = set(reg.extract_record_fields("character-sheets", 2, "CharacterSheetRecord"))
+    avro_char_fields = set(reg.extract_record_fields("character-sheets", 3, "CharacterSheetRecord"))
     py_char_fields = set(schema.CharacterSheetRecordDict.__annotations__.keys())
-    assert len(rust_char_fields) == 41
+    assert len(rust_char_fields) == 44
     assert py_char_fields == rust_char_fields == avro_char_fields
 
-    # 2. CharacterCharacteristicsRecord (32 fields)
+    # 2. CharacterCharacteristicsRecord (35 fields: 6 Physical + 2 Dim + 6 Mental + 6 Social + 6 Sensory + 9 Psyche)
     rust_stat_fields = set(schema.schema_default_record("CharacterCharacteristicsRecord").keys())
     avro_stat_fields = set(
-        reg.extract_record_fields("character-sheets", 2, "CharacterCharacteristicsRecord")
+        reg.extract_record_fields("character-sheets", 3, "CharacterCharacteristicsRecord")
     )
     py_stat_fields = set(schema.CharacterCharacteristicsRecordDict.__annotations__.keys())
-    assert len(rust_stat_fields) == 32
+    assert len(rust_stat_fields) == 35
+    assert {"sav", "bea", "wrm"}.issubset(rust_stat_fields)
     assert py_stat_fields == rust_stat_fields == avro_stat_fields
 
     # 3. CharacterAptitudesRecord (9 fields)
     rust_apt_fields = set(schema.schema_default_record("CharacterAptitudesRecord").keys())
     avro_apt_fields = set(
-        reg.extract_record_fields("character-sheets", 2, "CharacterAptitudesRecord")
+        reg.extract_record_fields("character-sheets", 3, "CharacterAptitudesRecord")
     )
     py_apt_fields = set(schema.CharacterAptitudesRecordDict.__annotations__.keys())
     assert len(rust_apt_fields) == 9
@@ -49,7 +50,7 @@ def test_character_sheet_and_nested_typed_dicts_match_rust_and_avro_v2() -> None
         "AnatomicalZoneRecord",
         {"location_code": "TORSO", "wound_tier": 1, "bone_status": "INTACT", "bleed_grade": 0},
     )
-    avro_zone_fields = set(reg.extract_record_fields("character-sheets", 2, "AnatomicalZoneRecord"))
+    avro_zone_fields = set(reg.extract_record_fields("character-sheets", 3, "AnatomicalZoneRecord"))
     py_zone_fields = set(schema.AnatomicalZoneRecordDict.__annotations__.keys())
     assert len(zone) == 4
     assert py_zone_fields == set(zone.keys()) == avro_zone_fields
@@ -67,7 +68,7 @@ def test_character_sheet_and_nested_typed_dicts_match_rust_and_avro_v2() -> None
             "created_at_us": 123456,
         },
     )
-    avro_asset_fields = set(reg.extract_record_fields("character-sheets", 2, "CharacterAssetRef"))
+    avro_asset_fields = set(reg.extract_record_fields("character-sheets", 3, "CharacterAssetRef"))
     py_asset_fields = set(schema.CharacterAssetRefDict.__annotations__.keys())
     assert len(asset) == 7
     assert py_asset_fields == set(asset.keys()) == avro_asset_fields
@@ -82,14 +83,29 @@ def test_normalize_character_sheet_record_aliases_defaults_and_roundtrip() -> No
     assert empty_norm["verification_status"] == "VERIFIED_OFFICIAL"
     assert empty_norm["sp_budget_valid"] is True
     assert empty_norm["dag_prereqs_valid"] is True
-    assert len(empty_norm["characteristics"]) == 32
+    assert len(empty_norm["characteristics"]) == 35
+    assert empty_norm["institutional_status"] == 5
+    assert empty_norm["street_cred"] == 0
+    assert empty_norm["debt_tier"] == 0
     assert len(empty_norm["aptitudes"]) == 9
     assert schema.validate_schema_dto("CharacterSheetRecord", empty_norm) == empty_norm
 
     aliased = schema.normalize_character_sheet_record(
         {
             "character_id": "pc-alias",
-            "characteristics": {"for": 13, "str": 15, "mass_kg": 68.5, "trs": 4, "cps": 17},
+            "institutional_status": 8,
+            "street_cred": 3,
+            "debt_tier": 2,
+            "characteristics": {
+                "for": 13,
+                "str": 15,
+                "mass_kg": 68.5,
+                "trs": 4,
+                "cps": 17,
+                "social_savvy": 13,
+                "poise": 14,
+                "warmth": 12,
+            },
             "aptitudes": {"apt_qnt": 2},
             "fatigue_tier": 2,
             "wound_shock_tier": 1,
@@ -104,6 +120,12 @@ def test_normalize_character_sheet_record_aliases_defaults_and_roundtrip() -> No
     assert aliased["characteristics"]["mas_kg"] == 68.5
     assert aliased["characteristics"]["trs"] == 4
     assert aliased["characteristics"]["cps"] == 17
+    assert aliased["characteristics"]["sav"] == 13
+    assert aliased["characteristics"]["bea"] == 14
+    assert aliased["characteristics"]["wrm"] == 12
+    assert aliased["institutional_status"] == 8
+    assert aliased["street_cred"] == 3
+    assert aliased["debt_tier"] == 2
     assert aliased["aptitudes"]["apt_qnt"] == 2
     assert aliased["fatigue_level"] == 2
     assert aliased["wound_shock_index"] == 1

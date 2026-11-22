@@ -2,7 +2,7 @@
 //! `#[wasm_bindgen]` handlers for the `#notebook-pane-character` tab.
 //!
 //! Companion modules re-exported flatly here:
-//! - [`crate::wasm_client::character_sheet_views`]: Top summary, all 32 Characteristics, 9 Domain Aptitudes,
+//! - [`crate::wasm_client::character_sheet_views`]: Top summary, all 35 Characteristics, 9 Domain Aptitudes,
 //!   10 Derived Metrics, Tactical Pool Envelope, Innate Talents Table, and Trained Skills Table.
 //! - [`crate::wasm_client::character_sheet_equip_views`]: Ranged Firearms (with live Ballistics),
 //!   Melee Weapons, Armor Profiles, and Field Gear / Ergonomic Encumbrance tables.
@@ -27,7 +27,7 @@ use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_engine::{
     AcuteMentalTraumaTier, AptitudeCode, ArmorProfileId, CarriedLoadItem, CarryErgonomicMethod,
     CharacterAptitudes, CharacterCharacteristics, CharacteristicCode, ConditionImpact,
-    ConditionSource, HemorrhageGrade, HitLocationId, MeleeWeaponId, MoraleState,
+    ConditionSource, DebtTier, HemorrhageGrade, HitLocationId, MeleeWeaponId, MoraleState,
     PhysiologicalStatusCondition, SkillAccessTier, SocialWoundKind, StructuralWoundTier,
     TacticalPoolEnvelope, TacticalPoolParams, Triad, accumulate_exertion_marks,
     build_amara_okafor_lifepath, build_linnea_cho_lifepath, build_mateo_vance_lifepath,
@@ -96,6 +96,9 @@ pub struct CharacterSheetState {
     pub age_years: u32,
     pub origin_label: String,
     pub campaign_sqm: u8,
+    pub institutional_status: u8,
+    pub street_cred: u8,
+    pub debt_tier: DebtTier,
     pub operational_heat: u8,
     pub granted_access_tags: Vec<SkillAccessTier>,
     pub stage_history: Vec<String>,
@@ -229,6 +232,9 @@ impl CharacterSheetState {
                     com: 11,
                     pre: 13,
                     elo: 11,
+                    sav: 12,
+                    bea: 13,
+                    wrm: 11,
                     sig: 14,
                     hea: 12,
                     tac: 12,
@@ -280,6 +286,9 @@ impl CharacterSheetState {
                     age_years: 26,
                     origin_label: "Professional / Upper-Middle Class".to_string(),
                     campaign_sqm: 6,
+                    institutional_status: 6,
+                    street_cred: 1,
+                    debt_tier: DebtTier::None,
                     operational_heat: 1,
                     granted_access_tags: vec![
                         SkillAccessTier::Universal,
@@ -361,6 +370,9 @@ impl CharacterSheetState {
             age_years: lp.age_years,
             origin_label: lp.origin.label.to_string(),
             campaign_sqm: lp.campaign_sqm,
+            institutional_status: lp.socioeconomic.institutional_status,
+            street_cred: lp.socioeconomic.street_cred,
+            debt_tier: lp.socioeconomic.debt_tier,
             operational_heat: lp.operational_heat,
             granted_access_tags: lp.granted_access_tags,
             stage_history: lp.stage_history,
@@ -821,6 +833,9 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
     sheet.age_years = baseline.age_years;
     sheet.origin_label = baseline.origin.label.to_string();
     sheet.campaign_sqm = baseline.campaign_sqm;
+    sheet.institutional_status = baseline.socioeconomic.institutional_status;
+    sheet.street_cred = baseline.socioeconomic.street_cred;
+    sheet.debt_tier = baseline.socioeconomic.debt_tier;
     sheet.operational_heat = baseline.operational_heat;
     sheet.granted_access_tags = baseline.granted_access_tags.clone();
     sheet.stage_history = baseline.stage_history.clone();

@@ -610,8 +610,11 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.kin = phy_vals[4];
             chars.for_stat = phy_vals[5];
             chars.com = soc_vals[0].max(13);
-            chars.elo = soc_vals[1].max(12);
-            chars.pre = soc_vals[2].max(11);
+            chars.wrm = soc_vals[1].max(12);
+            chars.elo = soc_vals[2].max(12);
+            chars.pre = soc_vals[3].max(11);
+            chars.bea = soc_vals[4];
+            chars.sav = soc_vals[5];
             chars.sig = sen_vals[0].max(12);
             chars.tac = sen_vals[1].max(12);
             chars.itu = sen_vals[2].max(12);
@@ -638,6 +641,9 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.elo = soc_vals[0];
             chars.com = soc_vals[1];
             chars.pre = soc_vals[2];
+            chars.bea = soc_vals[3];
+            chars.sav = soc_vals[4];
+            chars.wrm = soc_vals[5];
             chars.sig = sen_vals[0].max(12);
             chars.tac = sen_vals[1].max(12);
             chars.hea = sen_vals[2];
@@ -662,8 +668,11 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.mem = men_vals[4];
             chars.cre = men_vals[5];
             chars.pre = soc_vals[0].max(12);
-            chars.com = soc_vals[1].max(12);
-            chars.elo = soc_vals[2];
+            chars.bea = soc_vals[1].max(12);
+            chars.com = soc_vals[2].max(11);
+            chars.sav = soc_vals[3];
+            chars.elo = soc_vals[4];
+            chars.wrm = soc_vals[5];
             chars.sig = sen_vals[0].max(13);
             chars.hea = sen_vals[1].max(12);
             chars.itu = sen_vals[2].max(12);
@@ -686,9 +695,12 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.for_stat = phy_vals[3].max(11);
             chars.hlt = phy_vals[4];
             chars.kin = phy_vals[5];
-            chars.com = soc_vals[0].max(13);
-            chars.pre = soc_vals[1].max(12);
-            chars.elo = soc_vals[2].max(12);
+            chars.sav = soc_vals[0].max(13);
+            chars.bea = soc_vals[1].max(12);
+            chars.com = soc_vals[2].max(11);
+            chars.elo = soc_vals[3].max(11);
+            chars.pre = soc_vals[4].max(11);
+            chars.wrm = soc_vals[5];
             chars.sig = sen_vals[0].max(13);
             chars.itu = sen_vals[1].max(13);
             chars.hea = sen_vals[2].max(12);
@@ -713,8 +725,11 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.ana = men_vals[4];
             chars.mem = men_vals[5];
             chars.pre = soc_vals[0].max(13);
-            chars.com = soc_vals[1].max(12);
-            chars.elo = soc_vals[2].max(11);
+            chars.sav = soc_vals[1].max(12);
+            chars.com = soc_vals[2].max(11);
+            chars.bea = soc_vals[3].max(11);
+            chars.elo = soc_vals[4];
+            chars.wrm = soc_vals[5];
             chars.sig = sen_vals[0].max(12);
             chars.itu = sen_vals[1].max(12);
             chars.hea = sen_vals[2].max(11);
@@ -739,8 +754,11 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.mem = men_vals[4];
             chars.cre = men_vals[5];
             chars.com = soc_vals[0].max(11);
-            chars.pre = soc_vals[1];
-            chars.elo = soc_vals[2];
+            chars.wrm = soc_vals[1];
+            chars.pre = soc_vals[2];
+            chars.sav = soc_vals[3];
+            chars.bea = soc_vals[4];
+            chars.elo = soc_vals[5];
             chars.tac = sen_vals[0].max(13);
             chars.sig = sen_vals[1].max(12);
             chars.hea = sen_vals[2].max(11);
@@ -765,8 +783,11 @@ pub fn generate_npc_from_prompt_with_pack(
             chars.ana = men_vals[4];
             chars.cre = men_vals[5];
             chars.com = soc_vals[0].max(11);
-            chars.pre = soc_vals[1];
-            chars.elo = soc_vals[2];
+            chars.sav = soc_vals[1];
+            chars.bea = soc_vals[2];
+            chars.pre = soc_vals[3];
+            chars.elo = soc_vals[4];
+            chars.wrm = soc_vals[5];
             chars.sig = sen_vals[0].max(13);
             chars.hea = sen_vals[1].max(13);
             chars.olf = sen_vals[2].max(12);
@@ -995,6 +1016,7 @@ pub fn generate_npc_from_prompt_with_pack(
         "NPC Dossier: {npc_name} ({role_title}, Age {age_years}, Origin: {})\n\
          Prompt / Concept: {}\n\
          Psyche Profile: {psyche_line}\n\
+         Socio-Economic Standing: Wealth {} (Eff {}), InstStatus {}, StreetCred {}, Debt: {}\n\
          Key Skills: {top_skills_line}\n\
          Core Drive: {}\n\
          Underlying Fear: {}\n\
@@ -1007,6 +1029,11 @@ pub fn generate_npc_from_prompt_with_pack(
         } else {
             params.prompt.trim()
         },
+        baseline.socioeconomic.wealth_tier,
+        baseline.socioeconomic.effective_wealth_tier,
+        baseline.socioeconomic.institutional_status,
+        baseline.socioeconomic.street_cred,
+        baseline.socioeconomic.debt_tier.label(),
         motivation.core_drive,
         motivation.underlying_fear,
         motivation.immediate_agenda,
@@ -1025,6 +1052,9 @@ pub fn generate_npc_from_prompt_with_pack(
         age_years,
         origin_label: baseline.origin.label.to_string(),
         campaign_sqm: i32::from(baseline.campaign_sqm),
+        institutional_status: i32::from(baseline.socioeconomic.institutional_status),
+        street_cred: i32::from(baseline.socioeconomic.street_cred),
+        debt_tier: i32::from(baseline.socioeconomic.debt_tier.as_u8()),
         operational_heat: i32::from(baseline.operational_heat),
         granted_access_tags: access_tags,
         stage_history: baseline.stage_history,

@@ -87,14 +87,15 @@ Used in [Characteristics, Senses, Psyche & Aptitudes](../03-character/characteri
 | `SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT` | **Physical Primary Characteristics** | `1–20` *(Avg `10`)* | **Speed** (`SPD`), **Force** (`FOR`), **Dexterity** (`DEX`), **Kinesthesis** (`KIN`), **Health** (`HLT`), and **Fitness** (`FIT`). Mapped from the `0.0–100.0` spectrum (`5.0` spectrum pts = `1` d20 step). |
 | `MAS`, `HGT` | **Mass & Height** | `kg`, `m` | Character's physical body mass in kilograms (`MAS`, default `70 kg`) and stature in meters (`HGT`, default `1.50–1.75 m`). |
 | `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC` | **Mental Primary Characteristics** | `1–20` *(Avg `10`)* | **Memory** (`MEM`), **Analysis** (`ANA`), **Insight** (`INS`), **Creativity** (`CRE`), **Discipline** (`DIS`), and **Focus** (`FOC`). |
-| `COM`, `PRE`, `ELO` | **Social Primary Characteristics** | `1–20` *(Avg `10`)* | **Comeliness** (`COM`), **Presence** (`PRE`), and **Eloquence** (`ELO`). |
+| `COM`, `PRE`, `ELO`, `SAV`, `BEA`, `WRM` | **Social Primary Characteristics** | `1–20` *(Avg `10`)* | **Comeliness** (`COM`), **Presence** (`PRE`), **Eloquence** (`ELO`), **Social Savvy** (`SAV`), **Bearing** (`BEA`), and **Warmth** (`WRM`). |
 | `SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU` | **Sensory Characteristics** | `1–20` *(Avg `10`)* | **Sight** (`SIG`), **Hearing** (`HEA`), **Tactile** (`TAC`), **Olfactory** (`OLF`), **Taste** (`TAS`), and **Intuition** (`ITU`). |
 | `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS` | **Psyche Characteristics (The 9 Invisible Traits)** | `1–20` *(Neutral `10`)* | **Ego** (`EGO`), **Selfishness** (`SLF`), **Openness** (`OPN`), **Belongingness** (`BLG`), **Extraversion** (`EXT`), **Conformity** (`CNF`), **Aggressiveness** (`AGG`), **Trust** (`TRS`), and **Compassion** (`CPS`). |
 | $\text{POW}$ | **Physical Power** | $\mathbb{R}$ (`10.0` Avg) | Rate of mechanical energy transfer: $\text{POW} = (\text{FOR} \times \text{SPD}) / 10$ (or raw product $\text{FOR} \times \text{SPD}$ on the `1–400` scale). |
 | $\text{MMF}$ | **Melee Momentum Factor** | $\mathbb{R}$ | Mass-scaled kinetic impact multiplier for unarmed and melee strikes, derived from `MAS`, `FOR`, and `SPD`. |
 | $A$ *(or $\text{APT}_{\text{domain}}$)* | **Domain Aptitude** | $-2$ to $+3$ | Innate neurological or somatic learning affinity across 9 domains (`QNT`, `MEC`, `CMP`, `BIO`, `LNG`, `KIN`, `FIN`, `AUD`, `SOC`). |
 | $C_{\text{study}}$ | **Composite Study Characteristic** | `1–23` | Governing controller for Lifepath and Downtime educational advancement rolls: $C_{\text{study}} = \lfloor(\text{DIS} + C_{\text{mental}})/2\rfloor + \text{APT}_{\text{domain}}$. |
-| $\text{SQM}$ | **School Quality Modifier / Socioeconomic Tier** | $-6$ to $+4$ *(or Tier `1–10`)* | In childhood Lifepaths (Stages 1–4), shifts educational difficulty (`+4` blighted school to `-6` elite prep). In adulthood, `SQM 1–10` tracks Socioeconomic Lifestyle Tier. |
+| $\text{SQM}$ | **School Quality Modifier / Socioeconomic Wealth Tier** | $-6$ to $+4$ *(or Tier `1–10`)* | In childhood Lifepaths (Stages 1–4), shifts educational difficulty (`+4` blighted school to `-6` elite prep). In adulthood, `Wealth / SQM 1–10` tracks liquid lifestyle upkeep (with `Effective Wealth = max(1, Wealth - Debt drag)`). |
+| $\text{InstStatus}, \text{StreetCred}, \text{DebtTier}$ | **Dual-Standing Socio-Economic Vectors** | `1–10` / `0–5` / `0–3` | **Institutional Status** (`1–10`, default `5`: formal credentialed authority), **Street Cred** (`0–5`, default `0`: underworld/subculture respect), and **Debt Tier** (`0–3`: `0` Free, `1` Manageable, `2` Heavy `-1` Eff Wealth, `3` Predatory `-1` Eff Wealth). |
 | $\text{TN}_{\text{edu}}$ | **Educational Advancement Target Number** | $8\text{–}31$ | Target number for Lifepath schooling rolls: $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$. |
 
 ---
@@ -119,7 +120,7 @@ Used in [Action Economy, OODA Loop & Time Scales](../02-core-mechanics/action_ec
 | $\Delta_{\text{mot}}$ | **Situational Motivation Modifier** | $-4$ to $+6$ | Shift to a combatant's Morale Controller based on what they are fighting for (e.g., protecting family/crew vs. mercenary paycheck). |
 | $C_{\text{morale}}$ | **Morale Controlling Characteristic** | `1–24` | Effective controller for combat morale checks: $C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$ ($\text{TN}_P = 31 - C_{\text{morale}}$). |
 | $\Delta_{\text{morale}}$ | **Battlefield Morale Penalty** | $0$ to $+12$ | Cumulative battlefield shock modifier (casualties, outnumbered, leader down), setting the GM's hidden resistance target $\text{TN}_{GM} = 21 - \Delta_{\text{morale}}$. |
-| $\text{CMP}$ | **Social Composure Threshold** | $1\text{–}10$ *(Avg `5`)* | Mental stamina buffer in Social Combat: $\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$. |
+| $\text{CMP}$ | **Social Composure Threshold** | $1\text{–}10$ *(Avg `5`)* | Mental stamina buffer in Social Combat incorporating interpersonal poise: $\text{CMP} = \lfloor(\text{DIS} + \text{FOC} + \text{BEA}) / 6\rfloor$. |
 
 ---
 

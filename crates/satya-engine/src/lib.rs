@@ -28,7 +28,7 @@
 //! - [`action_economy`] & [`action_catalog_stealth`]: Temporal calibration (`1 Tick = 0.25s`), OODA Loop &
 //!   Quick Thinking ($D_{\text{cog}}$), Count-Up Tick Clock, `CANONICAL_ACTION_CATALOG`, `action_time_factor`,
 //!   and Multi-Sensory Stealth & Detection (`docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` §1–§6).
-//! - [`characteristics`]: All 32 Physical, Mental, Social, Sensory, and 9 Psyche characteristics on the `1–20`
+//! - [`characteristics`]: All 35 Physical, Mental, 6-trait Social (`COM`, `PRE`, `ELO`, `SAV`, `BEA`, `WRM`), Sensory, and 9 Psyche characteristics on the `1–20`
 //!   Controlling Scale, 10 derived metrics (`POW`, `MMF`, `OODA`, `D_cog`, `AWR`, `FT`, `WSR`, `CMP`, `C_study`),
 //!   and 9 Domain Aptitudes ($A \in [-2, +3]$)
 //!   (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §1–§10).

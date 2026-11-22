@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from satya_py._native import (
     apply_psyche_drift_mark,
+    compute_lifepath_socioeconomic_profile,
     compute_social_dissonance_check,
     evaluate_combat_morale_roll,
     evaluate_combat_motivation,
@@ -12,12 +13,14 @@ from satya_py._native import (
     evaluate_empathy_read,
     evaluate_psyche_friction_check,
     evaluate_social_exchange,
+    evaluate_social_standing_leverage,
     list_psyche_trait_descriptors,
     resolve_cognitive_dissonance,
 )
 
 __all__ = [
     "apply_psyche_drift_mark",
+    "compute_lifepath_socioeconomic_profile",
     "compute_social_dissonance_check",
     "evaluate_combat_morale_roll",
     "evaluate_combat_motivation",
@@ -26,6 +29,7 @@ __all__ = [
     "evaluate_empathy_read",
     "evaluate_psyche_friction_check",
     "evaluate_social_exchange",
+    "evaluate_social_standing_leverage",
     "list_psyche_trait_descriptors",
     "resolve_cognitive_dissonance",
 ]

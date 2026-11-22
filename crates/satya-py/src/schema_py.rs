@@ -327,6 +327,9 @@ pub(crate) fn parse_flexible_character_record(
                 "for" | "for_stat" | "str" => "for_stat",
                 "mass_kg" => "mas_kg",
                 "height_m" => "hgt_m",
+                "social_savvy" | "attunement" => "sav",
+                "bearing" | "poise" | "demeanor" => "bea",
+                "warmth" | "rapport" => "wrm",
                 other => other,
             };
             if !base_chars.contains_key(canon) {
@@ -369,6 +372,9 @@ pub(crate) fn parse_flexible_character_record(
         "version",
         "age_years",
         "campaign_sqm",
+        "institutional_status",
+        "street_cred",
+        "debt_tier",
         "operational_heat",
         "exertion_marks",
         "social_composure_lost",
@@ -859,13 +865,16 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let reg = PySchemaRegistry::new().unwrap();
-            let raw = reg.get_schema_json("character-sheets", 2).unwrap();
+            let raw = reg.get_schema_json("character-sheets", 3).unwrap();
             assert!(raw.contains("CharacterSheetRecord"));
             let fields = reg
-                .extract_record_fields("character-sheets", 2, Some("CharacterSheetRecord"))
+                .extract_record_fields("character-sheets", 3, Some("CharacterSheetRecord"))
                 .unwrap();
-            assert_eq!(fields.len(), 41);
+            assert_eq!(fields.len(), 44);
             assert!(fields.contains(&"faction_archetype".to_string()));
+            assert!(fields.contains(&"institutional_status".to_string()));
+            assert!(fields.contains(&"street_cred".to_string()));
+            assert!(fields.contains(&"debt_tier".to_string()));
 
             let def_char = schema_default_record(py, "CharacterSheetRecord").unwrap();
             let val_char = validate_schema_dto(

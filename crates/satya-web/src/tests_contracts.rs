@@ -393,11 +393,15 @@ fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
         record.audit_violations
     );
     let bytes = wasm_client::encode_offline_satyachar_bytes(&record, Some("sess-linnea"))
-        .expect("v2 .satyachar encode must succeed");
+        .expect("v3 .satyachar encode must succeed");
     let decoded = wasm_client::decode_offline_satyachar_bytes(&bytes)
-        .expect("v2 .satyachar decode must succeed");
+        .expect("v3 .satyachar decode must succeed");
     assert_eq!(decoded.characteristics.trs, 12);
     assert_eq!(decoded.characteristics.cps, 17);
+    assert_eq!(decoded.characteristics.sav, sheet.characteristics.sav);
+    assert_eq!(decoded.characteristics.bea, sheet.characteristics.bea);
+    assert_eq!(decoded.characteristics.wrm, sheet.characteristics.wrm);
+    assert_eq!(decoded.institutional_status, sheet.institutional_status as i32);
     assert_eq!(decoded.faction_id.as_deref(), Some("SATYANG"));
     assert_eq!(
         decoded.faction_archetype.as_deref(),

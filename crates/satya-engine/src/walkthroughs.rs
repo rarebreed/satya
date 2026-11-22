@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use crate::characteristics::{AptitudeCode, CharacterAptitudes, CharacterCharacteristics};
+use crate::economy_gear::DebtTier;
 use crate::lifepath_economy::{LifepathCharacterProfile, RuralYouthArchetype, StreetGangArchetype};
 use crate::skills_trees::SkillAccessTier;
 
@@ -37,6 +38,9 @@ pub fn build_mateo_vance_lifepath() -> LifepathCharacterProfile {
         itu: 13,
         pre: 12,
         elo: 10,
+        sav: 13,
+        bea: 11,
+        wrm: 11,
         trs: 5,
         cps: 12,
         ..Default::default()
@@ -82,6 +86,11 @@ pub fn build_mateo_vance_lifepath() -> LifepathCharacterProfile {
     );
     mateo.campaign_sqm = 4;
     mateo.operational_heat = 2;
+    mateo.socioeconomic.wealth_tier = 4;
+    mateo.socioeconomic.effective_wealth_tier = 4;
+    mateo.socioeconomic.institutional_status = 2;
+    mateo.socioeconomic.street_cred = 3;
+    mateo.socioeconomic.debt_tier = DebtTier::Manageable;
     mateo.stage_history.push(
         "Stage 5 (Ages 18–22): Organized Crime / Syndicate Enforcer (Pistols N=4, Fully Automatic Weapons N=2, Intimidation N=3, Streetwise N=3).".to_string(),
     );
@@ -109,6 +118,9 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
         kin: 9,
         elo: 12,
         pre: 11,
+        sav: 10,
+        bea: 11,
+        wrm: 10,
         trs: 11,
         cps: 14,
         ..Default::default()
@@ -154,6 +166,11 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
     );
     priya.campaign_sqm = 8;
     priya.operational_heat = 0;
+    priya.socioeconomic.wealth_tier = 8;
+    priya.socioeconomic.effective_wealth_tier = 8;
+    priya.socioeconomic.institutional_status = 7;
+    priya.socioeconomic.street_cred = 0;
+    priya.socioeconomic.debt_tier = DebtTier::None;
 
     priya
 }
@@ -175,6 +192,9 @@ pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
         dis: 12,
         mem: 12,
         ana: 10,
+        sav: 11,
+        bea: 12,
+        wrm: 12,
         trs: 7,
         cps: 15,
         ..Default::default()
@@ -225,6 +245,11 @@ pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
     );
     amara.campaign_sqm = 4;
     amara.operational_heat = 0;
+    amara.socioeconomic.wealth_tier = 4;
+    amara.socioeconomic.effective_wealth_tier = 4;
+    amara.socioeconomic.institutional_status = 3;
+    amara.socioeconomic.street_cred = 2;
+    amara.socioeconomic.debt_tier = DebtTier::None;
     amara.stage_history.push(
         "Stage 5 (Ages 18–22): Rural, Agrarian, Wilderness Guide & Frontier Ranger (Hunting & Trapping N=4, Wilderness Survival N=3, Long Guns N=3, Herbalism N=2, Veterinary Care N=2).".to_string(),
     );
@@ -246,6 +271,9 @@ pub fn build_linnea_cho_lifepath() -> LifepathCharacterProfile {
         com: 11,
         pre: 12,
         elo: 15,
+        sav: 15,
+        bea: 14,
+        wrm: 14,
         itu: 14,
         ego: 8,
         slf: 5,
@@ -274,8 +302,13 @@ pub fn build_linnea_cho_lifepath() -> LifepathCharacterProfile {
         .granted_access_tags
         .push(SkillAccessTier::VocationalLicensed);
     linnea.age_years = 29;
-    linnea.campaign_sqm = 6;
+    linnea.campaign_sqm = 5;
     linnea.operational_heat = 1;
+    linnea.socioeconomic.wealth_tier = 5;
+    linnea.socioeconomic.effective_wealth_tier = 5;
+    linnea.socioeconomic.institutional_status = 4;
+    linnea.socioeconomic.street_cred = 3;
+    linnea.socioeconomic.debt_tier = DebtTier::Manageable;
 
     insert_skill_ranks(
         &mut linnea.skills,

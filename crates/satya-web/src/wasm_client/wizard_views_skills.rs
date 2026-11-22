@@ -15,7 +15,8 @@ use satya_engine::{
     PopulationTier, PrerequisiteMode, SkillTrainingMode, SkillTreeId, SkillType,
     compute_academic_study_controller, compute_skill_allocation_sp_ledger,
     evaluate_operational_heat, is_career_formal_skill, is_hobby_club_discounted_skill,
-    lookup_campaign_sqm, preview_next_skill_step_sp, resolve_skill_tree_default, skills_in_tree,
+    lookup_campaign_sqm, lookup_institutional_status, lookup_street_cred,
+    preview_next_skill_step_sp, resolve_skill_tree_default, skills_in_tree,
     validate_skill_advancement,
 };
 
@@ -412,6 +413,21 @@ pub(crate) fn format_summary_step_html(st: &CharacterWizardState) -> String {
 
     let trained_chips = format_trained_skill_chips_html(c, &st.skills);
 
+    let inst_spec = lookup_institutional_status(baseline.socioeconomic.institutional_status);
+    let cred_spec = lookup_street_cred(baseline.socioeconomic.street_cred);
+    let contacts_note = if baseline.socioeconomic.earned_contacts.is_empty() {
+        "No earned lifepath contacts yet".to_string()
+    } else {
+        baseline
+            .socioeconomic
+            .earned_contacts
+            .iter()
+            .take(2)
+            .map(|ct| escape_html(&ct.role_title))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
     let stat_boxes = [
         (
             "Striking Power (POW)".to_string(),
@@ -462,7 +478,7 @@ pub(crate) fn format_summary_step_html(st: &CharacterWizardState) -> String {
         (
             "Social Composure (CMP)".to_string(),
             derived.cmp_social_composure_threshold.to_string(),
-            format!("floor((DIS {} + FOC {}) / 4)", c.dis, c.foc),
+            format!("floor((DIS {} + FOC {} + BEA {}) / 6)", c.dis, c.foc, c.bea),
         ),
         (
             "Lifepath Study (C_study)".to_string(),
@@ -476,6 +492,22 @@ pub(crate) fn format_summary_step_html(st: &CharacterWizardState) -> String {
             format!("Campaign Upkeep (SQM {})", sqm_spec.sqm_tier),
             format!("${}/mo", sqm_spec.monthly_liquid_baseline_usd),
             escape_html(sqm_spec.tier_name),
+        ),
+        (
+            "Socio-Economic Standing".to_string(),
+            format!(
+                "Wealth {} (Eff {}) · Inst {} · Cred {}",
+                baseline.socioeconomic.wealth_tier,
+                baseline.socioeconomic.effective_wealth_tier,
+                inst_spec.tier,
+                cred_spec.cred
+            ),
+            format!(
+                "{} · Debt: {} · Contacts: {}",
+                escape_html(inst_spec.bracket_name),
+                escape_html(baseline.socioeconomic.debt_tier.label()),
+                contacts_note
+            ),
         ),
         (
             format!("Operational Heat ({}/10)", heat_spec.heat_score),
@@ -627,8 +659,8 @@ pub fn format_character_wizard_html(st: &CharacterWizardState) -> String {
             );
             let soc_html = format_group_pool_section_html(
                 "social",
-                "Social Characteristics (3 Scores)",
-                "Comeliness (COM), Presence (PRE), Eloquence (ELO)",
+                "Social Characteristics (6 Scores)",
+                "Comeliness (COM), Presence (PRE), Eloquence (ELO), Social Savvy (SAV), Bearing (BEA), Warmth (WRM)",
                 &CharacteristicCode::SOCIAL_ALL,
                 st.social_pool.as_ref(),
                 &st.social_slots,
@@ -653,7 +685,7 @@ pub fn format_character_wizard_html(st: &CharacterWizardState) -> String {
                             />
                             <div>
                                 <strong>Method 1: Roll 2d4 + 3d5 (Drop Lowest d5)</strong>
-                                <div class="subtitle">Range 4–18 (skewed mean ~11.96). Roll 6 times for Physical, 6 for Mental, 6 for Sensory, and 3 for Social; assign in any order.</div>
+                                <div class="subtitle">Range 4–18 (skewed mean ~11.96). Roll 6 times each for Physical, Mental, Sensory, and Social; assign in any order.</div>
                             </div>
                         </label>
                         <label class="wiz-radio-card" for="wiz-method-2">
@@ -667,7 +699,7 @@ pub fn format_character_wizard_html(st: &CharacterWizardState) -> String {
                             />
                             <div>
                                 <strong>Method 2: Roll 2d4 + 2d5 Pool (Keep Highest)</strong>
-                                <div class="subtitle">Roll 2d4 + 2d5 8 times (keep 6 highest) for Physical, Mental, and Sensory; roll 4 times (drop lowest, keep 3) for Social; assign in any order.</div>
+                                <div class="subtitle">Roll 2d4 + 2d5 8 times (keep 6 highest) for Physical, Mental, Sensory, and Social; assign in any order.</div>
                             </div>
                         </label>
                     </div>

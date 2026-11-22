@@ -1095,7 +1095,7 @@ pub fn evaluate_multi_spectrum_stealth_modifiers(
         Some(fit) => (
             params
                 .infiltrator
-                .compute_controller(CharacteristicCode::PRE, Some(CharacteristicCode::CRE)),
+                .compute_controller(CharacteristicCode::BEA, Some(CharacteristicCode::SAV)),
             fit.infiltrator_social_delta_ext() - params.cover_identity_pr_bonus
                 + params.rf_hygiene.infiltrator_electronic_delta_ext(),
         ),

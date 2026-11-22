@@ -1,5 +1,5 @@
 //! Canonical Character Sheet, Multimodal Asset, Anti-Cheat Provenance, and Avro Event types
-//! (`com.satya.events.CharacterSheetEvent`, `schema_id = 11` v1 / `schema_id = 12` v2, topic `character-sheets`).
+//! (`com.satya.events.CharacterSheetEvent`, `schema_id = 11` v1 / `schema_id = 12` v2 / `schema_id = 13` v3, topic `character-sheets`).
 
 use crate::types::{EventMetadata, Participant};
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,7 @@ impl CharacterVerificationStatus {
     }
 }
 
-/// Serializable 32-characteristic profile (`1..=20` scale including `trs` & `cps`, plus `hgt_m` and `mas_kg`)
+/// Serializable 35-characteristic profile (`1..=20` scale including 6-trait Social `sav`/`bea`/`wrm` and 9-trait Psyche `trs`/`cps`, plus `hgt_m` and `mas_kg`)
 /// stored inside [`CharacterSheetRecord`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CharacterCharacteristicsRecord {
@@ -118,6 +118,15 @@ pub struct CharacterCharacteristicsRecord {
     pub com: i32,
     pub pre: i32,
     pub elo: i32,
+    /// Social Savvy (`1..=20`, default `10`: cognitive empathy and reading rooms/subtext).
+    #[serde(default = "default_ten")]
+    pub sav: i32,
+    /// Bearing (`1..=20`, default `10`: non-verbal composure, poker face, social blending).
+    #[serde(default = "default_ten")]
+    pub bea: i32,
+    /// Warmth (`1..=20`, default `10`: disarming approachability and rapport).
+    #[serde(default = "default_ten")]
+    pub wrm: i32,
     pub sig: i32,
     pub hea: i32,
     pub tac: i32,
@@ -143,6 +152,10 @@ fn default_ten() -> i32 {
     10
 }
 
+fn default_five() -> i32 {
+    5
+}
+
 impl Default for CharacterCharacteristicsRecord {
     fn default() -> Self {
         Self {
@@ -163,6 +176,9 @@ impl Default for CharacterCharacteristicsRecord {
             com: 10,
             pre: 10,
             elo: 10,
+            sav: 10,
+            bea: 10,
+            wrm: 10,
             sig: 10,
             hea: 10,
             tac: 10,
@@ -262,6 +278,15 @@ pub struct CharacterSheetRecord {
     /// Optional canonical faction sub-archetype code (e.g., `"SATYANG_MANJUSRI"`, `"BIG_TECH_EXECUTIVE_HAWK"`).
     #[serde(default)]
     pub faction_archetype: Option<String>,
+    /// Institutional Status (`1..=10`, default `5`: civic/corporate/legal standing & clearance).
+    #[serde(default = "default_five")]
+    pub institutional_status: i32,
+    /// Street & Subculture Cred (`0..=5`, default `0`: underworld, union, and grassroots credibility).
+    #[serde(default)]
+    pub street_cred: i32,
+    /// Debt Tier (`0..=3`, default `0`: 0=DebtFree, 1=Manageable, 2=Heavy, 3=Predatory).
+    #[serde(default)]
+    pub debt_tier: i32,
 }
 
 fn default_true() -> bool {
@@ -312,11 +337,14 @@ impl Default for CharacterSheetRecord {
             updated_at_us: 0,
             faction_id: None,
             faction_archetype: None,
+            institutional_status: 5,
+            street_cred: 0,
+            debt_tier: 0,
         }
     }
 }
 
-/// Avro event (`schema_id = 11` v1 / `schema_id = 12` v2) emitted to the `character-sheets` topic on every character create,
+/// Avro event (`schema_id = 11` v1 / `schema_id = 12` v2 / `schema_id = 13` v3) emitted to the `character-sheets` topic on every character create,
 /// update, export, import, session bind, and multimodal asset upload.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CharacterSheetEvent {

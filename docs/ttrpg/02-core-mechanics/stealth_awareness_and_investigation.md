@@ -129,7 +129,7 @@ When moving at any non-stationary gait (`StealthCreep`, `CombatGlide`, `RunningD
 
 ### 3.4 Social Stealth ("Hiding in Plain Sight")
 
-When infiltrating a corporate lobby, hospital wing, or checkpoint crowd rather than sneaking through ceiling vents, roll **Etiquette (`PRE/MEM`)**, **Deception (`ELO/CRE`)**, or **Con Artistry (`ELO/CRE`)** (governed by **`PRE / CRE`** in unified Social Stealth resolution) against the sentry's **Observation (`SIG/FOC`)** or **Empathy (`INS/ITU`)**:
+When infiltrating a corporate lobby, hospital wing, or checkpoint crowd rather than sneaking through ceiling vents, roll **Etiquette (`PRE/MEM`)**, **Deception (`ELO/BEA`)**, or **Con Artistry (`ELO/CRE`)** (governed by **`BEA / SAV`** in unified Social Blending resolution) against the sentry's **Observation (`SIG/FOC`)** or **Empathy (`SAV/ITU`)**:
 
 | Wardrobe & Credential Fit (`SocialStealthWardrobeFit`) | Infiltrator $\Delta_{\text{ext}}$ | Cover Identity Resistance ($\text{PR}_{\text{id}}$) |
 | :--- | :---: | :--- |

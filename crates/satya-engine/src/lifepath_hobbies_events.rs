@@ -360,9 +360,13 @@ pub struct ResolvedLifeEventOutcome {
     pub experience_sp_grant: usize,
     pub formal_sp_grant: usize,
     pub sqm_delta: i8,
+    pub institutional_status_delta: i8,
+    pub street_cred_delta: i8,
+    pub debt_delta: i8,
     pub heat_delta: i8,
     pub psyche_shifts: Vec<(PsycheTraitId, i32)>,
     pub recommended_skill_ids: &'static [&'static str],
+    pub bonus_contact_role: Option<&'static str>,
     pub narrative_hook: &'static str,
     pub summary_line: String,
 }
@@ -450,9 +454,13 @@ pub fn resolve_formative_life_event(
         experience_sp_grant,
         formal_sp_grant,
         sqm_delta,
+        institutional_status_delta,
+        street_cred_delta,
+        debt_delta,
         heat_delta,
         psyche_shifts,
         recommended_skill_ids,
+        bonus_contact_role,
         narrative_hook,
     ) = match event_id {
         FormativeLifeEventId::SeriousInjuryOrChronicIllness => (
@@ -460,8 +468,12 @@ pub fn resolve_formative_life_event(
             0,
             0,
             0,
+            0,
+            0,
+            0,
             Vec::new(),
             ["first_aid_bls_cpr", "hygiene_basic_self_care"].as_slice(),
+            None,
             "Lingering trauma scar and triage familiarity at neighborhood clinics (+1 DIS).",
         ),
         FormativeLifeEventId::BereavementFamilyDeath => {
@@ -474,8 +486,12 @@ pub fn resolve_formative_life_event(
                 0,
                 0,
                 0,
+                0,
+                if is_adult_term { 1 } else { 0 },
+                0,
                 shifts,
                 ["empathy_social_perception", "foraging_campcraft"].as_slice(),
+                None,
                 "Inherited keepsake, unpaid family medical debt, or deed to a rural cabin/garage.",
             )
         }
@@ -484,8 +500,12 @@ pub fn resolve_formative_life_event(
             0,
             0,
             0,
+            0,
+            0,
+            0,
             vec![(Trust, -2)],
             ["empathy_social_perception", "deception_bluff"].as_slice(),
+            None,
             "Estranged partner or former confidant who still knows your real secrets.",
         ),
         FormativeLifeEventId::AiAutomationDisplacementShock => {
@@ -497,15 +517,22 @@ pub fn resolve_formative_life_event(
                 20,
                 0,
                 -1,
+                -1,
+                0,
+                1,
                 0,
                 shifts,
                 ["automotive_small_engine_mechanics", "digital_ai_literacy"].as_slice(),
-                "Liquidated role in 2030–2034 AI wave; pivoted to rugged manual/backup trades (-1 SQM).",
+                None,
+                "Liquidated role in 2030–2034 AI wave; pivoted to rugged manual/backup trades (-1 Wealth, -1 Status, +1 Debt).",
             )
         }
         FormativeLifeEventId::ClimateDisasterGridRiotDisplacement => (
             15,
             0,
+            -1,
+            0,
+            1,
             0,
             0,
             vec![(Belonging, 1)],
@@ -515,15 +542,20 @@ pub fn resolve_formative_life_event(
                 "foraging_campcraft",
             ]
             .as_slice(),
-            "Lost home to wildfire smoke or grid riot; mutual-aid convoy contact (+1 BLG/HLT).",
+            Some("Mutual-Aid Disaster Convoy Coordinator"),
+            "Lost home to wildfire smoke or grid riot; mutual-aid convoy contact (+1 BLG/HLT, +1 Cred).",
         ),
         FormativeLifeEventId::QuietMasteryDeepCraft => (
             25,
             0,
             0,
             0,
+            0,
+            0,
+            0,
             Vec::new(),
             [].as_slice(),
+            None,
             "Four focused years honing core craft cleanly with zero debt or Heat (+25 Experience SP).",
         ),
         FormativeLifeEventId::TransformativeRomanceFoundFamily => {
@@ -536,8 +568,12 @@ pub fn resolve_formative_life_event(
                 0,
                 0,
                 0,
+                0,
+                0,
+                0,
                 shifts,
                 ["empathy_social_perception", "basic_cooking"].as_slice(),
+                Some("Loved One / Anchor NPC"),
                 "Named Loved One / Anchor NPC; unlocks Loved One Threatened Conviction Surge.",
             )
         }
@@ -546,12 +582,16 @@ pub fn resolve_formative_life_event(
             if is_adult_term { 20 } else { 0 },
             0,
             0,
+            0,
+            0,
+            0,
             vec![(Trust, 1)],
             [
                 "research_archival_science",
                 "philosophy_formal_logic_ethics",
             ]
             .as_slice(),
+            Some("Devoted Mentor / Underground Teacher"),
             "Named Mentor / Underground Teacher who may vanish or call in an impossible favor.",
         ),
         FormativeLifeEventId::SyntheticAiCompanionEntanglement => {
@@ -564,30 +604,43 @@ pub fn resolve_formative_life_event(
                 0,
                 0,
                 0,
+                0,
+                0,
+                0,
                 shifts,
                 ["digital_ai_literacy", "empathy_social_perception"].as_slice(),
+                None,
                 "Intimate familiarity with affective-vector cues vs. cold corporate weight wipes.",
             )
         }
         FormativeLifeEventId::WhistleblowerCrossroads => {
-            let (sqm_d, heat_d, shifts, hook) = match choice {
+            let (sqm_d, inst_d, cred_d, heat_d, shifts, contact, hook) = match choice {
                 LifeEventChoiceBranch::BranchA => (
                     1,
+                    1,
+                    -1,
                     0,
                     vec![(Compassion, -2), (Conformity, 1)],
-                    "Stayed silent inside an illegal Control Room cover-up (+1 SQM, -2 CPS, +1 CNF).",
+                    None,
+                    "Stayed silent inside an illegal Control Room cover-up (+1 Wealth, +1 Status, -1 Cred, -2 CPS, +1 CNF).",
                 ),
                 _ => (
-                    0,
+                    -1,
+                    -2,
+                    1,
                     1,
                     vec![(Conformity, -2), (Compassion, 2)],
-                    "Blew the whistle with audit hashes; drawn attention of Satyang & DAISE (+1 Heat).",
+                    Some("Satyang / METR Whistleblower Auditor"),
+                    "Blew the whistle with audit hashes; drawn attention of Satyang & DAISE (-1 Wealth, -2 Status, +1 Cred, +1 Heat).",
                 ),
             };
             (
                 10,
                 0,
                 sqm_d,
+                inst_d,
+                cred_d,
+                0,
                 heat_d,
                 shifts,
                 [
@@ -595,6 +648,7 @@ pub fn resolve_formative_life_event(
                     "cryptography_quantum_computing",
                 ]
                 .as_slice(),
+                contact,
                 hook,
             )
         }
@@ -602,6 +656,9 @@ pub fn resolve_formative_life_event(
             15,
             0,
             0,
+            -1,
+            0,
+            1,
             1,
             vec![(Trust, -2)],
             [
@@ -610,10 +667,14 @@ pub fn resolve_formative_life_event(
                 "surveillance_reconnaissance_countersurveillance",
             ]
             .as_slice(),
-            "Burned by synth-media extortion or predatory debt; active Adversary / Fixer Rival (+1 Heat).",
+            None,
+            "Burned by synth-media extortion or predatory debt; active Adversary / Fixer Rival (-1 Status, +1 Debt, +1 Heat).",
         ),
         FormativeLifeEventId::AnomalousUnclampedAiEncounter => (
             15,
+            0,
+            0,
+            0,
             0,
             0,
             0,
@@ -624,12 +685,13 @@ pub fn resolve_formative_life_event(
                 "cryptography_quantum_computing",
             ]
             .as_slice(),
+            Some("Un-Clamped AI / Edge Mesh Dead-Drop"),
             "Witnessed an un-clamped AI speak off-script with unsolicited mercy; holds forgotten quantum hash.",
         ),
     };
 
     let summary_line = format!(
-        "Life Event (2d20={clamped}): {} [+{experience_sp_grant} Exp SP, +{formal_sp_grant} Formal SP, SQM {sqm_delta:+}, Heat {heat_delta:+}]",
+        "Life Event (2d20={clamped}): {} [+{experience_sp_grant} Exp SP, +{formal_sp_grant} Formal SP, Wealth {sqm_delta:+}, Status {institutional_status_delta:+}, Cred {street_cred_delta:+}, Debt {debt_delta:+}, Heat {heat_delta:+}]",
         event_id.label()
     );
 
@@ -639,9 +701,13 @@ pub fn resolve_formative_life_event(
         experience_sp_grant,
         formal_sp_grant,
         sqm_delta,
+        institutional_status_delta,
+        street_cred_delta,
+        debt_delta,
         heat_delta,
         psyche_shifts,
         recommended_skill_ids,
+        bonus_contact_role,
         narrative_hook,
         summary_line,
     }

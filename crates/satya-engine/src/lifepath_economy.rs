@@ -45,6 +45,7 @@ pub struct LifepathCharacterProfile {
     pub stage_history: Vec<String>,
     pub campaign_sqm: u8,
     pub operational_heat: u8,
+    pub socioeconomic: SocioeconomicProfile,
 }
 
 impl LifepathCharacterProfile {
@@ -89,6 +90,23 @@ impl LifepathCharacterProfile {
             "Stage 2 (Ages 6–11): Elementary School Grants (Reading, Writing, Arithmetic, Digital & AI Literacy at N=1)".to_string(),
         ];
 
+        let init_wealth = origin.class.default_campaign_sqm();
+        let (contact_role, contact_reach, contact_trust) = origin.class.origin_contact();
+        let socioeconomic = SocioeconomicProfile {
+            origin_class: origin.class,
+            wealth_tier: init_wealth,
+            institutional_status: origin.class.default_institutional_status(),
+            street_cred: origin.class.default_street_cred(),
+            debt_tier: DebtTier::None,
+            effective_wealth_tier: init_wealth,
+            earned_contacts: vec![EarnedLifepathContact {
+                role_title: contact_role.to_string(),
+                source_stage: "Stage 1 Origin".to_string(),
+                reach_tier: contact_reach,
+                trust_level: contact_trust,
+            }],
+        };
+
         Self {
             name: name.into(),
             age_years: 11,
@@ -99,8 +117,9 @@ impl LifepathCharacterProfile {
             granted_access_tags,
             academic_tree_frozen: false,
             stage_history,
-            campaign_sqm: 5,
+            campaign_sqm: init_wealth,
             operational_heat: 0,
+            socioeconomic,
         }
     }
 
@@ -311,6 +330,7 @@ impl RuralYouthArchetype {
 /// Configuration for a single 4-Year Adult Career Term in Stage 5 (`Ages 18+`)
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CareerTermConfig {
     pub track: CareerTermTrack,
     pub term_roll_pairs: [(i32, i32); 2],
@@ -322,6 +342,8 @@ pub struct CareerTermConfig {
     pub life_event_roll_2d20: Option<i32>,
     #[serde(default)]
     pub life_event_choice: LifeEventChoiceBranch,
+    #[serde(default)]
+    pub echelon_override: Option<CareerEchelonTier>,
 }
 
 impl Default for CareerTermConfig {
@@ -334,6 +356,7 @@ impl Default for CareerTermConfig {
             off_duty_hobby: None,
             life_event_roll_2d20: None,
             life_event_choice: LifeEventChoiceBranch::DefaultPath,
+            echelon_override: None,
         }
     }
 }
@@ -368,6 +391,12 @@ pub struct LifepathBuildConfig {
     pub career_terms: Vec<CareerTermConfig>,
     pub campaign_sqm_override: Option<u8>,
     pub operational_heat_override: Option<u8>,
+    #[serde(default)]
+    pub institutional_status_override: Option<u8>,
+    #[serde(default)]
+    pub street_cred_override: Option<u8>,
+    #[serde(default)]
+    pub debt_tier_override: Option<DebtTier>,
     #[serde(default)]
     pub youth_hobby: Option<PersonalHobbyId>,
     #[serde(default)]
@@ -407,6 +436,9 @@ impl Default for LifepathBuildConfig {
             career_terms: vec![CareerTermConfig::default()],
             campaign_sqm_override: None,
             operational_heat_override: None,
+            institutional_status_override: None,
+            street_cred_override: None,
+            debt_tier_override: None,
             youth_hobby: None,
             adolescent_life_event_roll_2d20: None,
             adolescent_life_event_choice: LifeEventChoiceBranch::DefaultPath,
@@ -449,6 +481,7 @@ pub struct LifepathBaselineResult {
     pub stage4_path: Stage4Path,
     pub stage4a_hs_eval: Option<EducationalAdvancementResult>,
     pub term_evals: Vec<EducationalAdvancementResult>,
+    pub term_entry_evals: Vec<CareerTermEntryEvaluation>,
     pub baseline_skills: BTreeMap<String, usize>,
     pub granted_access_tags: Vec<SkillAccessTier>,
     pub academic_tree_frozen: bool,
@@ -457,6 +490,7 @@ pub struct LifepathBaselineResult {
     pub max_post_school_gain_per_skill: usize,
     pub campaign_sqm: u8,
     pub operational_heat: u8,
+    pub socioeconomic: SocioeconomicProfile,
     pub stage_history: Vec<String>,
 }
 
@@ -771,14 +805,62 @@ pub fn compute_lifepath_baseline_from_config(
         );
     }
 
+    let mut wealth: i32 = i32::from(origin.class.default_campaign_sqm());
+    let mut inst_status: i32 = i32::from(origin.class.default_institutional_status());
+    let mut street_cred: i32 = i32::from(origin.class.default_street_cred());
+    let mut debt = DebtTier::None;
+    let mut heat_acc: i32 = 0;
+
+    let (origin_contact_role, origin_contact_reach, origin_contact_trust) =
+        origin.class.origin_contact();
+    let mut earned_contacts = vec![EarnedLifepathContact {
+        role_title: origin_contact_role.to_string(),
+        source_stage: "Stage 1 Origin".to_string(),
+        reach_tier: origin_contact_reach,
+        trust_level: origin_contact_trust,
+    }];
+
+    match stage4_path {
+        Stage4Path::Path4BStreetGang => {
+            street_cred = (street_cred + 2).min(5);
+            heat_acc += 1;
+            if inst_status > 3 {
+                inst_status = (inst_status - 2).max(2);
+            }
+            if wealth > 4 {
+                wealth = (wealth - 2).max(3);
+            }
+        }
+        Stage4Path::Path4CRuralAgrarian => {
+            street_cred = (street_cred + 1).min(5);
+            if cfg.stage4c_rural_archetype == RuralYouthArchetype::FrontierScoutMilitiaSmuggler {
+                heat_acc += 1;
+            }
+        }
+        Stage4Path::Path4AHighSchool => {
+            if cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet
+                && stage4a_hs_eval.as_ref().is_some_and(|e| e.successes >= 1)
+            {
+                inst_status = (inst_status + 1).min(10);
+            }
+        }
+    }
+
     let mut career_skill_budget = 0usize;
     let mut elective_skill_budget = 40usize;
-    let mut sqm_delta_acc = 0i32;
-    let mut heat_delta_acc = 0i32;
     let mut term_evals = Vec::with_capacity(cfg.career_terms.len());
+    let mut term_entry_evals = Vec::with_capacity(cfg.career_terms.len());
+    let mut prior_tracks: Vec<CareerTermTrack> = Vec::with_capacity(4);
+    let mut prior_honors_count = 0usize;
 
     if let Some(hobby) = cfg.youth_hobby {
         let hspec = hobby.spec();
+        earned_contacts.push(EarnedLifepathContact {
+            role_title: hspec.grounded_contact_role.to_string(),
+            source_stage: "Stage 4 Youth Hobby".to_string(),
+            reach_tier: 1,
+            trust_level: 3,
+        });
         stage_history.push(format!(
             "Stage 4 Adolescent Hobby: {} (-15% Experience SP club discount on signature skills N<=3; Contact: {})",
             hspec.label, hspec.grounded_contact_role
@@ -788,8 +870,19 @@ pub fn compute_lifepath_baseline_from_config(
         let outcome = resolve_formative_life_event(roll, cfg.adolescent_life_event_choice, false);
         elective_skill_budget += outcome.experience_sp_grant;
         career_skill_budget += outcome.formal_sp_grant;
-        sqm_delta_acc += i32::from(outcome.sqm_delta);
-        heat_delta_acc += i32::from(outcome.heat_delta);
+        wealth = (wealth + i32::from(outcome.sqm_delta)).clamp(1, 10);
+        inst_status = (inst_status + i32::from(outcome.institutional_status_delta)).clamp(1, 10);
+        street_cred = (street_cred + i32::from(outcome.street_cred_delta)).clamp(0, 5);
+        debt = debt.add_steps(outcome.debt_delta);
+        heat_acc = (heat_acc + i32::from(outcome.heat_delta)).clamp(0, 10);
+        if let Some(role) = outcome.bonus_contact_role {
+            earned_contacts.push(EarnedLifepathContact {
+                role_title: role.to_string(),
+                source_stage: "Stage 4 Life Event".to_string(),
+                reach_tier: 1,
+                trust_level: 3,
+            });
+        }
         stage_history.push(format!("Stage 4 {}", outcome.summary_line));
     }
 
@@ -806,31 +899,109 @@ pub fn compute_lifepath_baseline_from_config(
             }
         }
 
+        let entry_ctx = CareerEntryContext {
+            wealth_tier: wealth.clamp(1, 10) as u8,
+            institutional_status: inst_status.clamp(1, 10) as u8,
+            street_cred: street_cred.clamp(0, 5) as u8,
+            current_heat: heat_acc.clamp(0, 10) as u8,
+            academic_tree_frozen,
+            prior_tracks: &prior_tracks,
+            prior_honors_count,
+            chars,
+            aptitudes,
+            echelon_override: term.echelon_override,
+        };
+        let entry = term.track.evaluate_socioeconomic_entry(&entry_ctx);
+        debt = debt.add_steps(entry.debt_added as i8);
+
         let (c_mental_or_career, apt_career) = term.track.eval_controllers(chars, aptitudes);
         let t_eval = evaluate_educational_advancement_with_override(
             chars.dis,
             c_mental_or_career,
             apt_career,
-            0,
+            entry.entry_tn_mod,
             term.term_roll_pairs,
             term.override_successes,
         );
-        let term_formal_sp = 120 + 20 * t_eval.successes.min(2);
+        let term_formal_sp =
+            120 + 20 * t_eval.successes.min(2) + entry.resolved_echelon.formal_sp_bonus();
         career_skill_budget += term_formal_sp;
         elective_skill_budget += 40;
+
+        let ep = term.track.economic_profile();
+        let echelon_lift = match entry.resolved_echelon {
+            CareerEchelonTier::EntryRank => 0,
+            CareerEchelonTier::MidSpecialist => 1,
+            CareerEchelonTier::SeniorLeadership => 2,
+        };
+        let target_w = (i32::from(ep.target_wealth_tier)
+            + i32::from(t_eval.successes >= 2)
+            + i32::from(echelon_lift == 2))
+        .clamp(1, 10);
+        if t_eval.successes == 0 {
+            if wealth > i32::from(ep.target_wealth_tier) {
+                wealth -= 1;
+            }
+        } else if wealth < target_w {
+            let step = if t_eval.successes >= 2 && (target_w - wealth) >= 2 {
+                2
+            } else {
+                1
+            };
+            wealth += step;
+        } else if wealth > target_w + 1 {
+            wealth -= 1;
+        }
+        if t_eval.successes >= 2 && ep.target_wealth_tier >= 7 && debt != DebtTier::None {
+            debt = debt.add_steps(-1);
+        }
+
+        let target_inst =
+            (i32::from(ep.target_institutional_status) + i32::from(t_eval.successes >= 2))
+                .clamp(1, 10);
+        if inst_status < target_inst && t_eval.successes >= 1 {
+            inst_status += 1;
+        } else if inst_status > target_inst && ep.target_institutional_status <= 3 {
+            inst_status -= 1;
+        }
+        if t_eval.successes >= 1 {
+            street_cred = (street_cred + i32::from(ep.street_cred_gain)).clamp(0, 5);
+        } else if ep.underworld_or_grassroots {
+            street_cred = (street_cred + 1).clamp(0, 5);
+        }
+        heat_acc = (heat_acc + i32::from(ep.heat_gain)).clamp(0, 10);
+        wealth = wealth.clamp(1, 10);
+        inst_status = inst_status.clamp(1, 10);
+
+        earned_contacts.push(EarnedLifepathContact {
+            role_title: ep.contact_role.to_string(),
+            source_stage: format!("Stage 5 Term {} ({})", t_idx + 1, entry.role_title),
+            reach_tier: (ep.base_contact_reach + entry.resolved_echelon.contact_reach_bonus())
+                .clamp(1, 4),
+            trust_level: if t_eval.successes >= 2 { 4 } else { 3 },
+        });
 
         let age_start = 18 + (t_idx as u32) * 4;
         let age_end = age_start + 4;
         stage_history.push(format!(
-            "Stage 5 Term {} (Ages {age_start}–{age_end}): {} — Roll {} succ (TN {}) -> +{} Formal SP (+40 Experience SP)",
+            "Stage 5 Term {} (Ages {age_start}–{age_end}): {} [{}] — {} — Roll {} succ (TN {}) -> +{} Formal SP (+40 Exp SP) | Wealth {wealth}, Status {inst_status}, Cred {street_cred}, Debt {}",
             t_idx + 1,
             term.track.label(),
+            entry.role_title,
+            entry.entry_notes,
             t_eval.successes,
             t_eval.tn_edu,
-            term_formal_sp
+            term_formal_sp,
+            debt.as_u8()
         ));
         if let Some(hobby) = term.off_duty_hobby {
             let hspec = hobby.spec();
+            earned_contacts.push(EarnedLifepathContact {
+                role_title: hspec.grounded_contact_role.to_string(),
+                source_stage: format!("Stage 5 Term {} Hobby", t_idx + 1),
+                reach_tier: 1 + u8::from(t_eval.successes >= 2),
+                trust_level: 3,
+            });
             stage_history.push(format!(
                 "Stage 5 Term {} Off-Duty Hobby: {} (-15% Experience SP N<=3; Contact: {})",
                 t_idx + 1,
@@ -842,38 +1013,65 @@ pub fn compute_lifepath_baseline_from_config(
             let outcome = resolve_formative_life_event(roll, term.life_event_choice, true);
             elective_skill_budget += outcome.experience_sp_grant;
             career_skill_budget += outcome.formal_sp_grant;
-            sqm_delta_acc += i32::from(outcome.sqm_delta);
-            heat_delta_acc += i32::from(outcome.heat_delta);
+            wealth = (wealth + i32::from(outcome.sqm_delta)).clamp(1, 10);
+            inst_status = (inst_status + i32::from(outcome.institutional_status_delta)).clamp(1, 10);
+            street_cred = (street_cred + i32::from(outcome.street_cred_delta)).clamp(0, 5);
+            debt = debt.add_steps(outcome.debt_delta);
+            heat_acc = (heat_acc + i32::from(outcome.heat_delta)).clamp(0, 10);
+            if let Some(role) = outcome.bonus_contact_role {
+                earned_contacts.push(EarnedLifepathContact {
+                    role_title: role.to_string(),
+                    source_stage: format!("Stage 5 Term {} Life Event", t_idx + 1),
+                    reach_tier: 2,
+                    trust_level: 3,
+                });
+            }
             stage_history.push(format!(
                 "Stage 5 Term {} {}",
                 t_idx + 1,
                 outcome.summary_line
             ));
         }
+
+        prior_tracks.push(term.track);
+        if t_eval.successes >= 2 {
+            prior_honors_count += 1;
+        }
         term_evals.push(t_eval);
+        term_entry_evals.push(entry);
     }
 
     let num_terms = cfg.career_terms.len().min(4);
     let age_years = 18 + (num_terms as u32) * 4;
     let max_post_school_gain_per_skill = (2 * num_terms.max(1)).max(2);
 
-    let default_sqm =
-        (i32::from(origin.class.default_campaign_sqm()) + sqm_delta_acc).clamp(1, 10) as u8;
-    let base_heat: i32 = if cfg
-        .career_terms
-        .iter()
-        .any(|t| t.track == CareerTermTrack::OrganizedCrimeCartelSyndicate)
-    {
-        2
-    } else if stage4_path == Stage4Path::Path4BStreetGang
-        || (stage4_path == Stage4Path::Path4CRuralAgrarian
-            && cfg.stage4c_rural_archetype == RuralYouthArchetype::FrontierScoutMilitiaSmuggler)
-    {
-        1
-    } else {
-        0
+    let final_wealth = cfg
+        .campaign_sqm_override
+        .unwrap_or(wealth.clamp(1, 10) as u8)
+        .clamp(1, 10);
+    let final_inst_status = cfg
+        .institutional_status_override
+        .unwrap_or(inst_status.clamp(1, 10) as u8)
+        .clamp(1, 10);
+    let final_street_cred = cfg
+        .street_cred_override
+        .unwrap_or(street_cred.clamp(0, 5) as u8)
+        .min(5);
+    let final_debt = cfg.debt_tier_override.unwrap_or(debt);
+    let final_heat = cfg
+        .operational_heat_override
+        .unwrap_or(heat_acc.clamp(0, 10) as u8)
+        .min(10);
+
+    let socioeconomic = SocioeconomicProfile {
+        origin_class: origin.class,
+        wealth_tier: final_wealth,
+        institutional_status: final_inst_status,
+        street_cred: final_street_cred,
+        debt_tier: final_debt,
+        effective_wealth_tier: final_wealth.saturating_sub(final_debt.wealth_drag()).max(1),
+        earned_contacts,
     };
-    let default_heat = (base_heat + heat_delta_acc).clamp(0, 10) as u8;
 
     LifepathBaselineResult {
         age_years,
@@ -887,20 +1085,16 @@ pub fn compute_lifepath_baseline_from_config(
         stage4_path,
         stage4a_hs_eval,
         term_evals,
+        term_entry_evals,
         baseline_skills: skills,
         granted_access_tags,
         academic_tree_frozen,
         career_skill_budget,
         elective_skill_budget,
         max_post_school_gain_per_skill,
-        campaign_sqm: cfg
-            .campaign_sqm_override
-            .unwrap_or(default_sqm)
-            .clamp(1, 10),
-        operational_heat: cfg
-            .operational_heat_override
-            .unwrap_or(default_heat)
-            .clamp(0, 10),
+        campaign_sqm: final_wealth,
+        operational_heat: final_heat,
+        socioeconomic,
         stage_history,
     }
 }

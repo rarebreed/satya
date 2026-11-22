@@ -5,9 +5,10 @@ use crate::wasm_client::dom::escape_html;
 use crate::wasm_client::wizard::CharacterWizardState;
 pub use crate::wasm_client::wizard_views_lifepath_extras::*;
 use satya_engine::{
-    CANONICAL_SKILL_TREES, CareerTermConfig, CareerTermTrack, EducationalAdvancementResult,
-    HighSchoolTrack, LifepathBaselineResult, LifepathBuildConfig, RuralYouthArchetype, SkillType,
-    SocioeconomicClass, Stage4Path, StreetGangArchetype, lookup_skill_node,
+    CANONICAL_SKILL_TREES, CareerEchelonTier, CareerTermConfig, CareerTermTrack,
+    EducationalAdvancementResult, HighSchoolTrack, LifepathBaselineResult, LifepathBuildConfig,
+    RuralYouthArchetype, SkillType, SocioeconomicClass, Stage4Path, StreetGangArchetype,
+    lookup_institutional_status, lookup_skill_node, lookup_street_cred,
     resolve_socioeconomic_origin,
 };
 
@@ -158,6 +159,14 @@ pub(crate) fn apply_career_term_in_config<F: FnMut(i32) -> i32>(
                 if let Some(trk) = CareerTermTrack::from_code_str(val) {
                     term.track = trk;
                 }
+            }
+            "echelon_override" => {
+                term.echelon_override = if val.trim().is_empty() || val.eq_ignore_ascii_case("AUTO")
+                {
+                    None
+                } else {
+                    CareerEchelonTier::from_code_str(val)
+                };
             }
             "override_successes" => {
                 term.override_successes = val.parse::<usize>().ok().map(|n| n.min(2));
@@ -612,6 +621,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 .join("");
 
             let t_eval = baseline.term_evals.get(t_idx);
+            let entry_eval = baseline.term_entry_evals.get(t_idx);
             let t_roll_str = t_eval.map_or_else(
                 || "N/A".to_string(),
                 |e| {
@@ -626,6 +636,44 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 },
             );
             let term_ov_opts = format_override_select_options(term.override_successes);
+            let auto_sel = if term.echelon_override.is_none() {
+                " selected"
+            } else {
+                ""
+            };
+            let echelon_opts = std::iter::once(format!(
+                r#"<option value="AUTO"{auto_sel}>Auto (Evaluated by Origin / Degree / Skill)</option>"#
+            ))
+            .chain(CareerEchelonTier::ALL.iter().map(|&ech| {
+                let sel = if term.echelon_override == Some(ech) {
+                    " selected"
+                } else {
+                    ""
+                };
+                format!(
+                    r#"<option value="{}"{sel}>{}</option>"#,
+                    ech.as_str(),
+                    escape_html(ech.label())
+                )
+            }))
+            .collect::<Vec<_>>()
+            .join("");
+            let echelon_pill = entry_eval.map_or_else(String::new, |ev| {
+                format!(
+                    r#"<span class="pill pill-active">{} · {}</span>"#,
+                    escape_html(ev.resolved_echelon.label()),
+                    escape_html(ev.role_title)
+                )
+            });
+            let entry_note = entry_eval.map_or_else(String::new, |ev| {
+                format!(
+                    " · <strong>Funding &amp; Entry:</strong> {} (TN {:+}, Debt +{}) — {}",
+                    escape_html(ev.funding_mode.label()),
+                    ev.entry_tn_mod,
+                    ev.debt_added,
+                    escape_html(&ev.entry_notes)
+                )
+            });
             let access_str: String = term
                 .track
                 .granted_access_tags()
@@ -642,7 +690,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                             <span class="wiz-char-code">TERM #{} (AGES {age_start}–{age_end})</span>
                             <strong class="wiz-char-name">{track_label}</strong>
                         </div>
-                        {qual_pill}
+                        <div class="btn-row-compact">{echelon_pill} {qual_pill}</div>
                     </div>
                     <label for="wiz-career-track-{t_idx}">
                         <span>Select 4-Year Career / Institution Track</span>
@@ -651,6 +699,15 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                             onchange="window.satyaWizardUpdateCareerTerm({t_idx}, 'track', this.value)"
                         >
                             {track_opts}
+                        </select>
+                    </label>
+                    <label for="wiz-career-echelon-{t_idx}">
+                        <span>Role Echelon Tier (Auto or Player/GM Override)</span>
+                        <select
+                            id="wiz-career-echelon-{t_idx}"
+                            onchange="window.satyaWizardUpdateCareerTerm({t_idx}, 'echelon_override', this.value)"
+                        >
+                            {echelon_opts}
                         </select>
                     </label>
                     <label for="wiz-career-ov-{t_idx}">
@@ -671,7 +728,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                             "Re-Roll Term #{term_num} (2d20)"
                         </button>
                     </div>
-                    <div class="stat-note"><strong>Unlocks:</strong> {access_str} · <strong>Prereqs:</strong> {qual_detail}</div>
+                    <div class="stat-note"><strong>Unlocks:</strong> {access_str} · <strong>Prereqs:</strong> {qual_detail}{entry_note}</div>
                     {term_extras_html}
                 </div>"#,
                 t_idx + 1,
@@ -684,6 +741,19 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
         .join("");
 
     let access_gates_html = format_access_gates_pills_html(&baseline);
+    let inst_spec = lookup_institutional_status(baseline.socioeconomic.institutional_status);
+    let cred_spec = lookup_street_cred(baseline.socioeconomic.street_cred);
+    let contacts_str = if baseline.socioeconomic.earned_contacts.is_empty() {
+        "None".to_string()
+    } else {
+        baseline
+            .socioeconomic
+            .earned_contacts
+            .iter()
+            .map(|c| escape_html(&c.role_title))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
     let faction_quickstart_html = format_faction_quickstart_fieldset_html(st);
     let youth_hobby_event_html = format_youth_hobby_and_event_cards_html(cfg);
     let history_items: String = baseline
@@ -714,6 +784,14 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
             <div class="wiz-pool-readout">
                 <div class="wiz-kept-slots-row">
                     <span class="roster-title">Unlocked [Access] Gates:</span> {access_gates_html}
+                </div>
+                <div class="wiz-kept-slots-row">
+                    <span class="roster-title">Socio-Economic Trajectory:</span>
+                    <span class="pill pill-iggy">Wealth {w} (Eff {eff_w})</span>
+                    <span class="pill pill-iggy">InstStatus {inst}/10 ({inst_label})</span>
+                    <span class="pill pill-iggy">StreetCred {cred}/5 ({cred_label})</span>
+                    <span class="pill pill-iggy">Debt: {debt_label}</span>
+                    <span class="pill pill-active">Earned Contacts ({n_contacts}): {contacts_str}</span>
                 </div>
                 <ul class="wiz-lifepath-log">{history_items}</ul>
             </div>
@@ -889,6 +967,14 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
         age = baseline.age_years,
         c_bud = baseline.career_skill_budget,
         e_bud = baseline.elective_skill_budget,
+        w = baseline.socioeconomic.wealth_tier,
+        eff_w = baseline.socioeconomic.effective_wealth_tier,
+        inst = inst_spec.tier,
+        inst_label = escape_html(inst_spec.bracket_name),
+        cred = cred_spec.cred,
+        cred_label = escape_html(cred_spec.bracket_name),
+        debt_label = escape_html(baseline.socioeconomic.debt_tier.label()),
+        n_contacts = baseline.socioeconomic.earned_contacts.len(),
         orig_roll = cfg.origin_roll_2d20.clamp(2, 40),
         sqm = origin.school_quality_modifier_sqm,
         drop_max = origin.adolescent_dropout_risk_max_2d20,

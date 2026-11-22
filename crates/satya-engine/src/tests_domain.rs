@@ -112,7 +112,7 @@ fn test_characteristic_roll_methods_height_mass_and_aptitude_pool() {
     assert_eq!(phys_m1.kept_values.len(), 6);
     assert!(phys_m1.kept_values.iter().all(|&v| (4..=18).contains(&v)));
 
-    // Method 1 Social Pool: 3 rolls, 3 kept
+    // Method 1 Social Pool: symmetric 6 rolls, 6 kept
     let soc_m1 = roll_characteristic_group_pool(
         CharacteristicCategory::Social,
         CharacteristicRollMethod::Method1DropLowestD5,
@@ -122,8 +122,8 @@ fn test_characteristic_roll_methods_height_mass_and_aptitude_pool() {
             v
         },
     );
-    assert_eq!(soc_m1.raw_rolls.len(), 3);
-    assert_eq!(soc_m1.kept_values.len(), 3);
+    assert_eq!(soc_m1.raw_rolls.len(), 6);
+    assert_eq!(soc_m1.kept_values.len(), 6);
 
     // Method 2 Physical Pool: 8 rolls of 2d4+2d5, drops 2 lowest -> keeps 6 highest
     let phys_m2 = roll_characteristic_group_pool(
@@ -146,7 +146,7 @@ fn test_characteristic_roll_methods_height_mass_and_aptitude_pool() {
     );
     assert_eq!(phys_m2.kept_values.len(), 6);
 
-    // Method 2 Social Pool: 4 rolls of 2d4+2d5, drops 1 lowest -> keeps 3 highest
+    // Method 2 Social Pool: symmetric 8 rolls of 2d4+2d5, drops 2 lowest -> keeps 6 highest
     let soc_m2 = roll_characteristic_group_pool(
         CharacteristicCategory::Social,
         CharacteristicRollMethod::Method2PoolKeepHighest,
@@ -156,16 +156,16 @@ fn test_characteristic_roll_methods_height_mass_and_aptitude_pool() {
             v
         },
     );
-    assert_eq!(soc_m2.raw_rolls.len(), 4);
+    assert_eq!(soc_m2.raw_rolls.len(), 8);
     assert_eq!(
         soc_m2
             .raw_rolls
             .iter()
             .filter(|r| r.dropped_from_pool)
             .count(),
-        1
+        2
     );
-    assert_eq!(soc_m2.kept_values.len(), 3);
+    assert_eq!(soc_m2.kept_values.len(), 6);
 
     // Correlated Height & Mass around mean (roll 11 -> 1.72m, FOR 10 -> BMI 23.0 -> 68.0 kg)
     let (hgt, bmi, mas) = compute_correlated_height_mass(11, 11, 10);
@@ -1474,6 +1474,8 @@ fn test_stealth_passive_vs_active_alertness_spectrum_tail_and_forensics() {
         itu: 12,
         pre: 14,
         cre: 12,
+        bea: 14,
+        sav: 12,
         ..Default::default()
     };
     let guard = CharacterCharacteristics {

@@ -447,6 +447,8 @@ pub(crate) fn apply_prompt_psyche_and_skill_cues(
             if rule.boost_social {
                 chars.pre = chars.pre.max(13);
                 chars.elo = chars.elo.max(13);
+                chars.sav = chars.sav.max(12);
+                chars.wrm = chars.wrm.max(12);
             }
             if !rule.priority_skills.is_empty() {
                 if rule.set_trait == Some((PsycheTraitId::Selfishness, 5)) {
@@ -1035,13 +1037,33 @@ pub fn compile_character_hooks(
         });
     }
 
-    // 5. Lifepath Origin / Debt Hook
-    if !record.origin_label.trim().is_empty() || !record.stage_history.is_empty() {
+    // 5. Lifepath Origin / Socio-Economic Debt Hook
+    if !record.origin_label.trim().is_empty()
+        || !record.stage_history.is_empty()
+        || record.debt_tier >= 2
+        || record.street_cred >= 3
+    {
         let origin = if record.origin_label.trim().is_empty() {
             "Past Career".to_string()
         } else {
             record.origin_label.clone()
         };
+        let debt_clause = if record.debt_tier >= 3 {
+            " Predatory debt holders or Syndicate enforcers press for immediate liquidation."
+        } else if record.debt_tier >= 2 {
+            " Heavy carrying debt gives an institutional or underworld creditor leverage."
+        } else {
+            ""
+        };
+        let cred_clause = if record.street_cred >= 3 {
+            " Underground brokers recognize their street cred and expect discreet reciprocity."
+        } else {
+            ""
+        };
+        let salience: f32 = (0.60_f32
+            + if record.debt_tier >= 2 { 0.08 } else { 0.0 }
+            + if record.street_cred >= 3 { 0.05 } else { 0.0 })
+        .min(0.85_f32);
         cards.push(MotivationalHookCard {
             hook_id: format!("hook_{}_lifepath", record.character_id),
             category: HookCategory::LifepathDebt,
@@ -1049,12 +1071,16 @@ pub fn compile_character_hooks(
             character_name: name.clone(),
             title: format!("{name}: Echoes of {origin}"),
             setup: format!(
-                "Surface a former colleague, supplier, or signature protocol from {name}'s {origin} background in {loc_label}."
+                "Surface a former colleague, supplier, or signature protocol from {name}'s {origin} background in {loc_label}.{debt_clause}{cred_clause}"
             ),
-            emotional_stake: "Personal history refuses to stay neatly compartmentalized from the current crisis.".to_string(),
+            emotional_stake: "Personal history and socio-economic obligations refuse to stay neatly compartmentalized from the current crisis.".to_string(),
             preferred_vectors: vec!["GroupConsensusLoyaltySharedIdentity".to_string()],
-            pressure_lever: "Old favor demands repayment at an inconvenient operational moment.".to_string(),
-            salience: 0.60,
+            pressure_lever: if record.debt_tier >= 2 {
+                "An unpaid debt note or old favor demands repayment at an inconvenient operational moment.".to_string()
+            } else {
+                "Old favor demands repayment at an inconvenient operational moment.".to_string()
+            },
+            salience,
             target_clock_hint: None,
         });
     }

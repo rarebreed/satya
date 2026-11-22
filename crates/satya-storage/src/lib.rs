@@ -819,13 +819,13 @@ impl EventLogRouter {
             .await
     }
 
-    /// Publishes a [`CharacterSheetEvent`] to the `character-sheets` topic (`v2`) and immediately flushes it.
+    /// Publishes a [`CharacterSheetEvent`] to the `character-sheets` topic (`v3`) and immediately flushes it.
     pub async fn log_character_sheet(&self, event: &CharacterSheetEvent) -> anyhow::Result<u64> {
         let offset = self
             .publish_event(
                 topics::CHARACTER_SHEETS,
                 subjects::CHARACTER_SHEET,
-                2,
+                3,
                 event,
             )
             .await?;
@@ -856,7 +856,7 @@ impl EventLogRouter {
                 _ => subjects::CHAT_MESSAGE,
             };
             let target_version = if subject == subjects::CHARACTER_SHEET {
-                2
+                3
             } else {
                 1
             };

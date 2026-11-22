@@ -44,7 +44,7 @@ pub struct CharacterWizardState {
     pub sensory_pool: Option<CharacteristicGroupPool>,
     pub sensory_slots: [Option<usize>; 6],
     pub social_pool: Option<CharacteristicGroupPool>,
-    pub social_slots: [Option<usize>; 3],
+    pub social_slots: [Option<usize>; 6],
     /// Psyche generation mode (`"CHOOSE"`, `"ROLL_DIRECT"`, or `"ROLL_POOL"`).
     pub psyche_mode: String,
     pub psyche_pool: Option<Vec<SingleCharacteristicRoll>>,
@@ -81,7 +81,7 @@ impl Default for CharacterWizardState {
             sensory_pool: None,
             sensory_slots: [None; 6],
             social_pool: None,
-            social_slots: [None; 3],
+            social_slots: [None; 6],
             psyche_mode: "CHOOSE".to_string(),
             psyche_pool: None,
             psyche_slots: [None; 9],
@@ -868,6 +868,20 @@ mod tests {
         assert_eq!(wiz.physical_slots[5], Some(0));
         assert_eq!(wiz.characteristics.spd, kept[5]);
         assert_eq!(wiz.characteristics.fit, kept[0]);
+
+        // Social group now uses symmetric 6-slot pool across COM, PRE, ELO, SAV, BEA, WRM
+        wiz.roll_group_with("social", &mut rng);
+        assert_eq!(
+            wiz.social_slots,
+            [Some(0), Some(1), Some(2), Some(3), Some(4), Some(5)]
+        );
+        let soc_kept = wiz.social_pool.as_ref().unwrap().kept_values.clone();
+        assert_eq!(soc_kept.len(), 6);
+        assert_eq!(wiz.characteristics.sav, soc_kept[3]);
+        assert_eq!(wiz.characteristics.bea, soc_kept[4]);
+        wiz.assign_slot("social", 3, Some(4));
+        assert_eq!(wiz.characteristics.sav, soc_kept[4]);
+        assert_eq!(wiz.characteristics.bea, soc_kept[3]);
     }
 
     #[test]

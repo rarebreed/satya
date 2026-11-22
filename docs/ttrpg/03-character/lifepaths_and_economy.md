@@ -44,16 +44,16 @@ flowchart LR
 
 ### 1.1 Stage 1: Socioeconomic Origin & School Quality (Ages 0–5)
 
-The character's starting family background establishes their **Socioeconomic Class**, which directly sets the **School Quality Modifier (`SQM`)** for their K–12 education and shifts the probability of disruptive adolescent Life Events:
+The character's starting family background establishes their **Socioeconomic Class**, which sets the **School Quality Modifier (`SQM`)** for their K–12 education, seeds their initial **Dual-Standing Profile** (`Wealth Tier`, `Institutional Status`, `Street Cred`), grants an **Origin Contact**, and shifts adolescent crisis risk:
 
-| Roll (`2d20`) | Socioeconomic Class | School System Assigned | School Quality Modifier (`SQM`) | Early Environment Exposure (Bonus `N = 1` or `+1` Talent) | Dropout / Crisis Event Risk (Age 12–17) |
-| :---: | :--- | :--- | :---: | :--- | :---: |
-| **`2–7`** | **Destitute / Urban Underclass** | Chronically Underfunded / Blighted Public School | **`+4` to $\text{TN}_{\text{edu}}$** *(Harder)* | *Stealth*, *Observation*, or *Brawling* `+1` (to `N = 2`) | **High** (`2–16` on `2d20` = `30.0%`) |
-| **`8–14`** | **Working Poor** | Overcrowded Low-Income Public School | **`+2` to $\text{TN}_{\text{edu}}$** *(Harder)* | *Brawling*, *Running*, or *Basic Tool Use* (`N = 1`) | **Elevated** (`2–13` on `2d20` = `19.5%`) |
-| **`15–26`** | **Working / Lower-Middle Class** | Standard Municipal Public School | **`0` (Baseline)** | *Ground Vehicle*, *Basic Tool Use*, or *Digital Literacy* (`N = 1`) | **Moderate** (`2–9` on `2d20` = `9.0%`) |
-| **`27–33`** | **Professional Middle Class** | Suburban Magnet / Charter School | **`-2` to $\text{TN}_{\text{edu}}$** *(Easier)* | *Digital Literacy* (`N = 1`) + one *Artistic* or *Athletic* skill (`N = 1`) | **Low** (`2–6` on `2d20` = `3.75%`) |
-| **`34–38`** | **Upper-Middle / Technocratic** | STEM Preparatory Academy | **`-4` to $\text{TN}_{\text{edu}}$** *(Easier)* | *Digital Literacy* (`N = 2`), *Foreign Language* (`N = 1`) | **Very Low** (`2–4` on `2d20` = `1.5%`) |
-| **`39–40`** | **Wealthy / Corporate Elite** | Elite Private Boarding Academy + AI Tutors | **`-6` to $\text{TN}_{\text{edu}}$** *(Much Easier)* | *Foreign Language* (`N = 2`), *Persuasion* (`N = 2`), *Fencing/Riding/Music* (`N = 1`) | **Minimal** (`2` on `2d20` = `0.25%`) |
+| Roll (`2d20`) | Socioeconomic Class | Starting Standing (`Wealth` / `InstStatus` / `StreetCred`) | School System Assigned & `SQM` | Early Exposure (`+1` / `N = 1`) & Origin Contact | Dropout Risk |
+| :---: | :--- | :---: | :--- | :--- | :---: |
+| **`2–7`** | **Destitute / Urban Underclass** | `W 2` · `Inst 2` · `Cred 2` | Blighted Public School (**`+4`** to $\text{TN}_{\text{edu}}$) | *Stealth*, *Observation*, or *Brawling* `+1` · *Shelter / Mutual-Aid Coordinator* | **High** (`2–16` = `30.0%`) |
+| **`8–14`** | **Working Poor** | `W 3` · `Inst 3` · `Cred 1` | Low-Income Public School (**`+2`** to $\text{TN}_{\text{edu}}$) | *Brawling*, *Running*, or *Manual Dexterity* `+1` · *Neighborhood Clinic / Trade Steward* | **Elevated** (`2–13` = `19.5%`) |
+| **`15–26`** | **Working / Lower-Middle Class** | `W 5` · `Inst 5` · `Cred 0` | Standard Municipal Public (**`0`** Baseline) | *Ground Vehicle*, *Manual Dexterity*, or *Digital Literacy* · *Local Municipal Foreman* | **Moderate** (`2–9` = `9.0%`) |
+| **`27–33`** | **Professional Middle Class** | `W 6` · `Inst 6` · `Cred 0` | Suburban Magnet / Charter (**`-2`** to $\text{TN}_{\text{edu}}$) | *Digital Literacy* (`N = 1`) + Art/Athletic · *University / Clinic Advisor* | **Low** (`2–6` = `3.75%`) |
+| **`34–38`** | **Upper-Middle / Technocratic** | `W 8` · `Inst 8` · `Cred 0` | STEM Prep Academy (**`-4`** to $\text{TN}_{\text{edu}}$) | *Digital Literacy* (`N = 2`), *Foreign Language* (`N = 1`) · *Corporate / Research Sponsor* | **Very Low** (`2–4` = `1.5%`) |
+| **`39–40`** | **Wealthy / Corporate Elite** | `W 9` · `Inst 9` · `Cred 0` | Private Boarding + AI Tutors (**`-6`** to $\text{TN}_{\text{edu}}$) | *Foreign Language* (`N = 2`), *Persuasion* (`N = 2`), *Music* · *Boardroom / Legal Retainer* | **Minimal** (`2` = `0.25%`) |
 
 #### Universal Childhood Baseline (Granted to All Characters at Age 5)
 - **Native Language Speech**: `N = 2`
@@ -208,6 +208,16 @@ Each 4-year adult term grants skill advancements strictly bounded by the career'
 | **Blue-Collar Trades / Industrial Technician** | Vocational High School or Apprenticeship (*Arithmetic* $\ge 2$) | `[Access: Vocational]` | *Automotive & EV Mechanics*, *Metalworking & Welding*, *CNC & Robotics Repair*, *Basic Electronics*, *Heavy Commercial Vehicles*, *Gunsmithing*. |
 | **Rural, Agrarian, Wilderness Guide & Frontier Ranger** | *Foraging* $\ge 2$, *Agriculture* $\ge 1$, or *Animal Handling* $\ge 1$ (or `FIT >= 9, HLT >= 9`) | `[Access: Vocational]` | *Hunting, Trapping & Field Butchery*, *Agriculture & Agronomy*, *Animal Handling & Riding*, *Wilderness Survival*, *Herbalism & Ethnobotany*, *Veterinary Medicine*, *Long Guns*, *Archery*, *Land Navigation*, *Camouflage*, *Small-Engine Mechanics*, *Small-Boat Seamanship*. |
 
+### 1.6.1 Bidirectional Lifepath ↔ Socio-Economic Loop (`Funding`, `Patronage` & `Career Echelons`)
+
+Career entry and progression dynamically interact with the character's evolving **Dual-Standing Profile** (`Wealth`, `InstStatus`, `StreetCred`, `DebtTier`) and `Heat`:
+1. **Socio-Economic State Modifies Career Entry (`Socio-Economic -> Lifepath`)**:
+   - **Tuition & Funding Mode (`CareerFundingMode`)**: Higher-cost university, medical, or policy tracks require **`Wealth >= 6`** for **Self/Family Paid** entry (`0` new debt). Characters below the threshold fund entry via **GI Bill / Service** (prior Military), **Merit Scholarship** (`DIS >= 12` or prior Honors), or **Student / Institutional Debt** (`+1` `DebtTier`, +2 in Predatory corporate indenture).
+   - **Patronage, Street Cred & Clearance Friction (`entry_tn_mod`)**: High **Institutional Status (`Inst >= 7`)** grants **`-1` to `-2` $\text{TN}_{\text{edu}}$** in corporate/gov/academic tracks via mentorship/patronage, while low standing imposes up to **`+2` glass-ceiling friction**; high **Street Cred (`Cred >= 3`)** grants **`-2` $\text{TN}_{\text{edu}}$** in *Organized Crime* and *Underground* tracks; active **`Heat >= 3`** imposes **`+2` to `+4` security-clearance vetting friction** on restricted gov/defense tracks.
+   - **Three Role Echelons (`CareerEchelonTier`)**: Entering a track resolves—or allows player/GM override across—three seniority tiers (`EntryRank` `+0` Formal SP, `MidSpecialist` `+10` Formal SP, `SeniorLeadership` `+20` Formal SP), each carrying a distinct role title (e.g., *Resident -> Attending Physician -> Chief of Surgery*, or *Enlisted -> NCO -> Staff Officer*).
+2. **Term Completion Reshapes Socio-Economic Standing (`Lifepath -> Socio-Economic`)**:
+   - Each 4-year term moves **`Wealth`** halfway toward the career's target bracket (shifted **`±1`** by term successes vs. stagnation), converges **`InstStatus`**, accumulates **`StreetCred`** in subcultural/illicit tracks, pays down `1` Debt Tier if affluent surpluses (`Wealth >= 7`) remain, and mints an **Earned Contact** (plus hobby & life-event contacts).
+
 ---
 
 ### 1.7 Per-Term Skill Point (`SP`) Budgets & The 5-Factor Skill Cost Formula
@@ -265,7 +275,12 @@ Rather than forcing players to track every cup of coffee while ignoring how a st
 
 > **See this in play**: [Guide 01 — Living in 2035: `SQM` Upkeep, `[Access]` Procurement & `Heat`](../../ttrpg-examples/01-lifepath-session-zero.md#4-living-in-2035-sqm-upkeep-access-procurement--heat).
 
-### 3.1 Socioeconomic Tier (`SQM 1–10`) & Lifestyle Upkeep
+### 3.1 Dual-Standing Socioeconomic Profile (`Wealth / SQM 1–10`, `InstStatus 1–10`, `StreetCred 0–5` & `Debt`)
+
+Post-Lifepath standing splits material resources from social legitimacy along two independent status axes plus carrying debt:
+- **Liquid Wealth / Lifestyle Tier (`SQM 1–10`)**: Baseline purchasing power. **Heavy (`2`)** or **Predatory (`3`)** debt imposes a **`-1` Wealth Drag** on discretionary spending: $\text{Effective Wealth} = \max(1, \text{Wealth} - \text{Drag})$.
+- **Institutional Status (`InstStatus 1–10`, default `5`)**: Formal credentialed weight (credentials, creditworthiness, clearances, boardroom deference).
+- **Street & Subculture Cred (`StreetCred 0–5`, default `0`)**: Informal underworld/activist reputation (respect on the street, union picket lines, or underground relays).
 
 | `SQM` Tier | Socioeconomic Bracket | Monthly Liquid Baseline (`2032 Credits / USD`) | Routine Purchases (No Roll) | Lifestyle & Safe-House Quality |
 | :---: | :--- | :---: | :--- | :--- |
@@ -279,7 +294,7 @@ Rather than forcing players to track every cup of coffee while ignoring how a st
 
 1. **Legality & `[Access]` Procurement Gates**:
    - Money alone cannot buy restricted military ordnance, zero-day exploits, or Schedule-I combat stims at a retail store. Restricted items have an **`[Access]` Gate** (`Class I: Licensed`, `Class II: Illicit / Street`, `Class III: Syndicate / Paramilitary`, `Class IV: State Secret / Black-Ops`).
-   - To locate and purchase a restricted item, the buyer must pass a **Black Market Logistics, Smuggling & Fencing (`INS/ELO`)**, **Streetwise & Gang Protocol (`INS/PRE`)**, or **Etiquette & Corporate Protocol (`PRE/MEM`)** cascade check with $\Delta_{\text{ext}}$ set by the item's `[Access]` class.
+   - To locate and purchase a restricted item, the buyer must pass a **Black Market Logistics, Smuggling & Fencing (`SAV/ELO`)**, **Streetwise & Gang Protocol (`SAV/BEA`)**, or **Etiquette & Corporate Protocol (`PRE/MEM`)** cascade check with $\Delta_{\text{ext}}$ set by the item's `[Access]` class.
 2. **Operational `Heat` & Digital Footprint (`0–10` Scale)**:
    - Leaving shell casings, biometric DNA, unlooped CCTV footage, loud unsuppressed gunfights, or dead law-enforcement officers generates **Operational `Heat`** in that jurisdiction:
      - **`Heat 1–2` (*Local Beat Inquiry*)**: Routine patrol awareness; basic disguise or alternate ID bypasses scrutiny.
@@ -297,7 +312,7 @@ Street brokers, corrupt clerks, clinic physicians, and intelligence handlers are
 - **Reliability / Trust (`1–5`)**: `1` (Strictly Transactional, `+2` $\Delta_{\text{ext}}$), `2` (Neutral Associate, `+0`), `3` (Dependable Ally, `-2`), `4` (Trusted Confidant, `-4`), `5` (Ride-or-Die, `-6`). Formula: `-(Trust - 2) * 2`.
 - **Exposure / Burn Risk (`0–5`)**: Current heat resting directly on the contact (`+1` $\Delta_{\text{ext}}$ per point of exposure).
 
-Calling in a favor uses **Black Market Logistics (`INS/ELO`)**, **Streetwise (`INS/PRE`)**, or **Persuasion / Etiquette (`ELO/PRE`)** via `evaluate_contact_favor_request` against hidden GM resistance:
+Calling in a favor uses **Black Market Logistics (`SAV/ELO`)**, **Streetwise (`SAV/BEA`)**, or **Persuasion / Etiquette (`ELO/PRE`)** via `evaluate_contact_favor_request` against hidden GM resistance:
 
 $$\Delta_{\text{ext, favor}} = \text{Favor Base} - 2(\text{Trust} - 2) + \text{Exposure} + \max(0, \text{Heat} - 2) + 4 \cdot \max(0, \text{ReqReach} - \text{Reach})$$
 

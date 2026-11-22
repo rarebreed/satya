@@ -1,24 +1,24 @@
 # Character Characteristics, Derived Metrics & Domain Aptitudes
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs) (`CharacteristicId`, `CharacteristicCategory`, `AptitudeDomain`, `CharacterAttributes`, `DerivedCharacteristics`, `compute_composite_controller`, `compute_gated_shortfall_penalty`, `study_time_multiplier`; full `32`-Characteristic scale including all `9` Psyche traits with `TRS` Trust and `CPS` Compassion).  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs) (`CharacteristicId`, `CharacteristicCategory`, `AptitudeDomain`, `CharacterAttributes`, `DerivedCharacteristics`, `compute_composite_controller`, `compute_gated_shortfall_penalty`, `study_time_multiplier`; full `35`-Characteristic scale including symmetric `6`-stat Physical/Mental/Social/Sensory groups plus `HGT`/`MAS` and all `9` Psyche traits with `TRS` Trust and `CPS` Compassion).  
 > **Guided Play Example**: See [Guide 01: Touring the Character Sheet (`32` Characteristics & `9` Aptitudes)](../../ttrpg-examples/01-lifepath-session-zero.md#2-touring-the-character-sheet-32-characteristics--9-aptitudes).
 
-This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md), the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md), and the [Skill System](skills_and_trees.md).
+This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, **OODA Initiative**, and **Social Composure (`CMP`)**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md), the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md), and the [Skill System](skills_and_trees.md).
 
 ---
 
 ## 1. Architectural Overview & Taxonomy
 
-Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity," reduce the mind to a single monolithic "Intelligence" score, and leave personality entirely unquantified, Satya models a character across **five distinct attribute categories** plus **nine learning Aptitudes**:
+Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity," reduce the mind to a single monolithic "Intelligence" score, and leave personality entirely unquantified, Satya models a character across **five distinct attribute categories (`35` innate characteristics: symmetric `6` scaled Physical + `2` dimensional, `6` Mental, `6` Social, `6` Sensory, and `9` Psyche traits)** plus **nine learning Aptitudes**:
 
 ```mermaid
 flowchart TD
-    Char["<b>Character Attributes, Traits & Aptitudes</b>"]
+    Char["<b>Character Attributes, Traits & Aptitudes (35 Characteristics)</b>"]
 
     subgraph Primaries["Primary Characteristics (Task Controllers & Lifepath Gates)"]
         Phys["<b>Physical Primary Characteristics</b><br/>Speed (SPD) · Force (FOR)<br/>Dexterity (DEX) · Kinesthesis (KIN)<br/>Health (HLT) · Fitness (FIT)<br/>Mass (kg) · Height (m)"]
         Ment["<b>Mental Primary Characteristics</b><br/>Memory (MEM) · Analysis (ANA)<br/>Insight (INS) · Creativity (CRE)<br/>Discipline (DIS) · Focus (FOC)"]
-        Soc["<b>Social Primary Characteristics</b><br/>Comeliness (COM)<br/>Presence (PRE)<br/>Eloquence (ELO)"]
+        Soc["<b>Social Primary Characteristics (6 Scaled)</b><br/>Comeliness (COM) · Presence (PRE)<br/>Eloquence (ELO) · Social Savvy (SAV)<br/>Bearing (BEA) · Warmth (WRM)"]
     end
 
     subgraph Senses["Sensory Characteristics (Perceptual Acuity)"]
@@ -27,7 +27,7 @@ flowchart TD
 
     subgraph Psych["Psychological, Derived & Learning Traits"]
         Psy["<b>Psyche: The Invisible Traits (9 Axes)</b><br/>Ego (EGO) · Selfishness (SLF)<br/>Openness (OPN) · Belongingness (BLG)<br/>Extraversion (EXT) · Conformity (CNF)<br/>Aggressiveness (AGG) · Trust (TRS) · Compassion (CPS)"]
-        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed) · MMF & Reach<br/>OODA & Quick Thinking (D_cog)<br/>Composure, FT & WSR"]
+        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed) · MMF & Reach<br/>OODA & Quick Thinking (D_cog)<br/>Composure (CMP), FT & WSR"]
         Apt["<b>Domain Aptitudes (A ∈ [-2, +3])</b><br/>QNT · MEC · CMP · BIO · LNG<br/>KIN · FIN · AUD · SOC"]
     end
 
@@ -38,10 +38,15 @@ flowchart TD
 
 1. **Physical Primary Characteristics**: Attributes expressed physically in the real world—speed, muscular force, fine hand-eye coordination, full-body spatial control, physiological hardiness, endurance, and physical dimensions (`Mass` and `Height`).
 2. **Mental Primary Characteristics**: Attributes of the mind—recall, analytical problem-solving, pattern wisdom, lateral creativity, mental fortitude, and sustained concentration.
-3. **Social Primary Characteristics**: Attributes that influence other people's behavior, perceptions, or attitudes—physical beauty, silent magnetism, and verbal articulateness.
+3. **Social Primary Characteristics (`6` Intrinsic Traits)**: Attributes that shape interpersonal perception and influence—physical beauty (`COM`), silent magnetism (`PRE`), verbal articulateness (`ELO`), subcultural/power reading (`SAV`), dignified emotional poise (`BEA`), and genuine approachable empathy (`WRM`). Note that **Wealth, Institutional Status, Street Cred, and Debt** are modeled separately as dynamic **Lifepath Socio-Economic Standing** in [Lifepath Character Creation & Economy](lifepaths_and_economy.md), not rolled intrinsic traits.
 4. **Sensory Characteristics**: The six perceptual channels through which an entity senses the environment and detects subtle cues—sight, hearing, touch, smell, taste, and gut intuition.
 5. **Psyche Characteristics (The Invisible Traits)**: Nine foundational bipolar personality spectrums (`Ego`, `Selfishness`, `Openness`, `Belongingness`, `Extraversion`, `Conformity`, `Aggressiveness`, `Trust`, and `Compassion`) that quantify behavioral drives, guide NPC/AI roleplay, trigger friction checks when violated, govern combat morale, and serve as the target vectors in **Social Combat & Cognitive Dissonance**.
 6. **Domain Aptitudes ($A \in [-2, +3]$)**: Innate neurological or somatic affinities for acquiring skills across nine specific domains during [Lifepath Education & Career Progression](lifepaths_and_economy.md).
+
+### 1.1 Symmetric Dice Generation Methods (`6 / 6 / 6 / 6`)
+Because scaled **Physical** (`SPD, FOR, DEX, KIN, HLT, FIT`), **Mental** (`MEM, ANA, INS, CRE, DIS, FOC`), **Social** (`COM, PRE, ELO, SAV, BEA, WRM`), and **Sensory** (`SIG, HEA, TAC, OLF, TAS, ITU`) each contain exactly **`6`** primary scores:
+- **Method 1 (Skewed Drop-Lowest)**: Roll **`2d4 + 3d5 (drop lowest d5)`** **6 times** per group and assign within that group (`Mean ~ 11.96`).
+- **Method 2 (Pool Keep-6)**: Roll **`2d4 + 2d5`** **8 times**, keep the **6 highest**, and assign within that group.
 
 ---
 
@@ -121,20 +126,24 @@ $$\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}, \qquad \text{TN}_{GM} = 21 - \D
 
 ---
 
-## 5. Social Primary Characteristics
+## 5. Social Primary Characteristics (`6` Intrinsic Traits)
 
-**Social Primary Characteristics** are the primary attributes that influence other people's behavior, perceptions, or attitudes during interpersonal, public, or adversarial interactions.
+**Social Primary Characteristics** are the `6` intrinsic interpersonal attributes that shape how a character reads, disarms, influences, or endures other people during social exchange and covert infiltration (distinct from Lifepath-derived Socio-Economic Standing such as Wealth Tier, Institutional Status, and Street Cred):
 
 | Abbr | Characteristic | Value Type / Range | Default | Core Definition & Mechanical Role |
 | :--- | :--- | :---: | :---: | :--- |
 | **`COM`** | **Comeliness** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures physical beauty and attractiveness (by the default society's standards).** Governs immediate visual first impressions, seduction and honey-trap tradecraft, fashion/media modeling, and halo-effect social engineering. |
-| **`PRE`** | **Presence** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures silent charisma, gravitas, command aura, and physical magnetism.** Governs how much weight a character carries simply by walking into a room—leadership and command authority, intimidation and menace, street credibility, poise under scrutiny, and stage magnetism. |
-| **`ELO`** | **Eloquence** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures how well one speaks, articulates ideas, and verbally influences others.** Governs persuasion, rhetoric, fast-talking deception, diplomacy, high-stakes negotiation, public oratory, courtroom advocacy, and subtle conversational elicitation. |
+| **`PRE`** | **Presence** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures silent charisma, gravitas, command aura, and physical magnetism.** Governs how much weight a character carries simply by walking into a room—leadership authority, intimidation/coercion (`PRE/DIS`), coercive interrogation support (`SAV/PRE`), etiquette (`PRE/MEM`), and stage magnetism. |
+| **`ELO`** | **Eloquence** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures how well one speaks, articulates ideas, and verbally influences others.** Governs persuasion and rhetoric (`ELO/ANA`), verbal deception (`ELO/BEA`), negotiation (`ELO/SAV`), black-market brokering (`SAV/ELO`), public oratory, and conversational elicitation. |
+| **`SAV`** | **Social Savvy** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures instinctive reading of room dynamics, subtextual power gradients, unspoken etiquette, and manipulative subtext.** Governs *Empathy & Read Person* (`SAV/ITU`), *Streetwise & Gang Protocol* (`SAV/BEA`), *Diplomacy & Negotiation* (`ELO/SAV`), *Coercive Interrogation* (`SAV/PRE`), *Black Market Logistics* (`SAV/ELO`), and Social Blending (`BEA/SAV`). |
+| **`BEA`** | **Bearing** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures dignified composure, emotional self-masking, posture under scrutiny, and natural social camouflage.** Combines with `DIS` and `FOC` to determine **Social Composure Threshold (`CMP`)** and governs *Deception & Fast-Talk* (`ELO/BEA`), *Disguise & Impersonation* (`BEA/CRE`), *Streetwise* (`SAV/BEA`), and Social Blending (`BEA/SAV`). |
+| **`WRM`** | **Warmth** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures genuine approachable openness, affective safety, and disarming human rapport.** Governs *Charm & Rapport* (`WRM/ELO`) and *Seduction & Honey-Trap* (`COM/WRM`)—explaining why an awkward med-student or beloved shopkeeper can instantly put strangers at ease while a slick corporate executive with high `BEA` and `ELO` still feels cold. |
 
 ### 5.1 Key Social Distinctions in Satya
-- A quiet, scarred syndicate enforcer or veteran infantry commander might have low **Comeliness (`COM 7`)** and modest **Eloquence (`ELO 9`)**, yet possess terrifying **Presence (`PRE 16`)** that silences a room with a single stare.
-- Conversely, a silver-tongued con artist or appellate lawyer may have unremarkable **Presence (`PRE 10`)** in silence, but extraordinary **Eloquence (`ELO 16`)** the moment they begin speaking.
-- A honey-trap operative or synth-media celebrity leverages high **Comeliness (`COM 15`)** alongside **Presence (`PRE`)** or **Eloquence (`ELO`)** to lower a target's guard before an elicitation roll.
+- A quiet, scarred syndicate enforcer or veteran infantry commander might have low **Comeliness (`COM 7`)**, low **Warmth (`WRM 6`)**, and modest **Eloquence (`ELO 9`)**, yet possess terrifying **Presence (`PRE 16`)** and iron **Bearing (`BEA 14`)** that silence a room with a single unblinking stare.
+- Conversely, a silver-tongued con artist or lobbyist may carry razor-sharp **Eloquence (`ELO 16`)**, **Social Savvy (`SAV 15`)**, and icy **Bearing (`BEA 15`)** without genuine **Warmth (`WRM 8`)**—winning negotiations while leaving shrewd empathizers cold.
+- An approachable counselor or nurse with unremarkable **Presence (`PRE 9`)** and average **Comeliness (`COM 10`)** yet radiant **Warmth (`WRM 15`)** and sharp **Social Savvy (`SAV 14`)** effortlessly earns candor during crisis triage (`*Charm* WRM/ELO`, `*Empathy* SAV/ITU`).
+- Rolling Social characteristics uses the symmetric **`6`-score pool** (`Method 1: 6 × 2d4 + 3d5 drop lowest`, or `Method 2: 8 × 2d4 + 2d5 keep 6`), matching Physical, Mental, and Sensory (`6 / 6 / 6 / 6`).
 
 ---
 
@@ -213,7 +222,7 @@ Several crucial mechanical metrics in Satya are derived directly from combinatio
 | **General Awareness (`AWR`)** | $$\text{AWR} = \left\lfloor \frac{\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}}{3} \right\rfloor$$ | Used for passive multi-sensory *Observation & Awareness* checks when no single sense is isolated. |
 | **Fatigue Threshold (`FT`)** | $$\text{FT} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Determines how many high-exertion combat ticks or hours of labor a character can sustain before gaining +1 `fatigue_level`. |
 | **Wound Shock Resistance (`WSR`)** | $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Mitigates `wound_shock_index` penalties from blood loss, structural trauma, and pain in combat. |
-| **Social Composure Threshold (`CMP`)** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md)). |
+| **Social Composure Threshold (`CMP`)** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC} + \text{BEA}}{6} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md)). |
 | **Academic Study Controller ($C_{\text{study}}$)** | $$C_{\text{study}} = \left\lfloor \frac{\text{DIS} + C_{\text{mental}}}{2} \right\rfloor + \text{APT}$$ | Governs Lifepath school and university advancement rolls (where $C_{\text{mental}}$ is typically `ANA`, `MEM`, `INS`, or `CRE` depending on the subject). |
 
 ---
@@ -232,7 +241,7 @@ While **Characteristics ($C$)** measure raw physical, cognitive, social, or sens
 | **`APT-KIN`** | **Kinesthetic & Somatic** | Athletics, Martial Arts, Melee Combat, Parkour, Swimming, Stealth (`KIN`/`SPD`/`FOR`). |
 | **`APT-FIN`** | **Fine-Motor & Tactile** | Sleight of Hand, Lockpicking, Micro-Electronics, Trauma Surgery, Watchmaking (`DEX`/`TAC`/`FOC`). |
 | **`APT-AUD`** | **Auditory & Musical** | Singing, Instrumental Music, Acoustic Analysis, Voice Mimicry, Tonal Languages (`HEA`/`CRE`/`ELO`). |
-| **`APT-SOC`** | **Interpersonal & Street** | Persuasion, Deception, Empathy, Streetwise, Command, Interrogation (`PRE`/`ELO`/`INS`/`COM`). |
+| **`APT-SOC`** | **Interpersonal & Street** | Persuasion, Deception, Empathy, Charm, Streetwise, Command, Negotiation (`PRE`/`ELO`/`SAV`/`BEA`/`WRM`). |
 
 ### 9.1 Mechanical Effects of Aptitudes
 1. **Lifepath Education & Training Bonus**: Added directly as a modifier (`-2` to `+3`) to **Discipline (`DIS`)** learning checks ($C_{\text{study}} = \lfloor(\text{DIS} + C_{\text{mental}})/2\rfloor + \text{APT}$) when advancing skills in that domain during school or career terms (see [Lifepath Character Creation, Economy & Heat](lifepaths_and_economy.md)).

@@ -5,7 +5,7 @@
 
 This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical symbols and subscripts such as $\text{TN}_P, \text{TN}_{GM}, \Delta_{\text{psyche}}, \Delta_{\text{mot}}, C_{\text{morale}}, \text{CMP}$),
-- **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the nine Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
+- **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the six Social Primary Characteristics `COM`, `PRE`, `ELO`, `SAV`, `BEA`, `WRM`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the nine Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
 - **[Skill System & Hierarchical Skill Trees](../03-character/skills_trees_tactical_and_social.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
 - **[Combat Architecture & Tactical Pools](../05-combat/tactical_triad_and_pools.md)** (where Morale states directly constrain Tactical Pool allocations across `Tempo`, `Control`, and `Force`).
 
@@ -183,13 +183,13 @@ Satya treats high-stakes debates, ideological arguments, courtroom cross-examina
 ```mermaid
 flowchart LR
     subgraph Speaker["Speaker (Attacker)"]
-        Skill["<b>Social / Rhetoric Skill (N pairs)</b><br/>Persuasion (ELO/ANA) · Deception (ELO/CRE)<br/>Charm (PRE/ELO) · Intimidation (PRE/DIS)<br/>Elicitation (INS/ELO)"]
-        Read["<b>Setup: Empathy / Read Person (INS/ITU)</b><br/>Identifies Target's High/Low Psyche Traits"]
+        Skill["<b>Social / Rhetoric Skill (N pairs)</b><br/>Persuasion (ELO/ANA) · Deception (ELO/BEA)<br/>Charm (WRM/ELO) · Intimidation (PRE/DIS)<br/>Negotiation (ELO/SAV) · Elicitation (INS/ELO)"]
+        Read["<b>Setup: Empathy / Read Person (SAV/ITU)</b><br/>Identifies Target's High/Low Psyche Traits"]
     end
 
-    subgraph PsycheFilter["Target's Psyche Filter (Δ_ext)"]
+    subgraph PsycheFilter["Target's Psyche Filter & Arena Standing (Δ_ext)"]
         Res["<b>Resonance (Aligns with Trait)</b><br/>e.g. Evidence → High Openness (OPN 16)<br/><b>Grants -2 to -6 Bonus to TN_eff</b>"]
-        Clash["<b>Resistance (Clashes with Trait)</b><br/>e.g. Break from Group → High Belonging (BLG 16)<br/><b>Imposes +2 to +8 Penalty to TN_eff</b>"]
+        Clash["<b>Clash & Standing Leverage (±2 Δ_ext)</b><br/>Psyche Clash (+2..+8) + Arena Standing:<br/>InstStatus vs. StreetCred inverted by Arena"]
     end
 
     subgraph MentalWounds["Social 'Wound' Inflicted on Target"]
@@ -212,7 +212,7 @@ flowchart LR
 ### 4.1 Reading the Target (`Empathy & Read Person` Setup)
 
 Before launching a decisive argument, a skilled negotiator or manipulator sizes up their counterpart:
-- Rolling **Empathy & Read Person** (`INS/ITU`) or **Investigative Elicitation** (`INS/ELO`) opposed by the target's **Deception** (`ELO/CRE`) or **Discipline** (`DIS`) reveals the target's most salient **Psyche poles**:
+- Rolling **Empathy & Read Person** (`SAV/ITU`) or **Investigative Elicitation** (`INS/ELO`) opposed by the target's **Deception** (`ELO/BEA`) or **Discipline** (`DIS`) reveals the target's most salient **Psyche poles**:
   - **`1` Success**: Reveals the target's single most extreme Psyche trait (e.g., `Belongingness 16`).
   - **`2` Successes**: Reveals two extreme Psyche traits (e.g., `Belongingness 16` and `Openness 16`) and whether they are in potential tension.
   - **`3+` Successes (`ExtraordinarySuccess`)**: Reveals the target's full Psyche profile and grants **`-2` to $\Delta_{\text{ext}}$** on the subsequent social maneuver.
@@ -226,24 +226,35 @@ When a speaker makes a Social skill roll to convince, sway, or pressure a target
 | Argument Vector / Appeal Type | Primary Skill (`Control`) | Resonates With ($\Delta_{\text{ext}}$ Bonus) | Clashes With ($\Delta_{\text{ext}}$ Penalty) |
 | :--- | :--- | :--- | :--- |
 | **Empirical Evidence, Logic & Novel Ideas** | *Persuasion & Rhetoric* (`ELO/ANA`) | **High `Openness` (`OPN >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{OPN} - 10)$ | **Low `Openness` (`OPN <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{OPN})$ |
-| **Group Consensus, Loyalty & Shared Identity** | *Persuasion* (`ELO/INS`) or *Charm* (`PRE/ELO`) | **High `Belongingness` (`BLG >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{BLG} - 10)$ | **Low `Belongingness` (`BLG <= 7`)** *(or asking High `BLG` to betray their group: $+(\text{BLG} - 10)$)* |
-| **Flattery, Prestige, Legacy & Status** | *Charm* (`PRE/ELO`) or *Deception* (`ELO/CRE`) | **High `Ego` (`EGO >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{EGO} - 10)$ | **Humiliation / Admitting Fault vs. High `Ego`**:<br/>$\Delta_{\text{ext}} = +(\text{EGO} - 10)$ |
-| **Personal Profit, Immunity & Self-Interest** | *Negotiation* (`ELO/INS`) or *Bribery* | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{SLF} - 10)$ | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{SLF})$ |
+| **Group Consensus, Loyalty & Shared Identity** | *Persuasion* (`ELO/INS`) or *Charm* (`WRM/ELO`) | **High `Belongingness` (`BLG >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{BLG} - 10)$ | **Low `Belongingness` (`BLG <= 7`)** *(or asking High `BLG` to betray their group: $+(\text{BLG} - 10)$)* |
+| **Flattery, Prestige, Legacy & Status** | *Charm* (`WRM/ELO`) or *Deception* (`ELO/BEA`) | **High `Ego` (`EGO >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{EGO} - 10)$ | **Humiliation / Admitting Fault vs. High `Ego`**:<br/>$\Delta_{\text{ext}} = +(\text{EGO} - 10)$ |
+| **Personal Profit, Immunity & Self-Interest** | *Negotiation* (`ELO/SAV`) or *Bribery* | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{SLF} - 10)$ | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{SLF})$ |
 | **Self-Sacrifice, Duty & Shared Burden** | *Persuasion* (`ELO/INS`) | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = -(10 - \text{SLF})$ | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = +(\text{SLF} - 10)$ |
-| **Rules, Law, Protocol & Chain of Command** | *Diplomacy* / *Command* (`PRE/DIS`) | **High `Conformity` (`CNF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CNF} - 10)$ | **Low `Conformity` (`CNF <= 7`)** *(or asking High `CNF` to break the law: $+(\text{CNF} - 10)$)* |
+| **Rules, Law, Protocol & Chain of Command** | *Diplomacy* (`ELO/SAV`) / *Command* (`PRE/DIS`) | **High `Conformity` (`CNF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CNF} - 10)$ | **Low `Conformity` (`CNF <= 7`)** *(or asking High `CNF` to break the law: $+(\text{CNF} - 10)$)* |
 | **Dominance, Threat, Dare & Confrontation** | *Intimidation* (`PRE/DIS`) | **Low `Aggressiveness` (`AGG <= 7`)** *(yields)* or **High `AGG`** *(to bait into a fight)* | **High `Aggressiveness` (`AGG >= 13`)** *(when trying to force submission: $+(\text{AGG} - 10)$)* |
-| **Transparency, Vulnerability & Good-Faith Olive Branch** | *Charm & Rapport* (`PRE/ELO`) or *Diplomacy* (`ELO/INS`) | **High `Trust` (`TRS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{TRS} - 10)$ *(while paranoid verification / threat-modeling resonates with `TRS <= 7`)* | **Low `Trust` (`TRS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{TRS})$ *(assumes traps or sandbagging)* |
-| **Moral Sanctity, Witnessed Suffering & Mercy** | *Persuasion* (`ELO/INS`) or *Empathy* (`INS/ITU`) | **High `Compassion` (`CPS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CPS} - 10)$ *(while cold utilitarian "greater-good" triage resonates with `CPS <= 7`)* | **Low `Compassion` (`CPS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{CPS})$ *(and utilitarian brutality clashes violently with `CPS >= 13`)* |
+| **Transparency, Vulnerability & Good-Faith Olive Branch** | *Charm & Rapport* (`WRM/ELO`) or *Diplomacy* (`ELO/SAV`) | **High `Trust` (`TRS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{TRS} - 10)$ *(while paranoid verification / threat-modeling resonates with `TRS <= 7`)* | **Low `Trust` (`TRS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{TRS})$ *(assumes traps or sandbagging)* |
+| **Moral Sanctity, Witnessed Suffering & Mercy** | *Persuasion* (`ELO/INS`) or *Empathy* (`SAV/ITU`) | **High `Compassion` (`CPS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CPS} - 10)$ *(while cold utilitarian "greater-good" triage resonates with `CPS <= 7`)* | **Low `Compassion` (`CPS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{CPS})$ *(and utilitarian brutality clashes violently with `CPS >= 13`)* |
+
+### 4.2.1 Dual-Standing Leverage & Social Arena Inversion (`evaluate_social_standing_modifier`)
+
+A speaker's **Institutional Status (`1–10`)** and **Street Cred (`0–5`)** apply an additional contextual **$\Delta_{\text{ext}}$** modifier (`-2` to `+2`, or up to `+4` when heavy executive polish triggers street backlash), filtered through **both the Social Arena (`SocialArenaKind`) and the target's Psyche (`CNF`, `EGO`, `TRS`)**:
+
+| Arena (`SocialArenaKind`) | Governing Standing | Psyche Amplifier / Inversion Effect | $\Delta_{\text{ext}}$ Bounds |
+| :--- | :--- | :--- | :---: |
+| **`InstitutionalFormal`** *(Corporate boardroom, court, DAISE audit)* | **Institutional Status** | High target `CNF >= 13` or `EGO >= 13` amplifies superior `InstStatus` (`-2`); low `CNF <= 7` iconoclasts resist hierarchy (`+2` against institutional bullying). | **`-2` to `+2`** |
+| **`StreetUnderworld`** *(Gang bar, dockyard, syndicate meet)* | **Street Cred** *(vs. Inst Privilege)* | **Inversion**: High `InstStatus >= 7` with low `StreetCred <= 1` radiates outsider/"suit" contempt, imposing **`+2`** (or **`+4`** if target `TRS <= 7` / `CNF <= 7`) backlash! | **`-2` to `+4`** |
+| **`GrassrootsCommunity`** *(Union hall, relief camp, sangha)* | **Street Cred** & **Authenticity** | High `InstStatus >= 8` without Street Cred suffers **`+2`** elitism penalty; high `StreetCred >= 3` earns **`-2`** solidarity rapport. | **`-2` to `+2`** |
+| **`MixedPublic`** *(Transit hub, open street, press scrums)* | Balanced `Inst + 2×Cred` | Mild **`-1` to `+1`** social-proof skew when combined standing gap is large. | **`-1` to `+1`** |
 
 ---
 
 ### 4.3 The Four Social "Wound" Types: Composure, Doubt, Cognitive Dissonance & Ego Wounds
 
-In an extended debate or social duel, each participant has a **Social Composure Threshold (`CMP`)** equal to:
+In an extended debate or social duel, each participant has a **Social Composure Threshold (`CMP`)** combining grit, focus, and dignified poise (**`BEA`**):
 
-$$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$
+$$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC} + \text{BEA}}{6} \right\rfloor$$
 
-(typically **`5`** at human average `DIS 10, FOC 10`). Opposed social exchanges inflict four distinct psychological conditions that mirror Satya's [physical trauma system](../06-health-and-survival/health_and_trauma.md):
+(typically **`5`** at human average `DIS 10, FOC 10, BEA 10`). Opposed social exchanges inflict four distinct psychological conditions that mirror Satya's [physical trauma system](../06-health-and-survival/health_and_trauma.md):
 
 | Social Wound Type | Physical Equivalent | How It Is Inflicted | Mechanical Effect on the Target |
 | :--- | :--- | :--- | :--- |
@@ -260,7 +271,7 @@ Consider an NPC scientist or mid-level syndicate lieutenant, **Marcus**:
 - **Marcus's Relevant Psyche Profile**:
   - **`Openness (OPN) = 16`** *(Deeply curious, respects hard evidence and rational merit; Resonance `-6` to logical proof).*
   - **`Belongingness (BLG) = 16`** *(Deeply attached to his faction/peer group; Resistance `+6` against any belief that would alienate him from his peers).*
-  - **`Discipline (DIS) = 11`**, **`Focus (FOC) = 11`** (`Composure Threshold = 5`).
+  - **`Discipline (DIS) = 11`**, **`Focus (FOC) = 11`**, **`Bearing (BEA) = 8`** (`Composure Threshold = floor((11 + 11 + 8) / 6) = 5`).
 - **The Debate Exchange**:
   1. The player character, **Nadia**, wants to convince Marcus that his faction's leadership falsified clinical trial data and is knowingly killing patients—a belief that Marcus's entire peer group fiercely denies.
   2. Nadia presents undeniable forensic logs and biochemical proof using **Persuasion & Rhetoric (`ELO/ANA`)**.

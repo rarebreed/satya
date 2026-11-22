@@ -1,10 +1,10 @@
-//! Canonical 25+ Characteristics, Senses, Psyche & 9 Domain Aptitudes (`03-character/characteristics_and_aptitudes.md`).
+//! Canonical 35 Characteristics (Physical, Mental, 6-Trait Social, Sensory, 9 Psyche) & 9 Domain Aptitudes (`03-character/characteristics_and_aptitudes.md`).
 //!
 //! Implements:
 //! - Spectrum (`0.0–100.0`) <-> Controlling Scale (`1–20`) conversion and Population Tier taxonomy (§2)
 //! - All Physical (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`, `MAS`, `HGT`), Mental (`MEM`, `ANA`, `INS`,
-//!   `CRE`, `DIS`, `FOC`), Social (`COM`, `PRE`, `ELO`), Sensory (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`),
-//!   and Psyche (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`) characteristics (§3–§7)
+//!   `CRE`, `DIS`, `FOC`), Social (`COM`, `PRE`, `ELO`, `SAV`, `BEA`, `WRM`), Sensory (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`),
+//!   and Psyche (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`) characteristics (§3–§7)
 //! - All 10 Secondary & Derived Characteristics (`POW`, `MMF`, `Melee Reach Index`, `D_cog`, `OODA`,
 //!   `AWR`, `FT`, `WSR`, `CMP`, and `C_study`) (§8)
 //! - 9 Domain Aptitudes (`APT-QNT` .. `APT-SOC`, `-2` to `+3`) with prerequisite relief and training time scaling (§9)
@@ -28,7 +28,7 @@ pub enum CharacteristicCategory {
 
 define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    pub enum CharacteristicCode [count = 32] {
+    pub enum CharacteristicCode [count = 35] {
         SPD => { code: "SPD", label: "Speed" },
         FOR => { code: "FOR", label: "Force" },
         DEX => { code: "DEX", label: "Dexterity" },
@@ -48,6 +48,9 @@ define_coded_enum! {
         COM => { code: "COM", label: "Comeliness" },
         PRE => { code: "PRE", label: "Presence" },
         ELO => { code: "ELO", label: "Eloquence" },
+        SAV => { code: "SAV", label: "Social Savvy", aliases: ["SOCIAL_SAVVY", "ATTUNEMENT"] },
+        BEA => { code: "BEA", label: "Bearing", aliases: ["POISE", "DEMEANOR"] },
+        WRM => { code: "WRM", label: "Warmth", aliases: ["RAPPORT", "APPROACHABILITY"] },
         SIG => { code: "SIG", label: "Sight" },
         HEA => { code: "HEA", label: "Hearing" },
         TAC => { code: "TAC", label: "Tactile" },
@@ -90,7 +93,9 @@ impl CharacteristicCode {
             Self::MEM | Self::ANA | Self::INS | Self::CRE | Self::DIS | Self::FOC => {
                 CharacteristicCategory::Mental
             }
-            Self::COM | Self::PRE | Self::ELO => CharacteristicCategory::Social,
+            Self::COM | Self::PRE | Self::ELO | Self::SAV | Self::BEA | Self::WRM => {
+                CharacteristicCategory::Social
+            }
             Self::SIG | Self::HEA | Self::TAC | Self::OLF | Self::TAS | Self::ITU => {
                 CharacteristicCategory::Sensory
             }
@@ -371,7 +376,7 @@ fn default_char_ten() -> i32 {
 
 macro_rules! impl_characteristics_struct {
     ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
-        /// Complete canonical 32-characteristic profile (`1..=20` controlling scale for 30 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
+        /// Complete canonical 35-characteristic profile (`1..=20` controlling scale for 33 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub struct CharacterCharacteristics {
             $(
@@ -455,6 +460,12 @@ impl_characteristics_struct! {
     COM => com,
     PRE => pre,
     ELO => elo,
+    #[serde(default = "default_char_ten")]
+    SAV => sav,
+    #[serde(default = "default_char_ten")]
+    BEA => bea,
+    #[serde(default = "default_char_ten")]
+    WRM => wrm,
     SIG => sig,
     HEA => hea,
     TAC => tac,
@@ -531,6 +542,13 @@ pub fn compute_social_composure_score(dis: i32, foc: i32) -> i32 {
     (dis.clamp(1, 20) + foc.clamp(1, 20)).div_euclid(4)
 }
 
+/// Compute Bearing-weighted Social Composure Threshold ($\text{CMP} = \lfloor(\text{DIS} + \text{FOC} + \text{BEA}) / 6\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
+#[must_use]
+pub fn compute_social_composure_with_bearing(dis: i32, foc: i32, bea: i32) -> i32 {
+    (dis.clamp(1, 20) + foc.clamp(1, 20) + bea.clamp(1, 20)).div_euclid(6)
+}
+
 /// Compute General Awareness ($\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}) / 3\rfloor$)
 /// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
@@ -580,7 +598,8 @@ impl CharacterCharacteristics {
             compute_general_awareness_score(self.sig, self.hea, self.foc, self.itu);
         let ft_fatigue_threshold = compute_fatigue_threshold_score(self.fit, self.dis);
         let wsr_wound_shock_resistance = compute_wound_shock_resistance_score(self.hlt, self.dis);
-        let cmp_social_composure_threshold = compute_social_composure_score(self.dis, self.foc);
+        let cmp_social_composure_threshold =
+            compute_social_composure_with_bearing(self.dis, self.foc, self.bea);
         let base_c_study = compute_academic_study_controller(dis, mem_or_ana(self.mem, ana), 0);
 
         DerivedCharacteristics {
@@ -650,7 +669,7 @@ pub struct DerivedCharacteristics {
     pub ft_fatigue_threshold: i32,
     /// $\text{WSR} = \text{HLT} + \lfloor\text{DIS} / 2\rfloor$
     pub wsr_wound_shock_resistance: i32,
-    /// $\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$
+    /// $\text{CMP} = \lfloor(\text{DIS} + \text{FOC} + \text{BEA}) / 6\rfloor$
     pub cmp_social_composure_threshold: i32,
     /// $\lfloor(\text{DIS} + \max(\text{MEM}, \text{ANA})) / 2\rfloor$ (before specific domain aptitude)
     pub base_c_study: i32,
@@ -684,7 +703,14 @@ impl CharacteristicCode {
         Self::ITU,
     ];
 
-    pub const SOCIAL_ALL: [Self; 3] = [Self::COM, Self::PRE, Self::ELO];
+    pub const SOCIAL_ALL: [Self; 6] = [
+        Self::COM,
+        Self::PRE,
+        Self::ELO,
+        Self::SAV,
+        Self::BEA,
+        Self::WRM,
+    ];
 
     pub const PSYCHE_ALL: [Self; 9] = [
         Self::EGO,
@@ -704,10 +730,10 @@ impl CharacteristicCode {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CharacteristicRollMethod {
     /// Method 1: Roll `2d4 + 3d5` and drop the lowest `d5` (`4–18`, skewed mean `~11.96`).
-    /// Rolled `6` times for Physical/Mental/Sensory and `3` times for Social.
+    /// Rolled `6` times across Physical, Mental, Sensory, and Social pools.
     Method1DropLowestD5,
     /// Method 2: Roll `2d4 + 2d5` (`4–18`, mean `11.0`) `8` times and keep the `6` highest
-    /// for Physical/Mental/Sensory; roll `4` times and keep the `3` highest for Social.
+    /// across Physical, Mental, Sensory, and Social pools.
     Method2PoolKeepHighest,
 }
 
@@ -831,13 +857,9 @@ pub fn roll_characteristic_group_pool<R>(
 where
     R: FnMut(i32) -> i32,
 {
-    let (num_rolls, num_keep): (usize, usize) = match (category, method) {
-        (CharacteristicCategory::Social, CharacteristicRollMethod::Method1DropLowestD5) => (3, 3),
-        (CharacteristicCategory::Social, CharacteristicRollMethod::Method2PoolKeepHighest) => {
-            (4, 3)
-        }
-        (_, CharacteristicRollMethod::Method1DropLowestD5) => (6, 6),
-        (_, CharacteristicRollMethod::Method2PoolKeepHighest) => (8, 6),
+    let (num_rolls, num_keep): (usize, usize) = match method {
+        CharacteristicRollMethod::Method1DropLowestD5 => (6, 6),
+        CharacteristicRollMethod::Method2PoolKeepHighest => (8, 6),
     };
 
     let mut raw_rolls: Vec<SingleCharacteristicRoll> = (0..num_rolls)

@@ -81,17 +81,286 @@ impl SocioeconomicClass {
         }
     }
 
-    /// Default campaign `SQM` tier (`1–10`) associated with this socioeconomic origin
+    /// Default campaign Wealth / `SQM` tier (`1–10`) associated with this socioeconomic origin
     /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §3.1).
     #[must_use]
     pub const fn default_campaign_sqm(self) -> u8 {
         match self {
             Self::DestituteUnderclassWarZone => 2,
-            Self::WorkingPoorLowerClass => 4,
+            Self::WorkingPoorLowerClass => 3,
             Self::WorkingMiddleClass => 5,
-            Self::ProfessionalUpperMiddleClass => 7,
+            Self::ProfessionalUpperMiddleClass => 6,
             Self::AffluentElitePreparatory => 8,
             Self::WealthyCorporateAristocraticElite => 9,
+        }
+    }
+
+    /// Default starting Institutional Status (`1–10`) associated with this birth origin.
+    #[must_use]
+    pub const fn default_institutional_status(self) -> u8 {
+        match self {
+            Self::DestituteUnderclassWarZone => 2,
+            Self::WorkingPoorLowerClass => 3,
+            Self::WorkingMiddleClass => 4,
+            Self::ProfessionalUpperMiddleClass => 6,
+            Self::AffluentElitePreparatory => 7,
+            Self::WealthyCorporateAristocraticElite => 9,
+        }
+    }
+
+    /// Default starting Street & Subculture Cred (`0–5`) associated with this birth origin.
+    #[must_use]
+    pub const fn default_street_cred(self) -> u8 {
+        match self {
+            Self::DestituteUnderclassWarZone => 2,
+            Self::WorkingPoorLowerClass => 1,
+            Self::WorkingMiddleClass
+            | Self::ProfessionalUpperMiddleClass
+            | Self::AffluentElitePreparatory
+            | Self::WealthyCorporateAristocraticElite => 0,
+        }
+    }
+
+    /// Grounded childhood/family contact `(role_title, reach_tier, trust_level)` from birth origin.
+    #[must_use]
+    pub const fn origin_contact(self) -> (&'static str, u8, u8) {
+        match self {
+            Self::DestituteUnderclassWarZone => ("Mutual-Aid Clinic / Shelter Organizer", 1, 3),
+            Self::WorkingPoorLowerClass => ("Neighborhood Union / Shop Steward", 1, 3),
+            Self::WorkingMiddleClass => ("Municipal Clerk / Community Teacher", 2, 3),
+            Self::ProfessionalUpperMiddleClass => ("Regional Professional / Alumni Peer", 2, 3),
+            Self::AffluentElitePreparatory => ("Corporate Counsel / Prep Patron", 3, 3),
+            Self::WealthyCorporateAristocraticElite => ("Executive Board / Family Fixer", 4, 3),
+        }
+    }
+}
+
+define_coded_enum! {
+    /// Debt / Financial Leverage Tier (`0..=3`) tracked in a character's Socio-Economic Profile
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum DebtTier [count = 4] {
+        #[default]
+        None => {
+            code: "DEBT_FREE",
+            label: "Debt-Free (0)",
+            aliases: ["NONE", "0"],
+        },
+        Manageable => {
+            code: "MANAGEABLE_DEBT",
+            label: "Manageable Debt (1)",
+            aliases: ["MANAGEABLE", "1"],
+        },
+        Heavy => {
+            code: "HEAVY_DEBT",
+            label: "Heavy / Indebted (2)",
+            aliases: ["HEAVY", "2"],
+        },
+        Predatory => {
+            code: "PREDATORY_DEBT",
+            label: "Predatory / Syndicate Debt (3)",
+            aliases: ["PREDATORY", "3"],
+        },
+    }
+}
+
+impl DebtTier {
+    #[must_use]
+    pub const fn as_u8(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Manageable => 1,
+            Self::Heavy => 2,
+            Self::Predatory => 3,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_u8(raw: u8) -> Self {
+        match raw {
+            0 => Self::None,
+            1 => Self::Manageable,
+            2 => Self::Heavy,
+            _ => Self::Predatory,
+        }
+    }
+
+    /// Discretionary Wealth Tier drag (`0` for None/Manageable, `1` for Heavy/Predatory).
+    #[must_use]
+    pub const fn wealth_drag(self) -> u8 {
+        match self {
+            Self::None | Self::Manageable => 0,
+            Self::Heavy | Self::Predatory => 1,
+        }
+    }
+
+    /// External check penalty ($\Delta_{\text{ext}}$) on formal credit, leasing, or background checks.
+    #[must_use]
+    pub const fn credit_check_delta_ext(self) -> i32 {
+        match self {
+            Self::None | Self::Manageable => 0,
+            Self::Heavy | Self::Predatory => 2,
+        }
+    }
+
+    /// Percentage of monthly liquid baseline consumed by debt service (`0%`, `15%`, `30%`, `45%`).
+    #[must_use]
+    pub const fn monthly_service_pct(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Manageable => 15,
+            Self::Heavy => 30,
+            Self::Predatory => 45,
+        }
+    }
+
+    /// Adjusts the current debt tier by `delta` steps, clamped within `0..=3`.
+    #[must_use]
+    pub const fn add_steps(self, delta: i8) -> Self {
+        let next = self.as_u8() as i16 + delta as i16;
+        let clamped = if next < 0 {
+            0
+        } else if next > 3 {
+            3
+        } else {
+            next as u8
+        };
+        Self::from_u8(clamped)
+    }
+}
+
+/// Institutional Status specification (`1..=10`) governing civic/corporate deference & clearance
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct InstitutionalStatusSpec {
+    pub tier: u8,
+    pub bracket_name: &'static str,
+    pub clearance_summary: &'static str,
+}
+
+/// Look up the canonical Institutional Status (`1..=10`) specification.
+#[must_use]
+pub const fn lookup_institutional_status(tier: u8) -> InstitutionalStatusSpec {
+    let clamped = if tier == 0 {
+        1
+    } else if tier > 10 {
+        10
+    } else {
+        tier
+    };
+    match clamped {
+        ..=2 => InstitutionalStatusSpec {
+            tier: clamped,
+            bracket_name: "Marginalized / Undocumented / Record-Flagged",
+            clearance_summary: "Dismissed by bureaucracy; high scrutiny at corporate or municipal checkpoints.",
+        },
+        3..=4 => InstitutionalStatusSpec {
+            tier: clamped,
+            bracket_name: "Blue-Collar / Routine Civilian",
+            clearance_summary: "Standard citizen standing; waits in regular queues without institutional weight.",
+        },
+        5..=6 => InstitutionalStatusSpec {
+            tier: clamped,
+            bracket_name: "Credentialed Professional / Mid-Rank Officer",
+            clearance_summary: "Respected credentials, clean KYC, routine corporate/civic access.",
+        },
+        7..=8 => InstitutionalStatusSpec {
+            tier: clamped,
+            bracket_name: "Executive / Senior Counsel / Field-Grade Clearance",
+            clearance_summary: "Boardroom, federal tribunal, and restricted-enclave deference.",
+        },
+        9.. => InstitutionalStatusSpec {
+            tier: clamped,
+            bracket_name: "Sovereign / C-Suite / Top-Secret Directorate",
+            clearance_summary: "Diplomatic/corporate immunity channels and sovereign oversight weight.",
+        },
+    }
+}
+
+/// Street & Subculture Cred specification (`0..=5`) governing underground, union, and neighborhood trust
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StreetCredSpec {
+    pub cred: u8,
+    pub bracket_name: &'static str,
+    pub summary: &'static str,
+}
+
+/// Look up the canonical Street & Subculture Cred (`0..=5`) specification.
+#[must_use]
+pub const fn lookup_street_cred(cred: u8) -> StreetCredSpec {
+    let clamped = if cred > 5 { 5 } else { cred };
+    match clamped {
+        0 => StreetCredSpec {
+            cred: 0,
+            bracket_name: "Outsider / Unknown",
+            summary: "No street or grassroots reputation; treated as a stranger or suit.",
+        },
+        1 => StreetCredSpec {
+            cred: 1,
+            bracket_name: "Recognized Local",
+            summary: "Known face in a neighborhood, union hall, or precinct corner.",
+        },
+        2 => StreetCredSpec {
+            cred: 2,
+            bracket_name: "Vetted Operator / Trusted Organizer",
+            summary: "Vouched for by fixers, clinic networks, or squad alumni.",
+        },
+        3 => StreetCredSpec {
+            cred: 3,
+            bracket_name: "Respected Shot-Caller / Cell Anchor",
+            summary: "Name opens back-alley doors, safe harbors, and black-market introductions.",
+        },
+        4 => StreetCredSpec {
+            cred: 4,
+            bracket_name: "Regional Legend / Movement Pillar",
+            summary: "Cross-district reputation across syndicates, unions, or underground cells.",
+        },
+        _ => StreetCredSpec {
+            cred: 5,
+            bracket_name: "Mythic / Untouchable Street Icon",
+            summary: "Commanding underground credibility; hostile enforcers pause before moving.",
+        },
+    }
+}
+
+/// Concrete contact earned chronologically during Lifepath stages (Origin, Hobbies, Career Terms, Life Events).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EarnedLifepathContact {
+    pub role_title: String,
+    pub source_stage: String,
+    pub reach_tier: u8,
+    pub trust_level: u8,
+}
+
+/// Complete Dual-Standing Socio-Economic Profile generated by Lifepath creation
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1, §3.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocioeconomicProfile {
+    pub origin_class: SocioeconomicClass,
+    /// Liquid Wealth / Lifestyle Tier (`1..=10`).
+    pub wealth_tier: u8,
+    /// Institutional Status (`1..=10`).
+    pub institutional_status: u8,
+    /// Street & Subculture Cred (`0..=5`).
+    pub street_cred: u8,
+    pub debt_tier: DebtTier,
+    /// Discretionary Wealth Tier after Debt drag (`max(1, wealth_tier - debt_tier.wealth_drag())`).
+    pub effective_wealth_tier: u8,
+    pub earned_contacts: Vec<EarnedLifepathContact>,
+}
+
+impl Default for SocioeconomicProfile {
+    fn default() -> Self {
+        Self {
+            origin_class: SocioeconomicClass::WorkingMiddleClass,
+            wealth_tier: 5,
+            institutional_status: 5,
+            street_cred: 0,
+            debt_tier: DebtTier::None,
+            effective_wealth_tier: 5,
+            earned_contacts: Vec::new(),
         }
     }
 }
@@ -1579,7 +1848,11 @@ mod tests {
                 .granted_access_tags
                 .contains(&SkillAccessTier::Restricted)
         );
-        assert_eq!(baseline.career_skill_budget, 160 + 140);
+        assert_eq!(baseline.career_skill_budget, 160 + 150);
+        assert_eq!(
+            baseline.term_entry_evals[1].resolved_echelon,
+            crate::lifepath_catalog::CareerEchelonTier::MidSpecialist
+        );
         assert_eq!(baseline.elective_skill_budget, 40 + 80);
 
         let mut skills = baseline.baseline_skills.clone();

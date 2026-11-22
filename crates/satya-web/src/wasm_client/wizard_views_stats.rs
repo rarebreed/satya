@@ -118,17 +118,11 @@ pub(crate) fn format_group_pool_section_html(
     chars: &CharacterCharacteristics,
     method: CharacteristicRollMethod,
 ) -> String {
-    let method_badge = match (group_slug, method) {
-        ("social", CharacteristicRollMethod::Method1DropLowestD5) => {
-            "Method 1: 3 × (2d4 + 3d5 drop lowest d5)"
-        }
-        ("social", CharacteristicRollMethod::Method2PoolKeepHighest) => {
-            "Method 2: 4 × (2d4 + 2d5), keep 3 highest"
-        }
-        (_, CharacteristicRollMethod::Method1DropLowestD5) => {
+    let method_badge = match method {
+        CharacteristicRollMethod::Method1DropLowestD5 => {
             "Method 1: 6 × (2d4 + 3d5 drop lowest d5)"
         }
-        (_, CharacteristicRollMethod::Method2PoolKeepHighest) => {
+        CharacteristicRollMethod::Method2PoolKeepHighest => {
             "Method 2: 8 × (2d4 + 2d5), keep 6 highest"
         }
     };

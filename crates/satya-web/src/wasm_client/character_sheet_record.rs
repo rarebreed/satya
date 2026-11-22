@@ -48,6 +48,9 @@ impl CharacterSheetState {
             age_years: self.age_years as i32,
             origin_label: self.origin_label.clone(),
             campaign_sqm: i32::from(self.campaign_sqm),
+            institutional_status: i32::from(self.institutional_status),
+            street_cred: i32::from(self.street_cred),
+            debt_tier: i32::from(self.debt_tier.as_u8()),
             operational_heat: i32::from(self.operational_heat),
             granted_access_tags: self
                 .granted_access_tags
@@ -124,6 +127,9 @@ impl CharacterSheetState {
         self.age_years = rec.age_years.max(1) as u32;
         self.origin_label = rec.origin_label.clone();
         self.campaign_sqm = rec.campaign_sqm.clamp(0, 10) as u8;
+        self.institutional_status = rec.institutional_status.clamp(1, 10) as u8;
+        self.street_cred = rec.street_cred.clamp(0, 5) as u8;
+        self.debt_tier = satya_engine::DebtTier::from_u8(rec.debt_tier.clamp(0, 3) as u8);
         self.operational_heat = rec.operational_heat.clamp(0, 10) as u8;
         self.granted_access_tags = rec
             .granted_access_tags
@@ -207,7 +213,7 @@ impl CharacterSheetState {
 }
 
 /// Encodes a [`CharacterSheetRecord`] into a framed `.satyachar` Avro binary payload
-/// (`Schema ID 12`, `v2` CRC-64-AVRO single-object framing) for offline local export.
+/// (`Schema ID 13`, `v3` CRC-64-AVRO single-object framing) for offline local export.
 pub fn encode_offline_satyachar_bytes(
     record: &CharacterSheetRecord,
     session_id: Option<&str>,
@@ -217,7 +223,7 @@ pub fn encode_offline_satyachar_bytes(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("local-export");
     let metadata = registry
-        .build_metadata(1, subjects::CHARACTER_SHEET, 2, sid, SessionMode::Ttrpg)
+        .build_metadata(1, subjects::CHARACTER_SHEET, 3, sid, SessionMode::Ttrpg)
         .map_err(|e| e.to_string())?;
     let mut actor = Participant::human(
         &record.owner_user_id,
@@ -233,7 +239,7 @@ pub fn encode_offline_satyachar_bytes(
         character: record.clone(),
     };
     registry
-        .encode_framed(subjects::CHARACTER_SHEET, 2, &event)
+        .encode_framed(subjects::CHARACTER_SHEET, 3, &event)
         .map_err(|e| e.to_string())
 }
 
@@ -345,6 +351,12 @@ mod tests {
             .apply_status_mutation("toggle_condition", "TINNITUS");
         st.character_sheet
             .apply_status_mutation("mental_trauma", "TIER_2");
+        st.character_sheet.characteristics.sav = 13;
+        st.character_sheet.characteristics.bea = 14;
+        st.character_sheet.characteristics.wrm = 12;
+        st.character_sheet.institutional_status = 7;
+        st.character_sheet.street_cred = 3;
+        st.character_sheet.debt_tier = satya_engine::DebtTier::Heavy;
 
         let record = st.character_sheet.to_character_sheet_record("usr-kira");
         assert_eq!(
@@ -359,6 +371,12 @@ mod tests {
         let decoded =
             decode_offline_satyachar_bytes(&bytes).expect("offline .satyachar decode must succeed");
         assert_eq!(decoded.character_name, "Kira \"Ghost\" Solis!");
+        assert_eq!(decoded.characteristics.sav, 13);
+        assert_eq!(decoded.characteristics.bea, 14);
+        assert_eq!(decoded.characteristics.wrm, 12);
+        assert_eq!(decoded.institutional_status, 7);
+        assert_eq!(decoded.street_cred, 3);
+        assert_eq!(decoded.debt_tier, 2);
         assert_eq!(
             decoded.lifepath_config_json.as_deref(),
             Some(lp_json.as_str())
@@ -371,6 +389,10 @@ mod tests {
         let mut restored = CharacterSheetState::default();
         restored.apply_character_sheet_record(&decoded);
         assert_eq!(restored.character_id, "char-kira-ghost-solis");
+        assert_eq!(restored.characteristics.bea, 14);
+        assert_eq!(restored.institutional_status, 7);
+        assert_eq!(restored.street_cred, 3);
+        assert_eq!(restored.debt_tier, satya_engine::DebtTier::Heavy);
         assert_eq!(
             restored.lifepath_config_json.as_deref(),
             Some(lp_json.as_str())

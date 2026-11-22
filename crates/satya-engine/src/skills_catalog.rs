@@ -466,10 +466,10 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
     sn!(T3, "genetics_biotech_cyber_implantation", "Genetics, Biotech & Cyber-Implantation", (6, 5, PhyKno), [Medical, Science, Cyber], (ANA, Some(DEX)), [(ANA, 14), (DEX, 13)], AllOf [("trauma_orthopedic_general_surgery", 3), ("organic_analytical_chemistry", 3)], [Academic, Restricted], Mandatory, false, AptBio),
     // === Tree4LanguageHumanitiesSocial ===
     sn!(T4, "native_language_speech", "Native Language Speech", (0, 1, Tal), [Social, Knowledge], (ELO, Some(MEM)), [], AllOf [], [Universal], None, true, AptLng),
-    sn!(T4, "empathy_social_perception", "Empathy & Social Perception", (0, 1, Tal), [Social], (INS, Some(ITU)), [], AllOf [], [Universal], None, true, AptSoc),
-    sn!(T4, "charm_rapport", "Charm & Rapport", (0, 1, Tal), [Social], (PRE, Some(ELO)), [], AllOf [], [Universal], None, true, AptSoc),
+    sn!(T4, "empathy_social_perception", "Empathy & Social Perception", (0, 1, Tal), [Social], (SAV, Some(ITU)), [], AllOf [], [Universal], None, true, AptSoc),
+    sn!(T4, "charm_rapport", "Charm & Rapport", (0, 1, Tal), [Social], (WRM, Some(ELO)), [], AllOf [], [Universal], None, true, AptSoc),
     sn!(T4, "persuasion_fast_talk", "Persuasion & Fast-Talk", (0, 1, Tal), [Social], (ELO, Some(ANA)), [], AllOf [], [Universal], None, true, AptSoc),
-    sn!(T4, "deception_bluff", "Deception & Bluff", (0, 1, Tal), [Social], (ELO, Some(CRE)), [], AllOf [], [Universal], None, true, AptSoc),
+    sn!(T4, "deception_bluff", "Deception & Bluff", (0, 1, Tal), [Social], (ELO, Some(BEA)), [], AllOf [], [Universal], None, true, AptSoc),
     sn!(T4, "intimidation_coercion", "Intimidation & Coercion", (0, 1, Tal), [Social, Combat], (PRE, Some(DIS)), [], AllOf [], [Universal], None, true, AptSoc),
     sn!(
         T4,
@@ -513,7 +513,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         false,
         AptLng
     ),
-    sn!(T4, "seduction_honey_trap", "Seduction & Honey-Trap", (2, 2, PhyKno), [Social, Fieldcraft], (COM, Some(PRE)), [(COM, 9), (PRE, 9)], AllOf [("charm_rapport", 2), ("deception_bluff", 1)], [Universal, Restricted, Illicit], None, true, AptSoc),
+    sn!(T4, "seduction_honey_trap", "Seduction & Honey-Trap", (2, 2, PhyKno), [Social, Fieldcraft], (COM, Some(WRM)), [(COM, 9), (WRM, 9)], AllOf [("charm_rapport", 2), ("deception_bluff", 1)], [Universal, Restricted, Illicit], None, true, AptSoc),
     sn!(T4, "rhetoric_oratory_debate", "Rhetoric, Oratory & Debate", (2, 2, Kno), [Social, Knowledge], (ELO, Some(PRE)), [(ELO, 9)], AllOf [("writing_composition", 2), ("persuasion_fast_talk", 2)], [Academic, Universal], None, true, AptSoc),
     sn!(T4, "research_archival_science", "Research & Archival Science", (2, 2, Kno), [Knowledge], (ANA, Some(MEM)), [(ANA, 8)], AllOf [("reading_comprehension", 2), ("writing_composition", 2)], [Academic], Situational, true, AptLng),
     sn!(
@@ -535,7 +535,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
     sn!(T4, "psychology_behavioral_analysis_counseling", "Psychology, Behavioral Analysis & Counseling", (3, 3, Kno), [Science, Medical, Social], (INS, Some(ANA)), [(INS, 10), (ANA, 9)], AllOf [("empathy_social_perception", 2), ("reading_comprehension", 2)], [Academic], None, false, AptSoc),
     sn!(T4, "economics_finance_accounting", "Economics, Finance & Accounting", (3, 3, Kno), [Knowledge, Science], (ANA, Some(MEM)), [(ANA, 10)], AllOf [("statistics_probability", 1), ("reading_comprehension", 2)], [Academic, VocationalLicensed], None, false, AptQnt),
     sn!(T4, "law_jurisprudence", "Law & Jurisprudence", (4, 4, Kno), [Knowledge, Social], (MEM, Some(ELO)), [(MEM, 11), (ANA, 10)], AllOf [("rhetoric_oratory_debate", 2), ("history_political_science", 2)], [Academic], None, false, AptSoc),
-    sn!(T4, "negotiation_diplomacy", "Negotiation & Diplomacy", (3, 3, Kno), [Social], (ELO, Some(INS)), [(ELO, 10), (INS, 10)], AllOf [("persuasion_fast_talk", 2), ("empathy_social_perception", 2)], [Universal, Academic, VocationalLicensed], None, true, AptSoc),
+    sn!(T4, "negotiation_diplomacy", "Negotiation & Diplomacy", (3, 3, Kno), [Social], (ELO, Some(SAV)), [(ELO, 10), (SAV, 10)], AllOf [("persuasion_fast_talk", 2), ("empathy_social_perception", 2)], [Universal, Academic, VocationalLicensed], None, true, AptSoc),
     sn!(
         T4,
         "leadership_command",
@@ -550,9 +550,9 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         true,
         AptSoc
     ),
-    sn!(T4, "interrogation_counter_interrogation", "Interrogation & Counter-Interrogation", (3, 3, Kno), [Social, Fieldcraft], (INS, Some(PRE)), [(INS, 10), (DIS, 10)], AllOf [("intimidation_coercion", 2), ("deception_bluff", 2)], [Restricted, Illicit], None, true, AptSoc),
-    sn!(T4, "streetwise_underworld_etiquette", "Streetwise & Underworld Etiquette", (2, 2, Kno), [Social, Fieldcraft], (INS, Some(ITU)), [(INS, 8)], AllOf [("empathy_social_perception", 2), ("deception_bluff", 1)], [Illicit, Universal], None, true, AptSoc),
-    sn!(T4, "black_market_smuggling_fencing", "Black-Market Smuggling & Fencing", (2, 2, Kno), [Social, Fieldcraft], (INS, Some(ELO)), [(INS, 8), (ELO, 8)], AllOf [("streetwise_underworld_etiquette", 1), ("deception_bluff", 1)], [Illicit], None, true, AptSoc),
+    sn!(T4, "interrogation_counter_interrogation", "Interrogation & Counter-Interrogation", (3, 3, Kno), [Social, Fieldcraft], (SAV, Some(PRE)), [(SAV, 10), (DIS, 10)], AllOf [("intimidation_coercion", 2), ("deception_bluff", 2)], [Restricted, Illicit], None, true, AptSoc),
+    sn!(T4, "streetwise_underworld_etiquette", "Streetwise & Underworld Etiquette", (2, 2, Kno), [Social, Fieldcraft], (SAV, Some(BEA)), [(SAV, 8)], AllOf [("empathy_social_perception", 2), ("deception_bluff", 1)], [Illicit, Universal], None, true, AptSoc),
+    sn!(T4, "black_market_smuggling_fencing", "Black-Market Smuggling & Fencing", (2, 2, Kno), [Social, Fieldcraft], (SAV, Some(ELO)), [(SAV, 8), (ELO, 8)], AllOf [("streetwise_underworld_etiquette", 1), ("deception_bluff", 1)], [Illicit], None, true, AptSoc),
     // === Tree5AthleticsAcrobaticsMelee ===
     sn!(T5, "running_sprinting", "Running & Sprinting", (0, 1, Tal), [Athletic], (SPD, Some(FIT)), [], AllOf [], [Universal], None, true, AptKin),
     sn!(T5, "jumping_leaping", "Jumping & Leaping", (0, 1, Tal), [Athletic], (FOR, Some(SPD)), [], AllOf [], [Universal], None, true, AptKin),
@@ -704,7 +704,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         AptKin
     ),
     sn!(T7, "sleight_of_hand_pickpocketing_palming", "Sleight of Hand, Pickpocketing & Palming", (2, 3, Phy), [Fieldcraft], (DEX, Some(TAC)), [(DEX, 10), (TAC, 9)], AllOf [("stealth_sneaking_hiding", 2), ("manual_dexterity_tinkering", 2)], [Illicit, Universal], None, true, AptFin),
-    sn!(T7, "disguise_impersonation", "Disguise & Impersonation", (2, 3, PhyKno), [Social, Fieldcraft, Artistic], (CRE, Some(INS)), [(CRE, 9), (INS, 9)], AllOf [("deception_bluff", 2), ("camouflage_concealment", 1)], [Restricted, Illicit, VocationalLicensed], Mandatory, true, AptSoc),
+    sn!(T7, "disguise_impersonation", "Disguise & Impersonation", (2, 3, PhyKno), [Social, Fieldcraft, Artistic], (BEA, Some(CRE)), [(BEA, 9), (CRE, 9)], AllOf [("deception_bluff", 2), ("camouflage_concealment", 1)], [Restricted, Illicit, VocationalLicensed], Mandatory, true, AptSoc),
     sn!(T7, "tracking_spoor_analysis", "Tracking & Spoor Analysis", (1, 2, Kno), [Fieldcraft], (SIG, Some(INS)), [(SIG, 9), (INS, 8)], AllOf [("alertness_situational_awareness", 2), ("foraging_campcraft", 1)], [Universal], None, true, AptAud),
     sn!(T7, "hunting_trapping_field_butchery", "Hunting, Trapping & Field Butchery", (1, 2, PhyKno), [Fieldcraft, Combat], (SIG, Some(INS)), [(SIG, 8), (DIS, 7)], AllOf [("foraging_campcraft", 1), ("stealth_sneaking_hiding", 1)], [Universal, VocationalLicensed], Mandatory, true, AptBio),
     sn!(T7, "animal_handling_husbandry_riding", "Animal Handling, Husbandry & Riding", (1, 2, PhyKno), [Fieldcraft, Athletic, Social], (INS, Some(KIN)), [(INS, 7), (KIN, 7)], AnyOf [("empathy_social_perception", 1), ("foraging_campcraft", 1)], [Universal, VocationalLicensed], Situational, true, AptBio),

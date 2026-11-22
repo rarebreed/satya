@@ -48,6 +48,10 @@ pub const CHARACTER_SHEET_V1_AVSC: &str =
 /// for [`crate::character::CharacterSheetEvent`].
 pub const CHARACTER_SHEET_V2_AVSC: &str =
     include_str!("../../../schemas/v2/character_sheet_event.avsc");
+/// Evolved raw JSON schema definition (`v3`, adding Social `sav`/`bea`/`wrm` and Dual-Standing
+/// `institutional_status`/`street_cred`/`debt_tier`) for [`crate::character::CharacterSheetEvent`].
+pub const CHARACTER_SHEET_V3_AVSC: &str =
+    include_str!("../../../schemas/v3/character_sheet_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -280,6 +284,13 @@ pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
         topics::CHARACTER_SHEETS,
         2,
         CHARACTER_SHEET_V2_AVSC,
+    ),
+    (
+        13,
+        subjects::CHARACTER_SHEET,
+        topics::CHARACTER_SHEETS,
+        3,
+        CHARACTER_SHEET_V3_AVSC,
     ),
 ];
 
