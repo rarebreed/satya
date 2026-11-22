@@ -123,6 +123,7 @@ impl TacticalPoolParams {
 /// Computed Tactical Pool ("Fill") and Characteristic Aspect Ceilings ("Envelope") for a combatant
 /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TacticalPoolEnvelope {
     /// Cognitive Decision Score ("Quick Thinking"): $D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$.
     pub d_cog: i32,
@@ -157,6 +158,12 @@ pub struct TacticalPoolEnvelope {
     pub force_must_not_exceed_control: bool,
 }
 
+impl Default for TacticalPoolEnvelope {
+    fn default() -> Self {
+        compute_tactical_pool(&TacticalPoolParams::default())
+    }
+}
+
 impl TacticalPoolEnvelope {
     #[must_use]
     pub const fn caps_triad(&self) -> Triad<i32> {
@@ -168,6 +175,7 @@ impl TacticalPoolEnvelope {
 /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalTriadEvaluation {
+    #[serde(flatten)]
     pub alloc: Triad<i32>,
     pub valid: bool,
     pub violations: Vec<String>,

@@ -22,7 +22,7 @@ who was a teacher in Penjak Silat and also a Buddhist layperson.
 Budi trained his body and mind with his uncle and always enjoyed spending time at his Gelanggang.  When Budi went off to college in Singapore, he would always
 make time to see his uncle and train with his old friends again.
 
-#### Education
+#### Education and Experience
 
 Budi went to a Chinese Education system in Johor Baru and speaks fluent Mandarin, Bahasa, and English as well as a little Japanese.  For college, Budi went
 to the National University of Singapore for his Undergrad degree in Mathematics.  He then did a small 4 year stint in the Royal Malaysian Army in the Signal
@@ -40,4 +40,15 @@ Dr. Bandajara tends to look a bit more asiatic than European, with more of hoode
 
 #### Personality
 
-Budi is definitely an introvert, unlike his father.  Budi always had his head in the clouds and would often dream about how things could be.
+Budi is definitely an introvert, unlike his father.  Budi always had his head in the clouds and would often dream about how things could be.  He is a very
+open-minded and curious person always digging for the truth.  Coming from a somewhat upper-middle class family, he felt bad seeing poverty, especially in the
+rural areas he saw while serving in the military.  Deep down, Budi is a sucker for a sob-story, but he also has been used before and can be guarded.
+
+### Alex Wen
+
+Alex is a nephew of Dr. Bandajara from his mother's side.  Alex's grandfather is Budi's uncle.  Alex however only spent a little time in Malaysia and grew up
+when his family moved to America in the 2010s.  Alex is in his mid 20s and only relatively recently graduated.  Alex is much more physically oriented than his
+uncle, though he is also quite smart.  His interests were always more in the physical and in the body, which is why he pursued a degree in Physical Therapy.
+
+#### Education
+

@@ -547,9 +547,11 @@ pub struct TechniqueTriadResolution {
     pub technique: CombatTechniqueId,
     pub category: CombatMoveCategory,
     pub domain: CombatDomain,
+    #[serde(flatten)]
     pub alloc: Triad<i32>,
     pub valid: bool,
     pub violations: Vec<String>,
+    #[serde(flatten)]
     pub action_cost: TwoComponentActionCost,
     pub effective_tc: i32,
     /// Effective centerline `Guard` ($C + \text{guard\_mod} + \text{weapon\_guard\_bonus}$).

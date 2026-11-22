@@ -25,10 +25,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal
 
-try:
-    import httpx
-except ImportError:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
+import httpx
 
 from satya_py import maps as _maps, schema as _schema
 
@@ -588,7 +585,7 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         timeout=2.0,
         include_trace=False,
         record_event_id=False,
-        client_cls=httpx.Client if httpx is not None else None,
+        client_cls=httpx.Client,
     )
 
 

@@ -29,10 +29,7 @@ from satya_py.enums import (
 
 from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
 
-try:
-    import httpx
-except ImportError:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
+import httpx
 
 from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event_id
 from satya_ml.ai_gm.tool_spec import (
@@ -332,7 +329,7 @@ def update_npc_state(
     npcs[target_key] = npc
 
     base = _signaling_base_url()
-    if base and httpx is not None:
+    if base:
         patch_body: dict[str, Any] = {}
         if disposition is not None:
             patch_body["disposition"] = disposition
@@ -1099,7 +1096,7 @@ def search_gm_memory_and_docs(
     )
     norm_scope = (scope or "ALL").strip().upper()
     base = _signaling_base_url()
-    if base and httpx is not None:
+    if base:
         url = f"{base}/api/gm/sessions/{session_id}/lookup"
         try:
             with httpx.Client(timeout=_httpx_timeout(url, 2.5)) as client:

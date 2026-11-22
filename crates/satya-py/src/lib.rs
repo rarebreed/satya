@@ -38,6 +38,16 @@ use satya_engine::{
 };
 use satya_schema::{CodedEnum, RulesChapterDocument, RulesChapterSummary, RulesSearchHit};
 
+macro_rules! impl_from_fields {
+    ($Src:ty => $Dst:ty { $($field:ident),+ $(,)? }) => {
+        impl From<$Src> for $Dst {
+            fn from(s: $Src) -> Self {
+                Self { $($field: s.$field),+ }
+            }
+        }
+    };
+}
+
 /// Summary moments of a discrete probability mass function (`PMF`).
 #[pyclass(name = "DistributionStats", get_all)]
 #[derive(Debug, Clone)]
@@ -103,21 +113,17 @@ pub struct PySignedCascadeResult {
     pub prob_success_with_complication: f64,
 }
 
-impl From<SignedCascadeResult> for PySignedCascadeResult {
-    fn from(r: SignedCascadeResult) -> Self {
-        Self {
-            signed_margin_pmf: r.signed_margin_pmf,
-            success_count_pmf: r.success_count_pmf,
-            botch_count_pmf: r.botch_count_pmf,
-            final_pair_value_pmf: r.final_pair_value_pmf,
-            failure_overshoot_pmf: r.failure_overshoot_pmf,
-            prob_any_success: r.prob_any_success,
-            prob_clean_failure: r.prob_clean_failure,
-            prob_botch_failure: r.prob_botch_failure,
-            prob_success_with_complication: r.prob_success_with_complication,
-        }
-    }
-}
+impl_from_fields!(SignedCascadeResult => PySignedCascadeResult {
+    signed_margin_pmf,
+    success_count_pmf,
+    botch_count_pmf,
+    final_pair_value_pmf,
+    failure_overshoot_pmf,
+    prob_any_success,
+    prob_clean_failure,
+    prob_botch_failure,
+    prob_success_with_complication,
+});
 
 /// Trace of a single sequential pair $n \in \{1, \dots, N\}$ in a Satya `2d20` cascade roll.
 #[pyclass(name = "CascadeStepTrace", get_all)]
@@ -147,23 +153,19 @@ pub struct PyCascadeStepTrace {
     pub carry_out: i32,
 }
 
-impl From<CascadeStepTrace> for PyCascadeStepTrace {
-    fn from(s: CascadeStepTrace) -> Self {
-        Self {
-            pair_index: s.pair_index,
-            die_a: s.die_a,
-            die_b: s.die_b,
-            raw_sum: s.raw_sum,
-            carry_in: s.carry_in,
-            effective_y: s.effective_y,
-            tn_eff: s.tn_eff,
-            succeeded: s.succeeded,
-            step_botch: s.step_botch,
-            miss_distance: s.miss_distance,
-            carry_out: s.carry_out,
-        }
-    }
-}
+impl_from_fields!(CascadeStepTrace => PyCascadeStepTrace {
+    pair_index,
+    die_a,
+    die_b,
+    raw_sum,
+    carry_in,
+    effective_y,
+    tn_eff,
+    succeeded,
+    step_botch,
+    miss_distance,
+    carry_out,
+});
 
 /// Complete step-by-step evaluation result of a concrete Satya `2d20` cascade roll.
 #[pyclass(name = "CascadeRollOutcome")]
@@ -516,19 +518,15 @@ pub struct PyTaskGateResolution {
     pub lock_reason: Option<String>,
 }
 
-impl From<TaskGateResolution> for PyTaskGateResolution {
-    fn from(r: TaskGateResolution) -> Self {
-        Self {
-            allowed: r.allowed,
-            effective_skill_n: r.effective_skill_n,
-            gate_delta_ext: r.gate_delta_ext,
-            tool_delta_mod: r.tool_delta_mod,
-            improvised_wear_on_floor_breach: r.improvised_wear_on_floor_breach,
-            used_defaulting: r.used_defaulting,
-            lock_reason: r.lock_reason,
-        }
-    }
-}
+impl_from_fields!(TaskGateResolution => PyTaskGateResolution {
+    allowed,
+    effective_skill_n,
+    gate_delta_ext,
+    tool_delta_mod,
+    improvised_wear_on_floor_breach,
+    used_defaulting,
+    lock_reason,
+});
 
 /// Mechanical synergy transferred from a preliminary analytical (`KNO` / `LOG`) setup roll
 /// to a subsequent physical or technical execution roll per §6.1 of `cascading_d20_and_tasks.md`.
@@ -573,19 +571,15 @@ pub struct PyExtendedProjectStepResult {
     pub is_completed: bool,
 }
 
-impl From<ExtendedProjectStepResult> for PyExtendedProjectStepResult {
-    fn from(r: ExtendedProjectStepResult) -> Self {
-        Self {
-            progress_delta: r.progress_delta,
-            accumulated_successes: r.accumulated_successes,
-            target_net_successes: r.target_net_successes,
-            intervals_rolled: r.intervals_rolled,
-            heat_generated: r.heat_generated,
-            extra_material_pct: r.extra_material_pct,
-            is_completed: r.is_completed,
-        }
-    }
-}
+impl_from_fields!(ExtendedProjectStepResult => PyExtendedProjectStepResult {
+    progress_delta,
+    accumulated_successes,
+    target_net_successes,
+    intervals_rolled,
+    heat_generated,
+    extra_material_pct,
+    is_completed,
+});
 
 /// Extended Project Progress Clock per §6.3 of `cascading_d20_and_tasks.md`.
 #[pyclass(name = "ExtendedProjectClock")]
@@ -790,115 +784,6 @@ impl From<TacticalTriadEvaluation> for PyTacticalTriadEvaluation {
     }
 }
 
-#[derive(serde::Deserialize)]
-#[serde(default)]
-struct TacticalPoolEnvelopeInput {
-    d_cog: i32,
-    ooda_init: i32,
-    combat_readiness_c: i32,
-    p_base: i32,
-    p_eff: i32,
-    neutral_baseline_b: i32,
-    tempo_cap: i32,
-    control_cap: i32,
-    force_cap: i32,
-    mastery_overflow: i32,
-    power_pow: f64,
-    momentum_mass_factor_mmf: f64,
-    fatigue_threshold_ft: i32,
-    action_time_factor: f64,
-    morale_state: MoraleState,
-    min_force_required: i32,
-    max_control_allowed: i32,
-    max_force_allowed: i32,
-    force_must_not_exceed_control: bool,
-}
-
-impl Default for TacticalPoolEnvelopeInput {
-    fn default() -> Self {
-        let e = satya_engine::compute_tactical_pool(&TacticalPoolParams::default());
-        Self {
-            d_cog: e.d_cog,
-            ooda_init: e.ooda_init,
-            combat_readiness_c: e.combat_readiness_c,
-            p_base: e.p_base,
-            p_eff: e.p_eff,
-            neutral_baseline_b: e.neutral_baseline_b,
-            tempo_cap: e.tempo_cap,
-            control_cap: e.control_cap,
-            force_cap: e.force_cap,
-            mastery_overflow: e.mastery_overflow,
-            power_pow: e.power_pow,
-            momentum_mass_factor_mmf: e.momentum_mass_factor_mmf,
-            fatigue_threshold_ft: e.fatigue_threshold_ft,
-            action_time_factor: e.action_time_factor,
-            morale_state: e.morale_state,
-            min_force_required: e.min_force_required,
-            max_control_allowed: e.max_control_allowed,
-            max_force_allowed: e.max_force_allowed,
-            force_must_not_exceed_control: e.force_must_not_exceed_control,
-        }
-    }
-}
-
-impl From<TacticalPoolEnvelopeInput> for TacticalPoolEnvelope {
-    fn from(v: TacticalPoolEnvelopeInput) -> Self {
-        Self {
-            d_cog: v.d_cog,
-            ooda_init: v.ooda_init,
-            combat_readiness_c: v.combat_readiness_c,
-            p_base: v.p_base,
-            p_eff: v.p_eff,
-            neutral_baseline_b: v.neutral_baseline_b,
-            caps: satya_engine::Triad::new(v.tempo_cap, v.control_cap, v.force_cap),
-            tempo_cap: v.tempo_cap,
-            control_cap: v.control_cap,
-            force_cap: v.force_cap,
-            mastery_overflow: v.mastery_overflow,
-            power_pow: v.power_pow,
-            momentum_mass_factor_mmf: v.momentum_mass_factor_mmf,
-            fatigue_threshold_ft: v.fatigue_threshold_ft,
-            action_time_factor: v.action_time_factor,
-            morale_state: v.morale_state,
-            min_force_required: v.min_force_required,
-            max_control_allowed: v.max_control_allowed,
-            max_force_allowed: v.max_force_allowed,
-            force_must_not_exceed_control: v.force_must_not_exceed_control,
-        }
-    }
-}
-
-#[derive(serde::Serialize)]
-struct TacticalTriadDict {
-    tempo: i32,
-    control: i32,
-    force: i32,
-    valid: bool,
-    violations: Vec<String>,
-    effective_tc: i32,
-    strike_impact: f64,
-    effective_root: f64,
-    exertion_marks_gained: i32,
-    archetype_label: String,
-}
-
-impl From<TacticalTriadEvaluation> for TacticalTriadDict {
-    fn from(e: TacticalTriadEvaluation) -> Self {
-        Self {
-            tempo: e.tempo,
-            control: e.control,
-            force: e.force,
-            valid: e.valid,
-            violations: e.violations,
-            effective_tc: e.effective_tc,
-            strike_impact: e.strike_impact,
-            effective_root: e.effective_root,
-            exertion_marks_gained: e.exertion_marks_gained,
-            archetype_label: e.archetype_label,
-        }
-    }
-}
-
 /// Validates and scores a `(Tempo, Control, Force)` allocation against a dict-encoded [`TacticalPoolEnvelope`].
 #[pyfunction]
 pub fn evaluate_tactical_triad_from_dict(
@@ -909,14 +794,14 @@ pub fn evaluate_tactical_triad_from_dict(
     control: i32,
     force: i32,
 ) -> PyResult<PyJsonDict> {
-    let parsed: TacticalPoolEnvelopeInput = from_py_object(&envelope, "tactical_pool_envelope")?;
-    let env = TacticalPoolEnvelope::from(parsed);
+    let mut env: TacticalPoolEnvelope = from_py_object(&envelope, "tactical_pool_envelope")?;
+    env.caps = satya_engine::Triad::new(env.tempo_cap, env.control_cap, env.force_cap);
     let eval = satya_engine::evaluate_tactical_triad(
         &env,
         base_weapon_tc,
         satya_engine::Triad::new(tempo, control, force),
     );
-    to_py_object(py, &TacticalTriadDict::from(eval))
+    to_py_object(py, &eval)
 }
 
 /// Metadata summary for a canonical chapter in the Satya TTRPG Rules Book.
@@ -937,18 +822,14 @@ pub struct PyRulesChapterSummary {
     pub headings: Vec<String>,
 }
 
-impl From<RulesChapterSummary> for PyRulesChapterSummary {
-    fn from(s: RulesChapterSummary) -> Self {
-        Self {
-            chapter_id: s.chapter_id,
-            part: s.part,
-            title: s.title,
-            relative_path: s.relative_path,
-            description: s.description,
-            headings: s.headings,
-        }
-    }
-}
+impl_from_fields!(RulesChapterSummary => PyRulesChapterSummary {
+    chapter_id,
+    part,
+    title,
+    relative_path,
+    description,
+    headings,
+});
 
 /// Full Satya TTRPG Rules Book chapter document including Markdown and pre-rendered HTML.
 #[pyclass(name = "RulesChapterDocument", get_all)]
@@ -1005,18 +886,14 @@ pub struct PyRulesSearchHit {
     pub score: usize,
 }
 
-impl From<RulesSearchHit> for PyRulesSearchHit {
-    fn from(h: RulesSearchHit) -> Self {
-        Self {
-            chapter_id: h.chapter_id,
-            chapter_title: h.chapter_title,
-            relative_path: h.relative_path,
-            section_heading: h.section_heading,
-            snippet: h.snippet,
-            score: h.score,
-        }
-    }
-}
+impl_from_fields!(RulesSearchHit => PyRulesSearchHit {
+    chapter_id,
+    chapter_title,
+    relative_path,
+    section_heading,
+    snippet,
+    score,
+});
 
 // ============================================================================
 // Module-level Functions
@@ -1932,18 +1809,11 @@ pub fn evaluate_health_fatigue_and_bleed(
 
 #[derive(serde::Serialize)]
 struct MovementAndEncumbranceDict {
-    stride_factor_sf: f64,
-    v_sprint_m_per_sec: f64,
-    v_sprint_m_per_tick: f64,
-    base_comfort_load_kg: f64,
-    effective_load_kg: f64,
-    load_ratio: f64,
+    #[serde(flatten)]
+    sprint: satya_engine::SprintVelocityMetrics,
+    #[serde(flatten)]
+    enc: satya_engine::EncumbranceEvaluation,
     encumbrance_tier_0_to_4: u8,
-    tempo_cap_penalty: i32,
-    kin_penalty: i32,
-    action_time_factor_delta: f64,
-    can_sprint: bool,
-    max_deadlift_drag_limit_kg: f64,
 }
 
 /// Evaluates Sprint Velocity ($V_{\text{sprint}}$) and Load-Bearing Encumbrance (`Tiers 0–4`, `movement_encumbrance_and_vehicles.md` §1–§2).
@@ -1968,21 +1838,13 @@ pub fn evaluate_movement_and_encumbrance(
         }],
         exo_offset_kg,
     );
+    let encumbrance_tier_0_to_4 = enc.tier.tier_number();
     to_py_object(
         py,
         &MovementAndEncumbranceDict {
-            stride_factor_sf: sprint.stride_factor_sf,
-            v_sprint_m_per_sec: sprint.v_sprint_m_per_sec,
-            v_sprint_m_per_tick: sprint.v_sprint_m_per_tick,
-            base_comfort_load_kg: enc.base_comfort_load_kg,
-            effective_load_kg: enc.effective_load_kg,
-            load_ratio: enc.load_ratio,
-            encumbrance_tier_0_to_4: enc.tier.tier_number(),
-            tempo_cap_penalty: enc.tempo_cap_penalty,
-            kin_penalty: enc.kin_penalty,
-            action_time_factor_delta: enc.action_time_factor_delta,
-            can_sprint: enc.can_sprint,
-            max_deadlift_drag_limit_kg: enc.max_deadlift_drag_limit_kg,
+            sprint,
+            enc,
+            encumbrance_tier_0_to_4,
         },
     )
 }
@@ -2044,32 +1906,8 @@ pub fn list_combat_techniques(
 struct TechniqueTriadEvalDict {
     technique_id: &'static str,
     technique_name: &'static str,
-    category: &'static str,
-    domain: &'static str,
-    tempo: i32,
-    control: i32,
-    force: i32,
-    valid: bool,
-    violations: Vec<String>,
-    effective_tc_decide: i32,
-    effective_tc_act: i32,
-    effective_total_tc: i32,
-    wind_up_ticks: i32,
-    recovery_ticks: i32,
-    effective_guard: i32,
-    effective_root: f64,
-    strike_impact: f64,
-    effective_pen_mod: i32,
-    block_damage_reduction: i32,
-    parry_counter_multiplier: i32,
-    feint_guard_strip_per_success: i32,
-    dodge_evasion_delta_ext: i32,
-    ranged_effective_recoil_r: i32,
-    ranged_unbraced_dispersion_delta_ext: i32,
-    ranged_effective_acc_bonus: i32,
-    technique_delta_ext: i32,
-    exertion_marks_gained: i32,
-    archetype_label: String,
+    #[serde(flatten)]
+    res: satya_engine::TechniqueTriadResolution,
 }
 
 /// Evaluates a canonical Combat Technique combined with a concrete `Tempo + Control + Force` (`TCF`)
@@ -2184,32 +2022,7 @@ pub fn evaluate_combat_technique_triad(
         &TechniqueTriadEvalDict {
             technique_id: res.technique.as_str(),
             technique_name: res.technique.label(),
-            category: res.category.as_str(),
-            domain: res.domain.as_str(),
-            tempo: res.alloc.tempo,
-            control: res.alloc.control,
-            force: res.alloc.force,
-            valid: res.valid,
-            violations: res.violations,
-            effective_tc_decide: res.action_cost.effective_tc_decide,
-            effective_tc_act: res.action_cost.effective_tc_act,
-            effective_total_tc: res.effective_tc,
-            wind_up_ticks: res.action_cost.wind_up_ticks,
-            recovery_ticks: res.action_cost.recovery_ticks,
-            effective_guard: res.effective_guard,
-            effective_root: res.effective_root,
-            strike_impact: res.strike_impact,
-            effective_pen_mod: res.effective_pen_mod,
-            block_damage_reduction: res.block_damage_reduction,
-            parry_counter_multiplier: res.parry_counter_multiplier,
-            feint_guard_strip_per_success: res.feint_guard_strip_per_success,
-            dodge_evasion_delta_ext: res.dodge_evasion_delta_ext,
-            ranged_effective_recoil_r: res.ranged_effective_recoil_r,
-            ranged_unbraced_dispersion_delta_ext: res.ranged_unbraced_dispersion_delta_ext,
-            ranged_effective_acc_bonus: res.ranged_effective_acc_bonus,
-            technique_delta_ext: res.technique_delta_ext,
-            exertion_marks_gained: res.exertion_marks_gained,
-            archetype_label: res.archetype_label,
+            res,
         },
     )
 }

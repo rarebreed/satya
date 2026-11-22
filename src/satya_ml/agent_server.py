@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -58,6 +58,11 @@ def verify_service_auth(
         raise HTTPException(status_code=401, detail=detail)
 
 
+def _pick(*values: Any, default: Any) -> Any:
+    """Return the first value that is neither `None` nor empty string `""`."""
+    return next((v for v in values if v is not None and v != ""), default)
+
+
 def resolve_turn_llm_config(
     payload: BaseModel,
     *,
@@ -68,65 +73,57 @@ def resolve_turn_llm_config(
     """Resolve `SessionLlmConfig` from request payload, `provider_config`, and `config/ai.toml`."""
     p_cfg = provider_config or {}
     file_cfg = load_ai_gm_toml_config()
-    payload_provider = getattr(payload, "provider", None)
-    payload_model_id = getattr(payload, "model_id", None)
-    payload_vision_model_id = getattr(payload, "vision_model_id", None)
-    payload_temperature = getattr(payload, "temperature", None)
-    payload_base_url = getattr(payload, "base_url", None)
-
-    provider = str(
-        payload_provider
-        or p_cfg.get("provider")
-        or file_cfg.get("default_provider")
-        or "ollama"
-    )
-    model_id = str(
-        payload_model_id
-        or p_cfg.get("model_id")
-        or file_cfg.get("reasoning_model")
-        or "gemma4:12b"
-    )
-    vision_model_id = str(
-        payload_vision_model_id
-        or p_cfg.get("vision_model_id")
-        or file_cfg.get("vision_model")
-        or "gemma4:12b"
-    )
-    if payload_temperature is not None:
-        temperature = float(payload_temperature)
-    elif p_cfg.get("temperature") is not None:
-        temperature = float(p_cfg["temperature"])
-    elif file_cfg.get("temperature") is not None:
-        temperature = float(file_cfg["temperature"])
-    else:
-        temperature = float(default_temperature)
-
-    base_url = str(
-        payload_base_url
-        or p_cfg.get("base_url")
-        or file_cfg.get("ollama_base_url")
-        or "http://127.0.0.1:11434"
-    )
-    num_ctx = int(p_cfg.get("num_ctx") or file_cfg.get("num_ctx") or 16384)
-    num_predict = int(p_cfg.get("num_predict") or file_cfg.get("num_predict") or 2048)
-    raw_reasoning = (
-        p_cfg.get("reasoning")
-        if "reasoning" in p_cfg
-        else file_cfg.get("reasoning", False)
-    )
-    reasoning: bool | None = bool(raw_reasoning) if raw_reasoning is not None else False
-    raw_provider_key = x_satya_provider_key if isinstance(x_satya_provider_key, str) else None
-
+    raw_reasoning = p_cfg["reasoning"] if "reasoning" in p_cfg else file_cfg.get("reasoning", False)
     llm_cfg = SessionLlmConfig(
-        provider=provider,  # type: ignore[arg-type]
-        model_id=model_id,
-        vision_model_id=vision_model_id,
-        temperature=temperature,
-        base_url=base_url,
-        num_ctx=num_ctx,
-        num_predict=num_predict,
-        reasoning=reasoning,
-        api_key=raw_provider_key,
+        provider=cast(
+            Any,
+            str(
+                _pick(
+                    getattr(payload, "provider", None),
+                    p_cfg.get("provider"),
+                    file_cfg.get("default_provider"),
+                    default="ollama",
+                )
+            ),
+        ),
+        model_id=str(
+            _pick(
+                getattr(payload, "model_id", None),
+                p_cfg.get("model_id"),
+                file_cfg.get("reasoning_model"),
+                default="gemma4:12b",
+            )
+        ),
+        vision_model_id=str(
+            _pick(
+                getattr(payload, "vision_model_id", None),
+                p_cfg.get("vision_model_id"),
+                file_cfg.get("vision_model"),
+                default="gemma4:12b",
+            )
+        ),
+        temperature=float(
+            _pick(
+                getattr(payload, "temperature", None),
+                p_cfg.get("temperature"),
+                file_cfg.get("temperature"),
+                default=default_temperature,
+            )
+        ),
+        base_url=str(
+            _pick(
+                getattr(payload, "base_url", None),
+                p_cfg.get("base_url"),
+                file_cfg.get("ollama_base_url"),
+                default="http://127.0.0.1:11434",
+            )
+        ),
+        num_ctx=int(_pick(p_cfg.get("num_ctx"), file_cfg.get("num_ctx"), default=16384)),
+        num_predict=int(
+            _pick(p_cfg.get("num_predict"), file_cfg.get("num_predict"), default=2048)
+        ),
+        reasoning=bool(raw_reasoning) if raw_reasoning is not None else False,
+        api_key=x_satya_provider_key if isinstance(x_satya_provider_key, str) else None,
     )
     return llm_cfg, file_cfg
 

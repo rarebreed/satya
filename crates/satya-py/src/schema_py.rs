@@ -32,40 +32,9 @@ const LIFEPATH_EXTRACT_KEYS: &[&str] = &[
     "faction_id",
 ];
 
-const SCHEMA_DTO_NAMES: &[&str] = &[
-    "AiGmTurnTriggerRequest",
-    "AnatomicalZoneRecord",
-    "CharacterAptitudesRecord",
-    "CharacterAssetRef",
-    "CharacterCharacteristicsRecord",
-    "CharacterSheetRecord",
-    "CombatTrackerState",
-    "CombatantTickEntry",
-    "FactionClockRecord",
-    "GenerateNpcRequest",
-    "GmChatRequest",
-    "GmMapUpdateRequest",
-    "GmMemoryNoteRecord",
-    "GmRollRequest",
-    "GmSessionLogEntry",
-    "GmTrajectoryReportRequest",
-    "McpToolInvocationRecord",
-    "MoveMapTokenRequest",
-    "Participant",
-    "PlayerAiChatRequest",
-    "PlayerAiDoorRequest",
-    "PlayerAiRollRequest",
-    "SessionNpcEntry",
-    "SessionWorldLedger",
-    "StepAiPlayerRequest",
-    "TokenPlacement",
-    "TokenVisualSpec",
-    "UpdateAiRallyRequest",
-    "UpdateCombatTrackerRequest",
-    "UpdateSessionNpcRequest",
-    "UpdateWorldLedgerRequest",
-    "UpsertGmMemoryRequest",
-];
+fn normalize_registry_key(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase().replace(['-', '_', ' '], "")
+}
 
 fn find_avro_record_fields_in_value(
     node: &Value,
@@ -554,116 +523,90 @@ fn default_ai_gm_turn_trigger_request() -> AiGmTurnTriggerRequest {
     }
 }
 
-/// Returns a canonical default-populated Python dict for a supported [`satya_schema`] DTO struct.
-#[pyfunction]
-#[pyo3(signature = (dto_name))]
-pub fn schema_default_record(py: Python<'_>, dto_name: &str) -> PyResult<PyJsonDict> {
-    let key = dto_name.trim().to_ascii_lowercase().replace(['-', ' '], "_");
-    match key.as_str() {
-        "charactersheetrecord" | "character_sheet_record" => {
-            to_py_object(py, &CharacterSheetRecord::default())
-        }
-        "charactercharacteristicsrecord" | "character_characteristics_record" => {
-            to_py_object(py, &CharacterCharacteristicsRecord::default())
-        }
-        "characteraptitudesrecord" | "character_aptitudes_record" => {
-            to_py_object(py, &CharacterAptitudesRecord::default())
-        }
-        "gmmapupdaterequest" | "gm_map_update_request" => {
-            to_py_object(py, &GmMapUpdateRequest::default())
-        }
-        "tokenvisualspec" | "token_visual_spec" => to_py_object(py, &TokenVisualSpec::default()),
-        "combattrackerstate" | "combat_tracker_state" => {
-            to_py_object(py, &CombatTrackerState::default())
-        }
-        "updatecombattrackerrequest" | "update_combat_tracker_request" => {
-            to_py_object(py, &UpdateCombatTrackerRequest::default())
-        }
-        "sessionnpcentry" | "session_npc_entry" => to_py_object(py, &SessionNpcEntry::default()),
-        "updatesessionnpcrequest" | "update_session_npc_request" => {
-            to_py_object(py, &UpdateSessionNpcRequest::default())
-        }
-        "updateworldledgerrequest" | "update_world_ledger_request" => {
-            to_py_object(py, &UpdateWorldLedgerRequest::default())
-        }
-        "stepaiplayerrequest" | "step_ai_player_request" => {
-            to_py_object(py, &StepAiPlayerRequest::default())
-        }
-        "updateairallyrequest" | "update_ai_rally_request" => {
-            to_py_object(py, &UpdateAiRallyRequest::default())
-        }
-        "aigmturn_trigger_request" | "aigmturntriggerrequest" | "ai_gm_turn_trigger_request" => {
-            to_py_object(py, &default_ai_gm_turn_trigger_request())
-        }
-        _ => Err(to_py_err(format!(
-            "No default factory registered for schema DTO '{dto_name}'"
-        ))),
-    }
-}
+macro_rules! schema_dto_registry {
+    (
+        $( ($dto_name:literal, $Ty:ty $(=> $default:expr)?) ),+ $(,)?
+    ) => {
+        const SCHEMA_DTO_NAMES: &[&str] = &[
+            $($dto_name,)+
+        ];
 
-macro_rules! validate_dto {
-    ($py:expr, $val:expr, $key:expr, $raw_name:expr, { $( $alias:literal => $Ty:ty ),+ $(,)? }) => {
-        match $key {
+        /// Returns a canonical default-populated Python dict for a supported [`satya_schema`] DTO struct.
+        #[pyfunction]
+        #[pyo3(signature = (dto_name))]
+        pub fn schema_default_record(py: Python<'_>, dto_name: &str) -> PyResult<PyJsonDict> {
+            let norm = normalize_registry_key(dto_name);
             $(
-                $alias => {
-                    let parsed: $Ty = serde_json::from_value($val)
-                        .map_err(|e| to_py_err(format!("Invalid {}: {e}", $raw_name)))?;
-                    to_py_object($py, &parsed)
+                $(
+                    if norm == normalize_registry_key($dto_name) {
+                        return to_py_object(py, &$default);
+                    }
+                )?
+            )+
+            Err(to_py_err(format!(
+                "No default factory registered for schema DTO '{dto_name}'"
+            )))
+        }
+
+        /// Strictly deserializes `payload` against the named [`satya_schema`] Rust DTO and returns the canonical dict.
+        #[pyfunction]
+        #[pyo3(signature = (dto_name, payload))]
+        pub fn validate_schema_dto(
+            py: Python<'_>,
+            dto_name: &str,
+            payload: PyJsonInput<'_>,
+        ) -> PyResult<PyJsonDict> {
+            let val = py_to_json_value(&payload, dto_name)?;
+            let norm = normalize_registry_key(dto_name);
+            $(
+                if norm == normalize_registry_key($dto_name) {
+                    let parsed: $Ty = serde_json::from_value(val)
+                        .map_err(|e| to_py_err(format!("Invalid {dto_name}: {e}")))?;
+                    return to_py_object(py, &parsed);
                 }
             )+
-            _ => Err(to_py_err(format!(
+            Err(to_py_err(format!(
                 "Unknown schema DTO '{}'; expected one of: {}",
-                $raw_name,
+                dto_name,
                 SCHEMA_DTO_NAMES.join(", ")
-            ))),
+            )))
         }
     };
 }
 
-/// Strictly deserializes `payload` against the named [`satya_schema`] Rust DTO and returns the canonical dict.
-#[pyfunction]
-#[pyo3(signature = (dto_name, payload))]
-pub fn validate_schema_dto(
-    py: Python<'_>,
-    dto_name: &str,
-    payload: PyJsonInput<'_>,
-) -> PyResult<PyJsonDict> {
-    let val = py_to_json_value(&payload, dto_name)?;
-    let norm = dto_name.trim().to_ascii_lowercase().replace(['-', '_'], "");
-    validate_dto!(py, val, norm.as_str(), dto_name, {
-        "aigmturntriggerrequest" => AiGmTurnTriggerRequest,
-        "anatomicalzonerecord" => AnatomicalZoneRecord,
-        "characteraptitudesrecord" => CharacterAptitudesRecord,
-        "characterassetref" => CharacterAssetRef,
-        "charactercharacteristicsrecord" => CharacterCharacteristicsRecord,
-        "charactersheetrecord" => CharacterSheetRecord,
-        "combattrackerstate" => CombatTrackerState,
-        "combatanttickentry" => CombatantTickEntry,
-        "factionclockrecord" => FactionClockRecord,
-        "generatenpcrequest" => GenerateNpcRequest,
-        "gmchatrequest" => GmChatRequest,
-        "gmmapupdaterequest" => GmMapUpdateRequest,
-        "gmmemorynoterecord" => GmMemoryNoteRecord,
-        "gmrollrequest" => GmRollRequest,
-        "gmsessionlogentry" => GmSessionLogEntry,
-        "gmtrajectoryreportrequest" => GmTrajectoryReportRequest,
-        "mcptoolinvocationrecord" => McpToolInvocationRecord,
-        "movemaptokenrequest" => MoveMapTokenRequest,
-        "participant" => Participant,
-        "playeraichatrequest" => PlayerAiChatRequest,
-        "playeraidoorrequest" => PlayerAiDoorRequest,
-        "playerairollrequest" => PlayerAiRollRequest,
-        "sessionnpcentry" => SessionNpcEntry,
-        "sessionworldledger" => SessionWorldLedger,
-        "stepaiplayerrequest" => StepAiPlayerRequest,
-        "tokenplacement" => TokenPlacement,
-        "tokenvisualspec" => TokenVisualSpec,
-        "updateairallyrequest" => UpdateAiRallyRequest,
-        "updatecombattrackerrequest" => UpdateCombatTrackerRequest,
-        "updatesessionnpcrequest" => UpdateSessionNpcRequest,
-        "updateworldledgerrequest" => UpdateWorldLedgerRequest,
-        "upsertgmmemoryrequest" => UpsertGmMemoryRequest,
-    })
+schema_dto_registry! {
+    ("AiGmTurnTriggerRequest", AiGmTurnTriggerRequest => default_ai_gm_turn_trigger_request()),
+    ("AnatomicalZoneRecord", AnatomicalZoneRecord),
+    ("CharacterAptitudesRecord", CharacterAptitudesRecord => CharacterAptitudesRecord::default()),
+    ("CharacterAssetRef", CharacterAssetRef),
+    ("CharacterCharacteristicsRecord", CharacterCharacteristicsRecord => CharacterCharacteristicsRecord::default()),
+    ("CharacterSheetRecord", CharacterSheetRecord => CharacterSheetRecord::default()),
+    ("CombatTrackerState", CombatTrackerState => CombatTrackerState::default()),
+    ("CombatantTickEntry", CombatantTickEntry),
+    ("FactionClockRecord", FactionClockRecord),
+    ("GenerateNpcRequest", GenerateNpcRequest),
+    ("GmChatRequest", GmChatRequest),
+    ("GmMapUpdateRequest", GmMapUpdateRequest => GmMapUpdateRequest::default()),
+    ("GmMemoryNoteRecord", GmMemoryNoteRecord),
+    ("GmRollRequest", GmRollRequest),
+    ("GmSessionLogEntry", GmSessionLogEntry),
+    ("GmTrajectoryReportRequest", GmTrajectoryReportRequest),
+    ("McpToolInvocationRecord", McpToolInvocationRecord),
+    ("MoveMapTokenRequest", MoveMapTokenRequest),
+    ("Participant", Participant),
+    ("PlayerAiChatRequest", PlayerAiChatRequest),
+    ("PlayerAiDoorRequest", PlayerAiDoorRequest),
+    ("PlayerAiRollRequest", PlayerAiRollRequest),
+    ("SessionNpcEntry", SessionNpcEntry => SessionNpcEntry::default()),
+    ("SessionWorldLedger", SessionWorldLedger),
+    ("StepAiPlayerRequest", StepAiPlayerRequest => StepAiPlayerRequest::default()),
+    ("TokenPlacement", TokenPlacement),
+    ("TokenVisualSpec", TokenVisualSpec => TokenVisualSpec::default()),
+    ("UpdateAiRallyRequest", UpdateAiRallyRequest => UpdateAiRallyRequest::default()),
+    ("UpdateCombatTrackerRequest", UpdateCombatTrackerRequest => UpdateCombatTrackerRequest::default()),
+    ("UpdateSessionNpcRequest", UpdateSessionNpcRequest => UpdateSessionNpcRequest::default()),
+    ("UpdateWorldLedgerRequest", UpdateWorldLedgerRequest => UpdateWorldLedgerRequest::default()),
+    ("UpsertGmMemoryRequest", UpsertGmMemoryRequest),
 }
 
 /// Returns the sorted list of canonical [`satya_schema`] DTO struct names supported by [`validate_schema_dto`].
@@ -674,10 +617,6 @@ pub fn list_schema_dto_names() -> Vec<String> {
 
 fn coded_enum_codes<T: CodedEnum>() -> Vec<String> {
     T::ALL.iter().map(|v| v.code().to_string()).collect()
-}
-
-fn normalize_registry_key(raw: &str) -> String {
-    raw.trim().to_ascii_lowercase().replace(['-', '_'], "")
 }
 
 macro_rules! wire_enum_registry {

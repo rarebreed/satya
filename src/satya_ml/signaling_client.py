@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import tomllib
 from typing import Any, Final
-import urllib.error
-import urllib.request
 
-try:
-    import httpx
-except Exception:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
+import httpx
 
 from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event_id
 
@@ -55,7 +49,7 @@ def is_loopback_url(url: str) -> bool:
 
 def httpx_timeout(url: str, timeout: float) -> Any:
     """Return an `httpx.Timeout` with fast loopback connect failure detection."""
-    if httpx is not None and is_loopback_url(url):
+    if is_loopback_url(url):
         return httpx.Timeout(timeout, connect=min(timeout, 0.25))
     return timeout
 
@@ -66,9 +60,7 @@ def gm_service_token() -> str:
     if env_tok:
         return env_tok
     cfg_tok = load_ai_gm_toml_config().get("service_token")
-    if cfg_tok:
-        return str(cfg_tok)
-    return "satya_gm_secret_dev_token"
+    return str(cfg_tok) if cfg_tok else "satya_gm_secret_dev_token"
 
 
 def service_auth_headers(*, include_trace: bool = True) -> dict[str, str]:
@@ -103,40 +95,18 @@ def http_post_json_detailed(
     if not url.startswith(("http://", "https://")):
         return None, None, "invalid_url"
     headers = service_auth_headers(include_trace=include_trace)
-    eff_client = client_cls or (httpx.Client if httpx is not None else None)
-    if eff_client is not None:
-        try:
-            with eff_client(timeout=httpx_timeout(url, timeout)) as client:
-                resp = client.post(url, headers=headers, json=payload)
-                if resp is None:
-                    return None, None, None
-                if resp.status_code == 200:
-                    data = dict(resp.json())
-                    if record_event_id:
-                        _extract_and_record_event_id(data)
-                    return data, 200, None
-                return None, int(resp.status_code), (resp.text or f"HTTP {resp.status_code}")[:400]
-        except Exception:
-            return None, None, None
-
-    eff_timeout = min(timeout, 0.25) if is_loopback_url(url) else timeout
+    eff_client = client_cls or httpx.Client
     try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
-            if resp.status == 200:
-                data = dict(json.loads(resp.read().decode("utf-8")))
+        with eff_client(timeout=httpx_timeout(url, timeout)) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp is None:
+                return None, None, None
+            if resp.status_code == 200:
+                data = dict(resp.json())
                 if record_event_id:
                     _extract_and_record_event_id(data)
                 return data, 200, None
-            return None, int(resp.status), f"HTTP {resp.status}"
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")[:400] if hasattr(exc, "read") else str(exc)
-        return None, int(exc.code), body or f"HTTP {exc.code}"
+            return None, int(resp.status_code), (resp.text or f"HTTP {resp.status_code}")[:400]
     except Exception:
         return None, None, None
 
@@ -173,23 +143,12 @@ def http_get_json(
     if not url.startswith(("http://", "https://")):
         return None
     headers = service_auth_headers(include_trace=include_trace)
-    eff_client = client_cls or (httpx.Client if httpx is not None else None)
-    if eff_client is not None:
-        try:
-            with eff_client(timeout=httpx_timeout(url, timeout)) as client:
-                resp = client.get(url, headers=headers)
-                if resp is not None and resp.status_code == 200:
-                    return dict(resp.json())
-        except Exception:
-            return None
-        return None
-
-    eff_timeout = min(timeout, 0.25) if is_loopback_url(url) else timeout
+    eff_client = client_cls or httpx.Client
     try:
-        req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
-            if resp.status == 200:
-                return dict(json.loads(resp.read().decode("utf-8")))
+        with eff_client(timeout=httpx_timeout(url, timeout)) as client:
+            resp = client.get(url, headers=headers)
+            if resp is not None and resp.status_code == 200:
+                return dict(resp.json())
     except Exception:
         return None
     return None
