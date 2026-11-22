@@ -143,6 +143,44 @@ pub fn NotebookMapPane() -> impl IntoView {
                                 .collect_view()}
                         </select>
                     </label>
+                    <label
+                        id="map-3d-shader-wrap"
+                        class="inline-label"
+                        for="map-3d-shader-mode"
+                    >
+                        <span>"Shader"</span>
+                        <select
+                            id="map-3d-shader-mode"
+                            title="3D Diorama surface and miniature shader style"
+                            onchange="window.satyaUpdate3dMapStyle()"
+                            on:change=move |_| wasm_client::satya_update_3d_map_style()
+                        >
+                            <option value="cel">"Cel-Shaded (Style C)"</option>
+                            <option value="pbr">"Clean PBR"</option>
+                            <option value="wireframe_pbr">"Wireframe + PBR"</option>
+                            <option value="hit_zones">"Hit Zones"</option>
+                            <option value="thermal">"Thermal / IR"</option>
+                        </select>
+                    </label>
+                    <label
+                        id="map-3d-lighting-wrap"
+                        class="inline-label"
+                        for="map-3d-lighting-mode"
+                    >
+                        <span>"Lighting"</span>
+                        <select
+                            id="map-3d-lighting-mode"
+                            title="3D Diorama key/fill lighting preset"
+                            onchange="window.satyaUpdate3dMapStyle()"
+                            on:change=move |_| wasm_client::satya_update_3d_map_style()
+                        >
+                            <option value="studio_matte">"Studio Matte"</option>
+                            <option value="daylight">"Outdoor Daylight"</option>
+                            <option value="dramatic_rim">"Dramatic Rim"</option>
+                            <option value="sunset">"Warm Sunset"</option>
+                            <option value="noir_night">"Noir Moonlight"</option>
+                        </select>
+                    </label>
                     <button
                         type="button"
                         id="btn-map-wall-cutaway"

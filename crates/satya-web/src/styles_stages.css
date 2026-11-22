@@ -718,8 +718,8 @@ input[type="range"].dice-opacity-slider:focus-visible {
 }
 .wgpu-model-canvas-wrap {
     width: 100%;
-    height: clamp(280px, 38dvh, 420px);
-    background: #070b14;
+    height: clamp(420px, 64dvh, 720px);
+    background: #141a24;
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;

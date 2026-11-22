@@ -565,9 +565,9 @@ fn assemble_loaded_model(
     let mut vertices = Vec::new();
     for sm in &submeshes {
         let col = [
-            sm.base_color[0],
-            sm.base_color[1],
-            sm.base_color[2],
+            linear_to_srgb(sm.base_color[0]),
+            linear_to_srgb(sm.base_color[1]),
+            linear_to_srgb(sm.base_color[2]),
             if sm.tintable { 1.0 } else { 0.0 },
         ];
         let zf = sm.zone.as_f32();
@@ -1147,6 +1147,17 @@ pub fn build_preset_glb_bytes(preset: &str) -> Vec<u8> {
     encode_glb_bytes(&submeshes)
 }
 
+/// Converts a glTF 2.0 linear RGB channel (`0..=1`) to sRGB for non-sRGB swapchain rendering.
+#[must_use]
+fn linear_to_srgb(c: f32) -> f32 {
+    let clamped = c.clamp(0.0, 1.0);
+    if clamped <= 0.003_130_8 {
+        clamped * 12.92
+    } else {
+        1.055 * clamped.powf(1.0 / 2.4) - 0.055
+    }
+}
+
 /// Builds and parses a built-in `.glb` preset through the full binary `.glb` round-trip pipeline.
 #[must_use]
 pub fn load_preset_glb_model(preset: &str) -> LoadedGlbModel {
@@ -1161,6 +1172,7 @@ mod tests {
 
     #[test]
     fn test_all_procedural_glb_presets_encode_and_parse_roundtrip() {
+        assert!((linear_to_srgb(0.214) - 0.50).abs() < 0.01);
         for preset in [
             "valkyrie_rig",
             "recon_mk4",

@@ -17,11 +17,13 @@ use wasm_bindgen::JsCast;
 /// - `1.0`: Wireframe + PBR (`fwidth` anti-aliased barycentric edges)
 /// - `2.0`: Anatomical Hit Zones (`Head`, `Torso`, `Arms/Weapon`, `Legs`, `Pack`)
 /// - `3.0`: Thermal / FLIR Sensor
+/// - `4.0`: Cel-Shaded / Toon (Style C)
 pub const SHARED_GLB_DIORAMA_WGSL: &str = r#"
 struct DioramaUniforms {
     view_proj: mat4x4<f32>,
     camera_pos: vec4<f32>,
     mode_params: vec4<f32>,
+    light_params: vec4<f32>,
 };
 
 @group(0) @binding(0)
@@ -110,6 +112,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var n = normalize(in.world_normal);
     let v = normalize(scene.camera_pos.xyz - in.world_pos);
     let fw = fwidth(in.bary);
+    let n_edge = length(fwidth(n));
     let mode = i32(round(scene.mode_params.x));
     var albedo = in.base_rgb;
     var spec_scale = 1.0;
@@ -179,15 +182,51 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    let key_l = normalize(vec3<f32>(0.48, 0.84, 0.36));
-    let fill_l = normalize(vec3<f32>(-0.62, 0.42, -0.52));
+    let lp = i32(round(scene.light_params.x));
+    var key_l = normalize(vec3<f32>(0.45, 0.80, 0.42));
+    var fill_l = normalize(vec3<f32>(-0.60, 0.45, -0.40));
+    var key_tint = vec3<f32>(1.0, 0.99, 0.97);
+    var hemi_low = vec3<f32>(0.16, 0.18, 0.23);
+    var hemi_high = vec3<f32>(0.32, 0.35, 0.42);
+    var shadow_tint = vec3<f32>(0.64, 0.66, 0.74);
+    if lp == 1 {
+        key_l = normalize(vec3<f32>(0.55, 0.88, 0.25));
+        fill_l = normalize(vec3<f32>(-0.55, 0.55, -0.45));
+        key_tint = vec3<f32>(1.05, 1.02, 0.95);
+        hemi_low = vec3<f32>(0.18, 0.21, 0.26);
+        hemi_high = vec3<f32>(0.38, 0.44, 0.52);
+        shadow_tint = vec3<f32>(0.60, 0.65, 0.76);
+    } else if lp == 2 {
+        key_l = normalize(vec3<f32>(0.82, 0.42, 0.38));
+        fill_l = normalize(vec3<f32>(-0.70, 0.25, -0.60));
+        key_tint = vec3<f32>(1.04, 0.98, 0.94);
+        hemi_low = vec3<f32>(0.05, 0.07, 0.13);
+        hemi_high = vec3<f32>(0.14, 0.20, 0.30);
+        shadow_tint = vec3<f32>(0.38, 0.44, 0.58);
+    } else if lp == 3 {
+        key_l = normalize(vec3<f32>(0.86, 0.34, 0.42));
+        fill_l = normalize(vec3<f32>(-0.55, 0.50, -0.50));
+        key_tint = vec3<f32>(1.14, 0.86, 0.64);
+        hemi_low = vec3<f32>(0.13, 0.10, 0.20);
+        hemi_high = vec3<f32>(0.34, 0.24, 0.28);
+        shadow_tint = vec3<f32>(0.48, 0.42, 0.58);
+    } else if lp == 4 {
+        key_l = normalize(vec3<f32>(-0.35, 0.85, 0.42));
+        fill_l = normalize(vec3<f32>(0.55, 0.25, -0.65));
+        key_tint = vec3<f32>(0.76, 0.86, 1.06);
+        hemi_low = vec3<f32>(0.04, 0.06, 0.12);
+        hemi_high = vec3<f32>(0.12, 0.18, 0.28);
+        shadow_tint = vec3<f32>(0.36, 0.44, 0.60);
+    }
 
+    let gloss = max(scene.light_params.y, 0.0);
+    let rim_gain = max(scene.light_params.z, 0.0);
     let ndl = max(dot(n, key_l), 0.0);
     let fill = max(dot(n, fill_l), 0.0) * 0.32;
-    let hemi = mix(vec3<f32>(0.07, 0.10, 0.16), vec3<f32>(0.22, 0.28, 0.38), n.y * 0.5 + 0.5);
+    let hemi = mix(hemi_low, hemi_high, n.y * 0.5 + 0.5);
     let h = normalize(key_l + v);
-    let spec = pow(max(dot(n, h), 0.0), 38.0) * 0.42 * spec_scale;
-    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.28 * spec_scale;
+    let spec = pow(max(dot(n, h), 0.0), 42.0) * 0.26 * spec_scale * gloss;
+    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.2) * 0.18 * spec_scale * gloss;
 
     // Subtle 1.0m minor / 5.0m major tactical grid lines on deck tiles (`zone_id < -0.5`)
     var grid_boost = vec3<f32>(0.0);
@@ -204,7 +243,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         grid_boost = minor_c * line1 + major_c * line5;
     }
 
-    var rgb = hemi * albedo + albedo * (0.76 * ndl + fill) + vec3<f32>(0.85, 0.93, 1.0) * (spec + fresnel * 0.5) + grid_boost;
+    var rgb = hemi * albedo + albedo * key_tint * (0.76 * ndl + fill) + key_tint * (spec + fresnel * 0.5) + grid_boost;
 
     if mode == 3 {
         // Thermal / IR false-color sensor view
@@ -213,6 +252,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let mid_c = vec3<f32>(0.88, 0.20, 0.38);
         let hot_c = vec3<f32>(1.0, 0.88, 0.22);
         rgb = select(mix(mid_c, hot_c, (heat - 0.5) * 2.0), mix(cold_c, mid_c, heat * 2.0), heat < 0.5);
+    } else if mode == 4 {
+        // Style C graphic-novel cel shading: 3 stepped toon bands, preset-tinted shadow, soft matte rim, Fresnel ink
+        let ndv = max(dot(n, v), 0.0);
+        let lit = ndl * 0.85 + fill * 0.45;
+        let b1 = smoothstep(0.20, 0.25, lit);
+        let b2 = smoothstep(0.62, 0.67, lit);
+        let shadow_c = albedo * shadow_tint;
+        let mid_c = albedo * 0.86 * mix(vec3<f32>(1.0, 1.0, 1.0), key_tint, 0.5);
+        let lit_c = albedo * 1.04 * key_tint;
+        var toon = mix(mix(shadow_c, mid_c, b1), lit_c, b2);
+        let cel_spec = smoothstep(0.08, 0.12, spec) * 0.16 * gloss;
+        let cel_rim = smoothstep(0.62, 0.70, 1.0 - ndv) * step(0.15, ndl) * rim_gain;
+        toon = toon + key_tint * (cel_spec + cel_rim);
+        if in.zone_id >= -0.5 {
+            if abs(in.zone_id - 1.0) < 0.1 {
+                let crease_ink = smoothstep(0.18, 0.38, n_edge);
+                toon = mix(toon, vec3<f32>(0.08, 0.09, 0.13), crease_ink * 0.65);
+            } else {
+                let ink = 1.0 - smoothstep(0.14, 0.23, ndv);
+                toon = mix(toon, vec3<f32>(0.06, 0.08, 0.12), ink * 0.68);
+            }
+        }
+        rgb = toon + grid_boost;
     }
 
     if mode == 1 || mode == 2 {
@@ -224,9 +286,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     return vec4<f32>(rgb, out_alpha);
 }
+
+@vertex
+fn vs_outline(in: VertexInput) -> @builtin(position) vec4<f32> {
+    if in.bary_zone.w < -0.5 {
+        return vec4<f32>(0.0, 0.0, 2.0, 1.0);
+    }
+    let model = mat4x4<f32>(in.model_0, in.model_1, in.model_2, in.model_3);
+    let world_p = model * vec4<f32>(in.position, 1.0);
+    let rot_m = mat3x3<f32>(in.model_0.xyz, in.model_1.xyz, in.model_2.xyz);
+    let world_n = normalize(rot_m * in.normal);
+    let is_head = abs(in.bary_zone.w - 1.0) < 0.1;
+    let width = select(0.0032, 0.0012, is_head);
+    let extruded = world_p.xyz + world_n * width;
+    return scene.view_proj * vec4<f32>(extruded, 1.0);
+}
+
+@fragment
+fn fs_outline() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.055, 0.075, 0.11, 1.0);
+}
 "#;
 
-/// Uniform buffer (`96` bytes) bound at `@group(0) @binding(0)` for [`SHARED_GLB_DIORAMA_WGSL`].
+/// Uniform buffer (`112` bytes) bound at `@group(0) @binding(0)` for [`SHARED_GLB_DIORAMA_WGSL`].
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct DioramaUniforms {
@@ -234,6 +316,8 @@ pub struct DioramaUniforms {
     pub camera_pos: [f32; 4],
     /// `[shader_mode, cell_size_m, wire_strength, reserved]`
     pub mode_params: [f32; 4],
+    /// `[lighting_preset_code, gloss_scale, rim_scale, reserved]`
+    pub light_params: [f32; 4],
 }
 
 /// Per-instance transform + tint (`80` bytes) bound as vertex buffer slot `1`.
@@ -487,14 +571,40 @@ pub fn mul_mat4_cols(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
     out
 }
 
-/// Maps UI shader mode slugs (`"pbr"`, `"wireframe_pbr"`, `"hit_zones"`, `"thermal"`) to `mode_params.x`.
+/// Maps UI shader mode slugs (`"pbr"`, `"wireframe_pbr"`, `"hit_zones"`, `"thermal"`, `"cel"`) to `mode_params.x`.
 #[must_use]
 pub fn shader_mode_code(mode_str: &str) -> f32 {
     match mode_str.trim() {
         "pbr" => 0.0,
         "hit_zones" => 2.0,
         "thermal" => 3.0,
+        "cel" => 4.0,
         _ => 1.0, // "wireframe_pbr"
+    }
+}
+
+/// Maps UI lighting preset slugs (`"studio_matte"`, `"daylight"`, `"dramatic_rim"`, `"sunset"`,
+/// `"noir_night"`) to `light_params.x`.
+#[must_use]
+pub fn lighting_preset_code(preset: &str) -> f32 {
+    match preset.trim() {
+        "daylight" => 1.0,
+        "dramatic_rim" => 2.0,
+        "sunset" => 3.0,
+        "noir_night" => 4.0,
+        _ => 0.0, // "studio_matte"
+    }
+}
+
+/// Returns `(gloss_scale, rim_scale)` for a lighting preset slug (`"studio_matte"` keeps skin/cloth matte).
+#[must_use]
+pub fn lighting_preset_gloss_and_rim(preset: &str) -> (f32, f32) {
+    match preset.trim() {
+        "daylight" => (0.18, 0.08),
+        "dramatic_rim" => (0.38, 0.26),
+        "sunset" => (0.16, 0.14),
+        "noir_night" => (0.22, 0.18),
+        _ => (0.10, 0.06), // "studio_matte"
     }
 }
 
@@ -718,6 +828,25 @@ pub fn create_shared_diorama_pipeline(
     surface_format: wgpu::TextureFormat,
     label_prefix: &str,
 ) -> (wgpu::Buffer, wgpu::BindGroup, wgpu::RenderPipeline) {
+    let (ub, bg, main_pipe, _outline_pipe) =
+        create_shared_diorama_pipelines(device, surface_format, label_prefix);
+    (ub, bg, main_pipe)
+}
+
+/// Builds `(uniform_buffer, bind_group, main_pipeline, outline_pipeline)` for
+/// [`SHARED_GLB_DIORAMA_WGSL`], including the inverted-hull comic ink outline pass.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn create_shared_diorama_pipelines(
+    device: &wgpu::Device,
+    surface_format: wgpu::TextureFormat,
+    label_prefix: &str,
+) -> (
+    wgpu::Buffer,
+    wgpu::BindGroup,
+    wgpu::RenderPipeline,
+    wgpu::RenderPipeline,
+) {
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label_prefix),
         size: std::mem::size_of::<DioramaUniforms>() as u64,
@@ -755,42 +884,52 @@ pub fn create_shared_diorama_pipeline(
         push_constant_ranges: &[],
     });
     let vbuffers = shared_glb_vertex_buffer_layouts();
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(label_prefix),
-        layout: Some(&playout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &vbuffers,
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: surface_format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            cull_mode: None,
-            ..Default::default()
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: wgpu::TextureFormat::Depth24Plus,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-        cache: None,
-    });
-    (uniform_buffer, bind_group, render_pipeline)
+    let build_pipe = |vs_entry: &str, fs_entry: &str, cull_mode: Option<wgpu::Face>| {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label_prefix),
+            layout: Some(&playout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some(vs_entry),
+                buffers: &vbuffers,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some(fs_entry),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
+    };
+    let render_pipeline = build_pipe("vs_main", "fs_main", None);
+    let outline_pipeline = build_pipe("vs_outline", "fs_outline", Some(wgpu::Face::Front));
+    (
+        uniform_buffer,
+        bind_group,
+        render_pipeline,
+        outline_pipeline,
+    )
 }
 
 #[cfg(test)]
@@ -820,8 +959,32 @@ mod tests {
         assert_valid_wgsl(
             "SHARED_GLB_DIORAMA_WGSL",
             SHARED_GLB_DIORAMA_WGSL,
-            &["vs_main", "fs_main"],
+            &["vs_main", "fs_main", "vs_outline", "fs_outline"],
         );
+        // Dawn/WebGPU rejects derivatives (`fwidth`) inside non-uniform branches at pipeline creation.
+        let fs_body = SHARED_GLB_DIORAMA_WGSL
+            .split("fn fs_main")
+            .nth(1)
+            .expect("fs_main must exist");
+        let first_if = fs_body.find("\n    if ").expect("fs_main should branch");
+        if let Some(last_fw) = fs_body.rfind("fwidth(") {
+            assert!(
+                last_fw < first_if,
+                "fwidth() must appear in uniform control flow before any branch in fs_main"
+            );
+        }
+        assert!((shader_mode_code("cel") - 4.0).abs() < 1e-6);
+        for (slug, code, (gloss, rim)) in [
+            ("studio_matte", 0.0_f32, (0.10_f32, 0.06_f32)),
+            ("daylight", 1.0, (0.18, 0.08)),
+            ("dramatic_rim", 2.0, (0.38, 0.26)),
+            ("sunset", 3.0, (0.16, 0.14)),
+            ("noir_night", 4.0, (0.22, 0.18)),
+        ] {
+            assert!((lighting_preset_code(slug) - code).abs() < 1e-6);
+            let (g, r) = lighting_preset_gloss_and_rim(slug);
+            assert!((g - gloss).abs() < 1e-6 && (r - rim).abs() < 1e-6);
+        }
         assert_valid_wgsl(
             "DICE_WGSL_SHADER",
             crate::wasm_client::dice_3d_wgpu::DICE_WGSL_SHADER,

@@ -112,6 +112,7 @@ mod model_wgpu_runtime {
         uniform_buffer: wgpu::Buffer,
         bind_group: wgpu::BindGroup,
         render_pipeline: wgpu::RenderPipeline,
+        outline_pipeline: wgpu::RenderPipeline,
         vertex_buffer: wgpu::Buffer,
         vertex_count: u32,
         instance_buffer: wgpu::Buffer,
@@ -126,6 +127,7 @@ mod model_wgpu_runtime {
         pub active_drag: Option<(bool, i32, i32)>,
         pub active_preset: String,
         pub shader_mode: String,
+        pub lighting_mode: String,
         pub tint_rgb: [f32; 3],
         pub loaded_model: Option<LoadedGlbModel>,
         pub mesh_dirty: bool,
@@ -141,6 +143,7 @@ mod model_wgpu_runtime {
                 active_drag: None,
                 active_preset: "valkyrie_rig".to_string(),
                 shader_mode: "wireframe_pbr".to_string(),
+                lighting_mode: "studio_matte".to_string(),
                 tint_rgb: [0.06, 0.65, 0.91],
                 loaded_model: None,
                 mesh_dirty: true,
@@ -204,10 +207,12 @@ mod model_wgpu_runtime {
         let aspect =
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
         let (view_proj, eye) = ctrl.camera.build_view_proj_and_eye(aspect);
+        let (gloss, rim) = lighting_preset_gloss_and_rim(&ctrl.lighting_mode);
         let uniforms = DioramaUniforms {
             view_proj,
             camera_pos: [eye[0], eye[1], eye[2], 1.0],
             mode_params: [shader_mode_code(&ctrl.shader_mode), 1.0, 0.55, 0.0],
+            light_params: [lighting_preset_code(&ctrl.lighting_mode), gloss, rim, 0.0],
         };
         pipe.queue
             .write_buffer(&pipe.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
@@ -233,6 +238,12 @@ mod model_wgpu_runtime {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("satya-model-enc"),
             });
+        let (bg_r, bg_g, bg_b) = match ctrl.lighting_mode.as_str() {
+            "daylight" => (0.20, 0.25, 0.32),
+            "sunset" => (0.17, 0.13, 0.19),
+            "dramatic_rim" | "noir_night" => (0.055, 0.075, 0.12),
+            _ => (0.14, 0.17, 0.22),
+        };
         {
             let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("satya-model-pass"),
@@ -241,9 +252,9 @@ mod model_wgpu_runtime {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.035,
-                            g: 0.051,
-                            b: 0.086,
+                            r: bg_r,
+                            g: bg_g,
+                            b: bg_b,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -265,6 +276,13 @@ mod model_wgpu_runtime {
             rpass.set_vertex_buffer(0, pipe.vertex_buffer.slice(..));
             rpass.set_vertex_buffer(1, pipe.instance_buffer.slice(..));
             rpass.draw(0..pipe.vertex_count, 0..pipe.instance_count);
+            if ctrl.shader_mode == "cel" {
+                rpass.set_pipeline(&pipe.outline_pipeline);
+                rpass.set_bind_group(0, &pipe.bind_group, &[]);
+                rpass.set_vertex_buffer(0, pipe.vertex_buffer.slice(..));
+                rpass.set_vertex_buffer(1, pipe.instance_buffer.slice(..));
+                rpass.draw(0..pipe.vertex_count, 0..pipe.instance_count);
+            }
         }
         pipe.queue.submit(std::iter::once(enc.finish()));
         frame.present();
@@ -382,6 +400,7 @@ mod model_wgpu_runtime {
                         c.pipeline = Some(pipe);
                         c.mesh_dirty = true;
                         crate::wasm_client::dom::set_display("wgpu-model-canvas-wrap", "block");
+                        crate::wasm_client::dom::set_display("model-preview-stage", "none");
                         crate::wasm_client::dom::set_text(
                             "model-wgpu-status-pill",
                             "WebGPU Active · glTF 2.0 (.glb)",
@@ -405,8 +424,8 @@ mod model_wgpu_runtime {
             surface_config.height,
             "satya-model-depth",
         );
-        let (uniform_buffer, bind_group, render_pipeline) =
-            create_shared_diorama_pipeline(&device, surface_config.format, "satya-model");
+        let (uniform_buffer, bind_group, render_pipeline, outline_pipeline) =
+            create_shared_diorama_pipelines(&device, surface_config.format, "satya-model");
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-model-empty-vb"),
@@ -430,6 +449,7 @@ mod model_wgpu_runtime {
             uniform_buffer,
             bind_group,
             render_pipeline,
+            outline_pipeline,
             vertex_buffer,
             vertex_count: 0,
             instance_buffer,
@@ -438,7 +458,7 @@ mod model_wgpu_runtime {
     }
 }
 
-/// Synchronizes `#model-preset-select`, `#model-render-mode`, and `#model-tint-color` into the
+/// Synchronizes `#model-preset-select`, `#model-render-mode`, `#model-lighting-mode`, and `#model-tint-color` into the
 /// live `wgpu` `.glb` turntable viewer (as well as the subsystem hit-zone readout).
 pub fn sync_3d_model_viewer_from_dom() {
     if crate::wasm_client::dom::window().is_none() {
@@ -446,6 +466,7 @@ pub fn sync_3d_model_viewer_from_dom() {
     }
     let preset = crate::wasm_client::dom::select_value("model-preset-select");
     let mode = crate::wasm_client::dom::select_value("model-render-mode");
+    let lighting = crate::wasm_client::dom::select_value("model-lighting-mode");
     let tint_hex = crate::wasm_client::dom::input_value("model-tint-color");
     let (_, tint_rgb) = parse_hex_color(
         if tint_hex.is_empty() {
@@ -468,18 +489,24 @@ pub fn sync_3d_model_viewer_from_dom() {
         } else {
             mode
         };
+        let l_eff = if lighting.is_empty() {
+            "studio_matte".to_string()
+        } else {
+            lighting
+        };
         model_wgpu_runtime::with_model_ctrl(|c| {
             if c.active_preset != p_eff {
                 c.active_preset = p_eff;
                 c.mesh_dirty = true;
             }
             c.shader_mode = m_eff;
+            c.lighting_mode = l_eff;
             c.tint_rgb = tint_rgb;
         });
         model_wgpu_runtime::ensure_model_viewer_initialized_and_render();
     }
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = (preset, mode, tint_rgb);
+    let _ = (preset, mode, lighting, tint_rgb);
 }
 
 /// Resets the `3D Model` turntable camera to its default front-quarter angle.

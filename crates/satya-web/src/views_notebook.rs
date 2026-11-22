@@ -414,8 +414,23 @@ fn NotebookModelAndCharacterPanes() -> impl IntoView {
                         >
                             <option value="wireframe_pbr">"Wireframe + PBR"</option>
                             <option value="pbr">"Clean PBR Armor"</option>
+                            <option value="cel">"Cel-Shaded (Style C)"</option>
                             <option value="hit_zones">"Anatomical Hit Zones"</option>
                             <option value="thermal">"Thermal / IR Sensor"</option>
+                        </select>
+                    </label>
+                    <label class="inline-label" for="model-lighting-mode">
+                        <span>"Lighting"</span>
+                        <select
+                            id="model-lighting-mode"
+                            onchange="window.satyaUpdate3dModelView()"
+                            on:change=move |_| wasm_client::satya_update_3d_model_view()
+                        >
+                            <option value="studio_matte">"Studio Matte"</option>
+                            <option value="daylight">"Outdoor Daylight"</option>
+                            <option value="dramatic_rim">"Dramatic Rim"</option>
+                            <option value="sunset">"Warm Sunset"</option>
+                            <option value="noir_night">"Noir Moonlight"</option>
                         </select>
                     </label>
                     <label class="inline-label" for="model-tint-color">

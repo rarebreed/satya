@@ -436,6 +436,9 @@ fn apply_battlemap_view_chrome(battlemap_on: bool) {
         "map-ink-style-wrap",
         if battlemap_on { "inline-flex" } else { "none" },
     );
+    for id in ["map-3d-shader-wrap", "map-3d-lighting-wrap"] {
+        set_display(id, if battlemap_on { "none" } else { "inline-flex" });
+    }
     if battlemap_on {
         let (style, tex_mode) = with_map_ui(|ui| (ui.ink_style, ui.texture_mode));
         set_select_value("map-ink-style-select", style.as_str());

@@ -262,10 +262,12 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
     let stroke_color = match render_mode {
         "hit_zones" => "#f43f5e",
         "thermal" => "#f59e0b",
+        "cel" => "#34d399",
         _ => "#38bdf8",
     };
     let mode_badge = match render_mode {
         "pbr" => "PBR-SHADED",
+        "cel" => "CEL-SHADED",
         "hit_zones" => "HIT-ZONES",
         "thermal" => "THERMAL-IR",
         _ => "WIREFRAME+PBR",

@@ -539,6 +539,11 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
         wasm_client::format_3d_model_stage_html("recon_mk4", "hit_zones");
     assert!(model_html.contains("Recon Suit Mk-IV"));
     assert!(model_pill.contains("11.8k tris"));
+    assert!(
+        wasm_client::format_3d_model_stage_html("custom_glb", "cel")
+            .0
+            .contains("CEL-SHADED")
+    );
 
     for chapter_val in [
         "notation_glossary",

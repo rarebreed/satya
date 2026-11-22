@@ -245,6 +245,7 @@ macro_rules! for_all_window_callbacks {
             "satyaApplyMapCoverToRoller" => satya_apply_map_cover_to_roller(),
             "satyaToggleMapProjection" => satya_toggle_map_projection(),
             "satyaToggleMapWallCutaway" => satya_toggle_map_wall_cutaway(),
+            "satyaUpdate3dMapStyle" => satya_update_3d_map_style(),
             "satyaResetMapCamera" => satya_reset_map_camera(),
             "satyaToggleMapEditor" => satya_toggle_map_editor(),
             "satyaSetMapEditorTool" => satya_set_map_editor_tool(String),

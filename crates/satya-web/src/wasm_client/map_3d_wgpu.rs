@@ -36,6 +36,7 @@ mod map_wgpu_runtime {
         uniform_buffer: wgpu::Buffer,
         bind_group: wgpu::BindGroup,
         render_pipeline: wgpu::RenderPipeline,
+        outline_pipeline: wgpu::RenderPipeline,
         diorama_vb: wgpu::Buffer,
         diorama_opaque_vcount: u32,
         diorama_vcount: u32,
@@ -55,6 +56,7 @@ mod map_wgpu_runtime {
         pub editor_pointer_active: bool,
         pub scene_dirty: bool,
         pub shader_mode: String,
+        pub lighting_mode: String,
     }
 
     impl Default for MapDioramaController {
@@ -67,7 +69,8 @@ mod map_wgpu_runtime {
                 drag_state: None,
                 editor_pointer_active: false,
                 scene_dirty: true,
-                shader_mode: "pbr".to_string(),
+                shader_mode: "cel".to_string(),
+                lighting_mode: "studio_matte".to_string(),
             }
         }
     }
@@ -248,10 +251,12 @@ mod map_wgpu_runtime {
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
         let (view_proj, eye) = ctrl.camera.build_view_proj_and_eye(aspect);
         let mode_f = shader_mode_code(&ctrl.shader_mode);
+        let (gloss, rim) = lighting_preset_gloss_and_rim(&ctrl.lighting_mode);
         let uniforms = DioramaUniforms {
             view_proj,
             camera_pos: [eye[0], eye[1], eye[2], 1.0],
             mode_params: [mode_f, cell_m, 0.42, if show_grid { 1.0 } else { 0.0 }],
+            light_params: [lighting_preset_code(&ctrl.lighting_mode), gloss, rim, 0.0],
         };
         pipe.queue
             .write_buffer(&pipe.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
@@ -294,25 +299,36 @@ mod map_wgpu_runtime {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+            let draw_solids = |rp: &mut wgpu::RenderPass<'_>| {
+                rp.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
+                rp.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
+                rp.draw(0..pipe.diorama_opaque_vcount, 0..1);
+
+                let stride = std::mem::size_of::<GlbInstanceData>() as u64;
+                for (idx, (preset, _)) in draws.iter().enumerate() {
+                    if let Some(mesh) = pipe.miniature_meshes.get(preset)
+                        && mesh.vertex_count > 0
+                    {
+                        let off = (idx as u64) * stride;
+                        rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                        rp.set_vertex_buffer(1, pipe.miniature_ib.slice(off..off + stride));
+                        rp.draw(0..mesh.vertex_count, 0..1);
+                    }
+                }
+            };
+
+            // 1. Draw opaque floor, cover, bulkheads, reach envelope, LoS laser & miniatures
             rpass.set_pipeline(&pipe.render_pipeline);
             rpass.set_bind_group(0, &pipe.bind_group, &[]);
+            draw_solids(&mut rpass);
 
-            // 1. Draw opaque floor, cover, bulkheads, reach envelope, and LoS laser
-            rpass.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
-            rpass.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
-            rpass.draw(0..pipe.diorama_opaque_vcount, 0..1);
-
-            // 2. Draw each `.glb` character miniature at its world cell transform
-            let stride = std::mem::size_of::<GlbInstanceData>() as u64;
-            for (idx, (preset, _)) in draws.iter().enumerate() {
-                if let Some(mesh) = pipe.miniature_meshes.get(preset)
-                    && mesh.vertex_count > 0
-                {
-                    let off = (idx as u64) * stride;
-                    rpass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                    rpass.set_vertex_buffer(1, pipe.miniature_ib.slice(off..off + stride));
-                    rpass.draw(0..mesh.vertex_count, 0..1);
-                }
+            // 2. Style C inverted-hull ink outlines on opaque cover, props, bulkheads & miniatures
+            if ctrl.shader_mode == "cel" {
+                rpass.set_pipeline(&pipe.outline_pipeline);
+                rpass.set_bind_group(0, &pipe.bind_group, &[]);
+                draw_solids(&mut rpass);
+                rpass.set_pipeline(&pipe.render_pipeline);
+                rpass.set_bind_group(0, &pipe.bind_group, &[]);
             }
 
             // 3. Draw translucent canopies (trees, gazebos) after miniatures so tokens underneath stay visible
@@ -561,8 +577,8 @@ mod map_wgpu_runtime {
             surface_config.height,
             "satya-map-depth",
         );
-        let (uniform_buffer, bind_group, render_pipeline) =
-            create_shared_diorama_pipeline(&device, surface_config.format, "satya-map");
+        let (uniform_buffer, bind_group, render_pipeline, outline_pipeline) =
+            create_shared_diorama_pipelines(&device, surface_config.format, "satya-map");
 
         let diorama_vb = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-map-empty-vb"),
@@ -592,6 +608,7 @@ mod map_wgpu_runtime {
             uniform_buffer,
             bind_group,
             render_pipeline,
+            outline_pipeline,
             diorama_vb,
             diorama_opaque_vcount: 0,
             diorama_vcount: 0,
@@ -652,6 +669,29 @@ pub fn satya_toggle_map_wall_cutaway() {
     );
     mark_map_wgpu_dirty();
     refresh_map_wgpu_if_active();
+}
+
+/// Synchronizes `#map-3d-shader-mode` and `#map-3d-lighting-mode` into the live WebGPU tactical map.
+#[wasm_bindgen]
+pub fn satya_update_3d_map_style() {
+    let shader = crate::wasm_client::dom::select_value("map-3d-shader-mode");
+    let lighting = crate::wasm_client::dom::select_value("map-3d-lighting-mode");
+    #[cfg(target_arch = "wasm32")]
+    map_wgpu_runtime::with_map_ctrl(|c| {
+        c.shader_mode = if shader.is_empty() {
+            "cel".to_string()
+        } else {
+            shader
+        };
+        c.lighting_mode = if lighting.is_empty() {
+            "studio_matte".to_string()
+        } else {
+            lighting
+        };
+        map_wgpu_runtime::render_map_frame(c);
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (shader, lighting);
 }
 
 /// Returns `(zoom, pan_xz)` for the live WebGPU tactical camera (`(1.0, [0.0, 0.0])` on host targets).
