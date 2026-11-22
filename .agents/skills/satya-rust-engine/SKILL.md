@@ -54,10 +54,10 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 - **6-Step Full-Stack Checklist for New `PropKind` / `SurfaceFeatureKind` / WebP Textures**:
   1. `crates/satya-schema`: Add variant to `define_wire_enum!` (`count = N`); verify `serde` `SCREAMING_SNAKE_CASE` matches the primary wire code on digit boundaries (e.g. `Printer3dStation` -> `"PRINTER3D_STATION"` primary + `"PRINTER_3D_STATION"` alias).
   2. `crates/satya-maps/src/map_dressing.rs`: Register `PropSpec` in `PROP_CATALOG`.
-  3. `src/satya_ml/texture_gen/catalog.py` & `tests/test_texture_gen_seamless.py`: Register new WebP tiles, generate/seam-check, and run `pixi run verify-textures`.
+  3. `src/satya_ml/texture_gen/catalog.py`, `crates/satya-web/src/wasm_client/map_2d_art_textures.rs` (`BATTLEMAP_TEXTURE_SPECS`), & `tests/test_texture_gen_seamless.py`: Register matching WebP tile filenames (enforced by `test_battlemap_2d_texture_catalog_matches_rust_wasm_registry` in `tests/test_schema_contracts.py`), generate/seam-check, and run `pixi run verify-textures`.
   4. `crates/satya-web/src/wasm_client/`: Implement 2D SVG glyph (`map_2d_art*.rs` + `BATTLEMAP_TEXTURE_SPECS`), 3D mesh (`map_3d*.rs`), and add the variant uniquely to `PROP_BRUSH_GROUPS` (`map_edge_edit.rs`).
   5. `crates/satya-web` tests verify all `PropKind::ALL` variants render balanced `<g>`/`</g>` SVG and unique brush membership.
-  6. Never modify frozen `schemas/v1/*.avsc` or `crates/satya-schema/src/events.rs`; keep map authoring DTO additions strictly `#[serde(default)]`.
+  6. When adding or evolving map/Avro DTOs in `crates/satya-schema`, keep `#[serde(default)]` (or Avro `v2+` / default-backed schema evolution) and verify `v1` wire compatibility with `pixi run test-schema`.
 
 ---
 
