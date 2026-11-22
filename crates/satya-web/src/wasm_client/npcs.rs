@@ -321,6 +321,7 @@ pub fn render_npcs_tab_dom() {
 #[wasm_bindgen]
 pub fn satya_refresh_npcs_tab() {
     render_npcs_tab_dom();
+    crate::wasm_client::notebook::render_combat_tracker();
 
     let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         return;
@@ -335,6 +336,7 @@ pub fn satya_refresh_npcs_tab() {
                 st.session_npcs = resp.npcs;
             });
             render_npcs_tab_dom();
+            crate::wasm_client::notebook::render_combat_tracker();
         }
     });
 }
@@ -390,6 +392,7 @@ fn retain_non_duplicate_npcs(
 
 fn notify_npc_vault_synced(msg: &str, append_notice: bool) {
     render_npcs_tab_dom();
+    crate::wasm_client::notebook::render_combat_tracker();
     satya_refresh_gm_memories();
     refresh_gm_omnisearch_if_active();
     set_feedback("gm-doc-feedback", msg, false);
@@ -599,6 +602,7 @@ pub fn satya_generate_npc_from_prompt() {
         st.selected_npc_id = Some(local_entry.character_id.clone());
     });
     render_npcs_tab_dom();
+    crate::wasm_client::notebook::render_combat_tracker();
     refresh_gm_omnisearch_if_active();
     append_system_notice(&format!(
         "Rolled up NPC '{}' ({}) with rules-legal 5-Stage Lifepath, Skills, and 9 Psyche traits.",
@@ -658,6 +662,7 @@ pub fn satya_generate_npc_from_prompt() {
                 st.session_npcs.insert(0, resp.npc);
             });
             render_npcs_tab_dom();
+            crate::wasm_client::notebook::render_combat_tracker();
             refresh_gm_omnisearch_if_active();
         }
     });

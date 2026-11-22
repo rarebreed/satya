@@ -65,7 +65,11 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                     <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.25s) · 30 Combat Techniques × TCF Triad"</span>
                     <label class="inline-label" for="ttrpg-stance">
                         <span>"Combat Action / Technique"</span>
-                        <select id="ttrpg-stance">
+                        <select
+                            id="ttrpg-stance"
+                            onchange="window.satyaOnCombatTrackerTechniqueChange()"
+                            on:change=move |_| wasm_client::satya_on_combat_tracker_technique_change()
+                        >
                             <option value="">"Non-Combat Task (TC 10)"</option>
                             {COMBAT_STANCE_TABLE_ROWS
                                 .iter()
@@ -118,6 +122,12 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                     </button>
                 </div>
             </div>
+            <div
+                id="combat-action-mode-readout"
+                class="ttrpg-odds-readout combat-action-mode-card"
+                aria-live="polite"
+                inner_html=wasm_client::default_ttrpg_triad_readout_html()
+            ></div>
             <div class="roster-bar">
                 <span class="roster-title">"Active Combatants & Session Order:"</span>
                 <div id="combat-tracker-list" class="combat-tracker-list">

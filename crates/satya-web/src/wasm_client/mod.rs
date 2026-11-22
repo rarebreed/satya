@@ -28,6 +28,7 @@ pub mod character_sheet_status_views;
 pub mod character_sheet_vault;
 pub mod character_sheet_views;
 pub mod chat_and_ttrpg;
+pub mod combat_tracker;
 pub mod dice_3d;
 pub mod dice_3d_wgpu;
 pub mod dom;
@@ -187,12 +188,14 @@ macro_rules! for_all_window_callbacks {
             "satyaSelectChatContext" => satya_select_chat_context(String),
             "satyaUpdateCascadePreview" => satya_update_cascade_preview(),
             "satyaUpdateCascadeOdds" => satya_update_cascade_odds(),
+            "satyaToggleTtrpgOddsGraph" => satya_toggle_ttrpg_odds_graph(),
             "satyaFilterTtrpgSkillDropdown" => satya_filter_ttrpg_skill_dropdown(),
             "satyaOpenTtrpgSkillDropdown" => satya_open_ttrpg_skill_dropdown(),
             "satyaToggleTtrpgSkillDropdown" => satya_toggle_ttrpg_skill_dropdown(),
             "satyaSelectTtrpgSkill" => satya_select_ttrpg_skill(String),
             "satyaTtrpgSkillKeydown" => satya_ttrpg_skill_keydown(KeyboardEvent),
             "satyaOnDrawerTechniqueChange" => satya_on_drawer_technique_change(),
+            "satyaOnCombatTrackerTechniqueChange" => satya_on_combat_tracker_technique_change(),
             "satyaApplyTriadPreset" => satya_apply_triad_preset(),
             "satyaUpdateDrawerTriadPreview" => satya_update_drawer_triad_preview(),
 
@@ -261,6 +264,7 @@ macro_rules! for_all_window_callbacks {
             "satyaEditorDeleteSelected" => satya_editor_delete_selected(),
             "satyaLoadSkillPreset" => satya_load_skill_preset(String, i32, i32),
             "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
+            "satyaOpenCombatantDetails" => satya_open_combatant_details(String, String),
             "satyaSelectRulesChapter" => satya_select_rules_chapter(String),
             "satyaSearchRulesBook" => satya_search_rules_book(),
 

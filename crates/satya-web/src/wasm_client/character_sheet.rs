@@ -18,10 +18,9 @@ pub use crate::wasm_client::character_sheet_record::*;
 pub use crate::wasm_client::character_sheet_status_views::*;
 pub use crate::wasm_client::character_sheet_vault::*;
 pub use crate::wasm_client::character_sheet_views::*;
-use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
+use crate::wasm_client::chat_and_ttrpg::append_system_notice;
 use crate::wasm_client::dom::{
-    get_element, input_value, roll_browser_die_i32, select_value, set_input_value, set_text,
-    slugify_identifier,
+    get_element, input_value, roll_browser_die_i32, select_value, set_text, slugify_identifier,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_engine::{
@@ -853,6 +852,7 @@ pub fn satya_char_sheet_load_preset(preset_id: String) {
         });
     }
     render_character_sheet();
+    crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
 }
 
 /// Switches the visible section filter (`"ALL"`, `"STATS"`, `"SKILLS"`, `"EQUIPMENT"`, `"STATUS"`, `"NOTES"`) on the Character Sheet.
@@ -909,27 +909,17 @@ pub fn satya_char_sheet_update_zone(zone_idx: usize, field: String, value: Strin
             .apply_zone_mutation(zone_idx, &field, &value);
     });
     render_character_sheet();
+    crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
 }
 
 /// Adjusts or sets Damage, Fatigue, Exertion, Blood Loss, Morale, or Psyche status fields on the Character Sheet.
 #[wasm_bindgen]
 pub fn satya_char_sheet_update_status(field: String, value: String) {
-    let is_sync = field.trim().eq_ignore_ascii_case("sync_to_roller");
-    let roller_vals = with_state_mut(|st| {
+    with_state_mut(|st| {
         st.character_sheet.apply_status_mutation(&field, &value);
-        is_sync.then(|| {
-            (
-                st.character_sheet.total_task_delta_int(),
-                st.character_sheet.effective_wound_shock_index(),
-            )
-        })
     });
-    if let Some((delta_int, shock)) = roller_vals {
-        set_input_value("ttrpg-internal-mod", &delta_int.to_string());
-        set_input_value("ttrpg-wound-shock", &shock.to_string());
-        satya_update_cascade_preview();
-    }
     render_character_sheet();
+    crate::wasm_client::combat_tracker::sync_character_sheet_conditions_to_roller_and_tracker();
 }
 
 /// Modifies equipped Ranged Firearms, Melee Weapons, Armor Profiles, Field Gear, or Ballistic Range on the Character Sheet.

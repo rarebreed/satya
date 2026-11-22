@@ -2,14 +2,63 @@
 //! (`Task Resolution & Action Pool`).
 
 use crate::wasm_client::chat_and_ttrpg::satya_update_cascade_preview;
-use crate::wasm_client::dom::{escape_html, input_value, select_value, set_html, set_input_value};
-use crate::wasm_client::state::{SECONDS_PER_TICK, with_state};
+use crate::wasm_client::dom::{
+    escape_html, input_value, select_value, set_display, set_html, set_input_value,
+    set_select_value,
+};
+use crate::wasm_client::state::{
+    PlannedCombatActionState, SECONDS_PER_TICK, with_state, with_state_mut,
+};
 use satya_engine::{
     ActionTimeFactorParams, CombatDomain, CombatTechniqueId, TacticalPoolEnvelope,
     TacticalPoolParams, TechniqueTriadEvalParams, Triad, compute_tactical_pool,
     evaluate_technique_with_triad,
 };
 use wasm_bindgen::prelude::*;
+
+/// Inputs for evaluating the Action Mode & Tactical Triad (`T / C / F`) preview shared between
+/// `#ttrpg-drawer` and `#notebook-pane-combat`.
+#[derive(Debug, Clone, Copy)]
+pub struct DrawerTriadInputs<'a> {
+    pub technique_raw: &'a str,
+    pub tempo: i32,
+    pub control: i32,
+    pub force: i32,
+    pub skill_c: i32,
+    pub skill_n: usize,
+    pub fatigue_level: i32,
+    pub wound_shock_index: f32,
+}
+
+/// Pure output of [`evaluate_drawer_triad_preview`] for Combat Tracker display,
+/// Task Roller pool-violation warnings, and [`PlannedCombatActionState`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DrawerTriadPreviewOutput {
+    pub combat_tracker_html: String,
+    pub drawer_warning_html: Option<String>,
+    pub planned_action: PlannedCombatActionState,
+}
+
+/// Resolves a `<select>` option value (either a legacy [`satya_schema::CombatStance`] code or a
+/// canonical [`CombatTechniqueId`] code) into an optional [`CombatTechniqueId`].
+#[must_use]
+pub fn resolve_combat_technique_from_select(raw: &str) -> Option<CombatTechniqueId> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("non_combat")
+        || trimmed.eq_ignore_ascii_case("none")
+    {
+        return None;
+    }
+    match trimmed {
+        "POWER" => Some(CombatTechniqueId::Swing),
+        "MANEUVER" => Some(CombatTechniqueId::Probe),
+        "STABILITY" => Some(CombatTechniqueId::Parry),
+        "RANGED_AIMED" => Some(CombatTechniqueId::DeliberateAimedShot),
+        "RANGED_SNAP" => Some(CombatTechniqueId::SnapShot),
+        _ => CombatTechniqueId::from_code_str(trimmed),
+    }
+}
 
 /// Computes the active character's [`TacticalPoolEnvelope`] for the current `#ttrpg-drawer` settings.
 pub fn compute_active_drawer_envelope(
@@ -90,33 +139,17 @@ pub fn compute_preset_triad_allocation(
     (t, c, f)
 }
 
-/// Returns the default SSR HTML for `#ttrpg-triad-readout`.
+/// Returns the default SSR HTML for `#combat-action-mode-readout`.
 pub fn default_ttrpg_triad_readout_html() -> String {
     format_drawer_triad_readout("non_combat", 7, 7, 7, 12, 3, 1, 0.0)
 }
 
-/// Formats the live HTML readout for `#ttrpg-triad-readout` in `#ttrpg-drawer`.
-#[allow(clippy::too_many_arguments)]
-pub fn format_drawer_triad_readout(
-    technique_raw: &str,
-    tempo: i32,
-    control: i32,
-    force: i32,
-    skill_c: i32,
-    skill_n: usize,
-    fatigue_level: i32,
-    wound_shock_index: f32,
-) -> String {
-    let raw_trimmed = technique_raw.trim();
-    let tech_opt = if raw_trimmed.is_empty()
-        || raw_trimmed.eq_ignore_ascii_case("non_combat")
-        || raw_trimmed.eq_ignore_ascii_case("none")
-    {
-        None
-    } else {
-        CombatTechniqueId::from_code_str(raw_trimmed)
-    };
-
+/// Evaluates the Action Mode & Tactical Triad (`T / C / F`) preview HTML for the Combat Tracker,
+/// an optional compact Task Roller warning pill (only when a combat technique has a T/C/F violation),
+/// and the [`PlannedCombatActionState`] snapshot.
+#[must_use]
+pub fn evaluate_drawer_triad_preview(inputs: &DrawerTriadInputs<'_>) -> DrawerTriadPreviewOutput {
+    let tech_opt = resolve_combat_technique_from_select(inputs.technique_raw);
     let domain = match tech_opt {
         Some(tid) => {
             let spec = tid.spec();
@@ -132,30 +165,49 @@ pub fn format_drawer_triad_readout(
     };
 
     let env = compute_active_drawer_envelope(
-        skill_c,
-        skill_n,
+        inputs.skill_c,
+        inputs.skill_n,
         domain == CombatDomain::Ranged,
-        fatigue_level,
-        wound_shock_index,
+        inputs.fatigue_level,
+        inputs.wound_shock_index,
     );
+    let tempo = inputs.tempo;
+    let control = inputs.control;
+    let force = inputs.force;
     let sum = tempo + control + force;
 
     let Some(tech_id) = tech_opt else {
-        return format!(
+        let combat_tracker_html = format!(
             r#"<div class="cascade-summary-header">
                 <span><strong>Action Mode:</strong> Non-Combat Task (Standard 2d20 Skill Check)</span>
                 <span class="mono">Tactical Pool P_eff = <strong>{}/{}</strong> · Neutral B = <strong>{}</strong> · Caps: T&le;{} · C&le;{} · F&le;{}</span>
             </div>
             <div class="mono" style="font-size:0.78rem;opacity:0.88;">
-                Select a <strong>Combat Action / Technique</strong> above (e.g. <em>Strike: Punch/Thrust</em>, <em>Control: Grab/Takedown</em>, or <em>Ranged: Snap Shot / Sighted Shot</em>) to activate Count-Up Tick &amp; Tempo/Control/Force (T/C/F) pool resolution.
+                Planned Triad: T=<strong>{tempo}</strong> · C=<strong>{control}</strong> · F=<strong>{force}</strong> (Sum {sum}/{}). Select a <strong>Combat Action / Technique</strong> above or in Task Resolution to activate Count-Up Tick &amp; T/C/F resolution.
             </div>"#,
             env.p_eff,
             env.p_base,
             env.neutral_baseline_b,
             env.tempo_cap,
             env.control_cap,
-            env.force_cap
+            env.force_cap,
+            env.p_eff,
         );
+        return DrawerTriadPreviewOutput {
+            combat_tracker_html,
+            drawer_warning_html: None,
+            planned_action: PlannedCombatActionState {
+                technique_code: None,
+                technique_name: None,
+                tempo,
+                control,
+                force,
+                p_eff: env.p_eff,
+                effective_tc: None,
+                valid: true,
+                archetype_label: None,
+            },
+        };
     };
 
     let eval_params = TechniqueTriadEvalParams {
@@ -163,10 +215,10 @@ pub fn format_drawer_triad_readout(
         domain,
         envelope: env.clone(),
         alloc: Triad::new(tempo, control, force),
-        skill_level_n: skill_n.clamp(1, 10),
+        skill_level_n: inputs.skill_n.clamp(1, 10),
         time_factor_params: ActionTimeFactorParams {
-            fatigue_level: fatigue_level.max(0),
-            wound_shock_index: f64::from(wound_shock_index.max(0.0)),
+            fatigue_level: inputs.fatigue_level.max(0),
+            wound_shock_index: f64::from(inputs.wound_shock_index.max(0.0)),
             ..Default::default()
         },
         weapon_recoil_r: if domain == CombatDomain::Ranged { 4 } else { 0 },
@@ -190,7 +242,7 @@ pub fn format_drawer_triad_readout(
         )
     };
 
-    format!(
+    let combat_tracker_html = format!(
         r#"<div class="cascade-summary-header">
             <span><strong>Action:</strong> {} <span class="mono">[{}]</span></span>
             {status_html}
@@ -219,14 +271,62 @@ pub fn format_drawer_triad_readout(
         res.ranged_effective_recoil_r,
         res.ranged_unbraced_dispersion_delta_ext,
         res.exertion_marks_gained
-    )
+    );
+
+    let drawer_warning_html = (!res.valid).then(|| {
+        format!(
+            r#"<span class="pill pill-danger">T/C/F Violation ({sum}/{}): {}</span><button type="button" class="btn-chip" onclick="window.satyaSelectNotebookTab('combat')">Combat Tracker ↗</button>"#,
+            env.p_eff,
+            escape_html(&res.violations.join(" "))
+        )
+    });
+
+    let planned_action = PlannedCombatActionState {
+        technique_code: Some(tech_id.as_str().to_string()),
+        technique_name: Some(spec.name.to_string()),
+        tempo,
+        control,
+        force,
+        p_eff: env.p_eff,
+        effective_tc: Some(res.effective_tc),
+        valid: res.valid,
+        archetype_label: Some(res.archetype_label),
+    };
+
+    DrawerTriadPreviewOutput {
+        combat_tracker_html,
+        drawer_warning_html,
+        planned_action,
+    }
 }
 
-/// Invoked when `#ttrpg-action-technique` changes in `#ttrpg-drawer`.
-#[wasm_bindgen]
-pub fn satya_on_drawer_technique_change() {
-    let tech_raw = select_value("ttrpg-action-technique");
-    if let Some(tid) = CombatTechniqueId::from_code_str(&tech_raw) {
+/// Formats the live Action Mode & Tactical Triad HTML readout for `#combat-action-mode-readout`.
+#[allow(clippy::too_many_arguments)]
+pub fn format_drawer_triad_readout(
+    technique_raw: &str,
+    tempo: i32,
+    control: i32,
+    force: i32,
+    skill_c: i32,
+    skill_n: usize,
+    fatigue_level: i32,
+    wound_shock_index: f32,
+) -> String {
+    evaluate_drawer_triad_preview(&DrawerTriadInputs {
+        technique_raw,
+        tempo,
+        control,
+        force,
+        skill_c,
+        skill_n,
+        fatigue_level,
+        wound_shock_index,
+    })
+    .combat_tracker_html
+}
+
+fn sync_skill_suggestion_for_technique(tech_opt: Option<CombatTechniqueId>) {
+    if let Some(tid) = tech_opt {
         let spec = tid.spec();
         let current_skill = input_value("ttrpg-skill");
         if current_skill.trim().is_empty() || current_skill == "Trauma Surgery" {
@@ -240,6 +340,36 @@ pub fn satya_on_drawer_technique_change() {
             set_input_value("ttrpg-skill", suggested_skill);
         }
     }
+}
+
+/// Invoked when `#ttrpg-action-technique` changes in `#ttrpg-drawer`.
+/// Two-way syncs `#ttrpg-stance` in the Combat Tracker, applies the Triad preset, and refreshes previews.
+#[wasm_bindgen]
+pub fn satya_on_drawer_technique_change() {
+    let tech_raw = select_value("ttrpg-action-technique");
+    let resolved = resolve_combat_technique_from_select(&tech_raw);
+    set_select_value(
+        "ttrpg-stance",
+        resolved.map(CombatTechniqueId::as_str).unwrap_or(""),
+    );
+    sync_skill_suggestion_for_technique(resolved);
+    satya_apply_triad_preset();
+    satya_update_cascade_preview();
+}
+
+/// Invoked when `#ttrpg-stance` changes in `#notebook-pane-combat` (`Combat Tracker`).
+/// Two-way syncs `#ttrpg-action-technique` in `#ttrpg-drawer`, applies the Triad preset, and refreshes previews.
+#[wasm_bindgen]
+pub fn satya_on_combat_tracker_technique_change() {
+    let stance_raw = select_value("ttrpg-stance");
+    let resolved = resolve_combat_technique_from_select(&stance_raw);
+    set_select_value(
+        "ttrpg-action-technique",
+        resolved
+            .map(CombatTechniqueId::as_str)
+            .unwrap_or("non_combat"),
+    );
+    sync_skill_suggestion_for_technique(resolved);
     satya_apply_triad_preset();
     satya_update_cascade_preview();
 }
@@ -254,7 +384,7 @@ pub fn satya_apply_triad_preset() {
         return;
     }
     let tech_raw = select_value("ttrpg-action-technique");
-    let is_ranged = CombatTechniqueId::from_code_str(&tech_raw)
+    let is_ranged = resolve_combat_technique_from_select(&tech_raw)
         .map(|tid| tid.spec().allowed_ranged && !tid.spec().allowed_unarmed)
         .unwrap_or(false);
     let skill_n = input_value("ttrpg-skill-level")
@@ -285,7 +415,9 @@ pub fn satya_apply_triad_preset() {
     satya_update_drawer_triad_preview();
 }
 
-/// Recalculates and updates `#ttrpg-triad-readout` when `T`, `C`, `F`, or any drawer stat changes.
+/// Recalculates and updates `#combat-action-mode-readout`, `#ttrpg-triad-warning`,
+/// `SatyaWasmState::planned_combat_action`, and `#combat-tracker-list` when `T`, `C`, `F`,
+/// or any drawer stat changes.
 #[wasm_bindgen]
 pub fn satya_update_drawer_triad_preview() {
     let tech_raw = select_value("ttrpg-action-technique");
@@ -314,17 +446,28 @@ pub fn satya_update_drawer_triad_preview() {
         .parse::<f32>()
         .unwrap_or(0.0);
 
-    let html = format_drawer_triad_readout(
-        &tech_raw,
+    let out = evaluate_drawer_triad_preview(&DrawerTriadInputs {
+        technique_raw: &tech_raw,
         tempo,
         control,
         force,
-        control_c,
+        skill_c: control_c,
         skill_n,
-        fatigue,
-        wound_shock,
-    );
-    set_html("ttrpg-triad-readout", &html);
+        fatigue_level: fatigue,
+        wound_shock_index: wound_shock,
+    });
+    set_html("combat-action-mode-readout", &out.combat_tracker_html);
+    if let Some(warn) = out.drawer_warning_html {
+        set_html("ttrpg-triad-warning", &warn);
+        set_display("ttrpg-triad-warning", "flex");
+    } else {
+        set_html("ttrpg-triad-warning", "");
+        set_display("ttrpg-triad-warning", "none");
+    }
+    with_state_mut(|st| {
+        st.planned_combat_action = out.planned_action;
+    });
+    crate::wasm_client::notebook::render_combat_tracker();
 }
 
 #[cfg(test)]
@@ -382,5 +525,74 @@ mod tests {
 
         let punch_over = format_drawer_triad_readout("punch", 30, 30, 30, 12, 3, 0, 0.0);
         assert!(punch_over.contains("Pool Violation"));
+    }
+
+    #[test]
+    fn test_resolve_combat_technique_and_drawer_warning_behavior() {
+        assert_eq!(resolve_combat_technique_from_select(""), None);
+        assert_eq!(resolve_combat_technique_from_select("non_combat"), None);
+        assert_eq!(
+            resolve_combat_technique_from_select("POWER"),
+            Some(CombatTechniqueId::Swing)
+        );
+        assert_eq!(
+            resolve_combat_technique_from_select("RANGED_SNAP"),
+            Some(CombatTechniqueId::SnapShot)
+        );
+        assert_eq!(
+            resolve_combat_technique_from_select("punch"),
+            Some(CombatTechniqueId::Punch)
+        );
+
+        let non_combat_out = evaluate_drawer_triad_preview(&DrawerTriadInputs {
+            technique_raw: "non_combat",
+            tempo: 7,
+            control: 7,
+            force: 7,
+            skill_c: 12,
+            skill_n: 3,
+            fatigue_level: 0,
+            wound_shock_index: 0.0,
+        });
+        assert!(non_combat_out.drawer_warning_html.is_none());
+        assert_eq!(non_combat_out.planned_action.technique_code, None);
+        assert!(non_combat_out.planned_action.valid);
+
+        let env = compute_active_drawer_envelope(12, 3, false, 0, 0.0);
+        let (t, c, f) = compute_preset_triad_allocation(&env, "balanced");
+        let valid_out = evaluate_drawer_triad_preview(&DrawerTriadInputs {
+            technique_raw: "punch",
+            tempo: t,
+            control: c,
+            force: f,
+            skill_c: 12,
+            skill_n: 3,
+            fatigue_level: 0,
+            wound_shock_index: 0.0,
+        });
+        assert!(valid_out.drawer_warning_html.is_none());
+        assert_eq!(
+            valid_out.planned_action.technique_code.as_deref(),
+            Some("punch")
+        );
+        assert!(valid_out.planned_action.effective_tc.is_some());
+        assert!(valid_out.planned_action.valid);
+
+        let bad_out = evaluate_drawer_triad_preview(&DrawerTriadInputs {
+            technique_raw: "punch",
+            tempo: 25,
+            control: 25,
+            force: 25,
+            skill_c: 12,
+            skill_n: 3,
+            fatigue_level: 0,
+            wound_shock_index: 0.0,
+        });
+        let warn = bad_out
+            .drawer_warning_html
+            .expect("violation warning must emit on illegal T/C/F");
+        assert!(warn.contains("T/C/F Violation"));
+        assert!(warn.contains("window.satyaSelectNotebookTab('combat')"));
+        assert!(!bad_out.planned_action.valid);
     }
 }

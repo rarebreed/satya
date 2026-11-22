@@ -26,6 +26,46 @@ use web_sys::{AudioContext, MediaStream, RtcDataChannel, RtcPeerConnection, WebS
 /// Canonical temporal granularity across the UI and engine (`1 Tick = 0.25s`, `20 Ticks = 5.0s`).
 pub const SECONDS_PER_TICK: f64 = 0.25;
 
+/// Snapshot of the player's currently planned Action Mode and Tactical Triad (`Tempo` / `Control` / `Force`)
+/// shared between `#ttrpg-drawer` (`Task Resolution & Action Pool`) and `#notebook-pane-combat` (`Combat Tracker`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedCombatActionState {
+    /// Canonical `CombatTechniqueId::as_str()` code when a combat technique is selected; `None` for Non-Combat.
+    pub technique_code: Option<String>,
+    /// Human-readable technique name when a combat technique is selected; `None` for Non-Combat.
+    pub technique_name: Option<String>,
+    /// Planned Tempo Pool (`T`) allocation.
+    pub tempo: i32,
+    /// Planned Control Pool (`C`) allocation.
+    pub control: i32,
+    /// Planned Force Pool (`F`) allocation.
+    pub force: i32,
+    /// Character's effective Tactical Pool (`P_eff`) for the active parameters.
+    pub p_eff: i32,
+    /// Effective Count-Up Tick cost (`effective_tc`) when a combat technique is active.
+    pub effective_tc: Option<i32>,
+    /// Whether the planned `T / C / F` split respects `P_eff` and all aspect caps.
+    pub valid: bool,
+    /// Tactical Triad archetype descriptor (e.g. `"Balanced"`, `"Blitz Tempo"`).
+    pub archetype_label: Option<String>,
+}
+
+impl Default for PlannedCombatActionState {
+    fn default() -> Self {
+        Self {
+            technique_code: None,
+            technique_name: None,
+            tempo: 7,
+            control: 7,
+            force: 7,
+            p_eff: 0,
+            effective_tc: None,
+            valid: true,
+            archetype_label: None,
+        }
+    }
+}
+
 /// Active WebRTC peer connection and optional `satya-chat-dc` DataChannel for a remote participant.
 pub struct PeerEntry {
     /// Browser `RTCPeerConnection` instance for this remote peer.
@@ -150,6 +190,10 @@ pub struct SatyaWasmState {
     pub wizard: crate::wasm_client::wizard::CharacterWizardState,
     /// Interactive state for the Character Sheet / Status notebook tab (`#notebook-pane-character`).
     pub character_sheet: crate::wasm_client::character_sheet::CharacterSheetState,
+    /// Whether the Outcome Distribution Graph breakdown table in `#ttrpg-odds-readout` is expanded.
+    pub ttrpg_odds_table_expanded: bool,
+    /// Planned Action Mode and `T / C / F` allocation synchronized between Task Resolution and Combat Tracker.
+    pub planned_combat_action: PlannedCombatActionState,
 }
 
 impl Default for SatyaWasmState {
@@ -214,6 +258,8 @@ impl Default for SatyaWasmState {
             viewer_can_see_gm_secrets: false,
             wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
             character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
+            ttrpg_odds_table_expanded: false,
+            planned_combat_action: PlannedCombatActionState::default(),
         }
     }
 }

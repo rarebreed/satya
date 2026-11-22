@@ -3,18 +3,19 @@
 //! handlers and HTML formatters.
 
 use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
+pub use crate::wasm_client::combat_tracker::*;
 use crate::wasm_client::dom::{
-    document, escape_html, escape_js_single_quoted_attr, fetch_json, get_element, input_value,
+    document, escape_html, escape_js_single_quoted_attr, get_element, input_value,
     roll_browser_die_i64, select_value, set_class, set_display, set_input_value, set_select_value,
     set_text,
 };
 pub use crate::wasm_client::gm_docs::*;
-use crate::wasm_client::state::{SECONDS_PER_TICK, with_state, with_state_mut};
+use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
 use crate::wasm_client::webrtc::{send_ws_packet, sync_workspace_drawers_dom};
 use satya_schema::{
     ChannelContext, ClientWsPacket, GmMapUpdateRequest, MessageVisibility, Participant,
-    ParticipantKind, SessionRole, WgpuDiceSpec,
+    SessionRole, WgpuDiceSpec,
 };
 use wasm_bindgen::prelude::*;
 
@@ -122,6 +123,7 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         satya_refresh_metrics();
     } else if target == "combat" {
         refresh_combat_tracker();
+        crate::wasm_client::ttrpg_drawer_triad::satya_update_drawer_triad_preview();
     } else if target == "docs" {
         satya_refresh_gm_documents();
     } else if target == "npcs" {
@@ -331,223 +333,6 @@ pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: 
     set_input_value("ttrpg-control-c", &control_c.clamp(1, 20).to_string());
     set_text("char-stat-control", &control_c.clamp(1, 20).to_string());
     satya_update_cascade_preview();
-}
-
-/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.25s`, `20 Ticks = 5.0s`) in the `Combat Tracker` notebook tab and persists the updated state to SQLite when in a live session.
-#[wasm_bindgen]
-pub fn satya_advance_combat_tick(delta: i32) {
-    if with_state(|st| {
-        st.session_id.is_some()
-            && st
-                .self_participant
-                .as_ref()
-                .is_some_and(|p| p.role == SessionRole::Observer)
-    }) {
-        return;
-    }
-    let (round, tick, session_opt, token_opt) = with_state_mut(|st| {
-        if delta <= 0 {
-            st.combat_round = 1;
-            st.combat_tick = 1;
-        } else {
-            let next = st.combat_tick + (delta as u32);
-            st.combat_tick = next;
-            st.combat_round = 1 + (next / 20);
-        }
-        (
-            st.combat_round,
-            st.combat_tick,
-            st.session_id.clone(),
-            st.auth_token.clone(),
-        )
-    });
-    let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
-    set_text(
-        "combat-round-pill",
-        &format!("Window {round} · Tick {tick} ({elapsed_sec:.2}s)"),
-    );
-    render_combat_tracker();
-
-    if let (Some(sid), Some(token)) = (session_opt, token_opt) {
-        let req = satya_schema::UpdateCombatTrackerRequest {
-            tick_delta: Some(delta),
-            combat_active: Some(true),
-            entity_id: None,
-            active_stance: None,
-            next_action_tick: None,
-            fatigue_level: None,
-            wound_shock: None,
-            grid_x: None,
-            grid_y: None,
-            zone_label: None,
-        };
-        wasm_bindgen_futures::spawn_local(async move {
-            let url = format!("/api/sessions/{sid}/combat");
-            if let Ok(ct) = fetch_json::<_, satya_schema::CombatTrackerState>(
-                "POST",
-                &url,
-                Some(&token),
-                Some(&req),
-            )
-            .await
-            {
-                let tick = ct.tick;
-                let round = ct.round.max(1);
-                with_state_mut(|st| {
-                    st.combat_tick = tick;
-                    st.combat_round = round;
-                    st.combat_combatants = ct.combatants;
-                });
-                let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
-                set_text(
-                    "combat-round-pill",
-                    &format!("Window {round} · Tick {tick} ({elapsed_sec:.2}s)"),
-                );
-                render_combat_tracker();
-            }
-        });
-    }
-}
-
-/// Formats authoritative server [`satya_schema::CombatantTickEntry`] rows (including NPCs, stance, fatigue, and wound shock) for `#combat-tracker-list`.
-pub fn format_combat_tracker_entries_html(
-    combatants: &[satya_schema::CombatantTickEntry],
-    round: u32,
-) -> String {
-    if combatants.is_empty() {
-        return r#"<span class="pill pill-muted">No active combatants recorded in session tracker.</span>"#
-            .to_string();
-    }
-    let mut ordered: Vec<&satya_schema::CombatantTickEntry> = combatants.iter().collect();
-    ordered.sort_by_key(|c| (c.next_action_tick, c.display_name.as_str()));
-    ordered
-        .into_iter()
-        .map(|c| {
-            let actor_sec = f64::from(c.next_action_tick) * SECONDS_PER_TICK;
-            let role_low = c.role_or_faction.to_ascii_lowercase();
-            let badge_cls = if c.entity_id.starts_with("ai-")
-                || role_low.contains("ai")
-                || role_low.contains("npc")
-                || role_low.contains("enemy")
-            {
-                "participant-chip ai"
-            } else {
-                "participant-chip"
-            };
-            let stance = c
-                .active_stance
-                .as_ref()
-                .map(|s| format!(" · {s:?}"))
-                .unwrap_or_default();
-            let fatigue = if c.fatigue_level != 0 {
-                format!(" · Fatigue {}", c.fatigue_level)
-            } else {
-                String::new()
-            };
-            let shock = if c.wound_shock != 0 {
-                format!(" · Shock {}", c.wound_shock)
-            } else {
-                String::new()
-            };
-            let zone = c
-                .zone_label
-                .as_deref()
-                .map(str::trim)
-                .filter(|z| !z.is_empty())
-                .map(|z| format!(" · {}", escape_html(z)))
-                .unwrap_or_default();
-            format!(
-                r#"<div class="{badge_cls}"><strong>{}</strong> [{}] · OODA {} · Next Action @ Tick {} ({actor_sec:.2}s · W{round}){stance}{fatigue}{shock}{zone}</div>"#,
-                escape_html(&c.display_name),
-                escape_html(&c.role_or_faction),
-                c.ooda_score,
-                c.next_action_tick,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-/// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`1 Tick = 0.25s`, `Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.
-pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32) -> String {
-    let combatants: Vec<&Participant> = roster
-        .iter()
-        .filter(|p| p.role == SessionRole::Player)
-        .collect();
-    if combatants.is_empty() {
-        return r#"<span class="pill pill-muted">No active player combatants in roster.</span>"#
-            .to_string();
-    }
-    combatants
-        .into_iter()
-        .enumerate()
-        .map(|(idx, p)| {
-            let ooda = (13 - (idx as i32)).clamp(8, 16);
-            let start_tick = satya_engine::compute_starting_tick(ooda, 0, 0, ooda + 1, 12) as u32;
-            let actor_tick = tick.max(start_tick) + (idx as u32) * 2;
-            let actor_sec = f64::from(actor_tick) * SECONDS_PER_TICK;
-            let badge_cls = if p.participant_kind == ParticipantKind::AiAgent {
-                "participant-chip ai"
-            } else {
-                "participant-chip"
-            };
-            format!(
-                r#"<div class="{badge_cls}"><strong>{}</strong> [{:?}] · OODA {ooda} · Next Action @ Tick {actor_tick} ({actor_sec:.2}s · W{round})</div>"#,
-                escape_html(&p.display_name),
-                p.role
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-pub(crate) fn render_combat_tracker() {
-    let (in_session, combatants, roster, round, tick) = with_state(|st| {
-        (
-            st.session_id.is_some(),
-            st.combat_combatants.clone(),
-            st.roster.clone(),
-            st.combat_round,
-            st.combat_tick,
-        )
-    });
-    if let Some(el) = get_element("combat-tracker-list") {
-        let html = if in_session || !combatants.is_empty() {
-            format_combat_tracker_entries_html(&combatants, round)
-        } else {
-            format_combat_tracker_html(&roster, round, tick)
-        };
-        el.set_inner_html(&html);
-    }
-}
-
-/// Fetches the latest authoritative [`satya_schema::CombatTrackerState`] when in a live session and re-renders `#combat-tracker-list`.
-pub(crate) fn refresh_combat_tracker() {
-    render_combat_tracker();
-    let (session_opt, token_opt) = with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-    if let (Some(sid), Some(tok)) = (session_opt, token_opt) {
-        wasm_bindgen_futures::spawn_local(async move {
-            let url = format!("/api/sessions/{sid}/combat");
-            if let Ok(ct) =
-                fetch_json::<(), satya_schema::CombatTrackerState>("GET", &url, Some(&tok), None)
-                    .await
-            {
-                let tick = ct.tick;
-                let round = ct.round.max(1);
-                with_state_mut(|st| {
-                    st.combat_tick = tick;
-                    st.combat_round = round;
-                    st.combat_combatants = ct.combatants;
-                });
-                let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
-                set_text(
-                    "combat-round-pill",
-                    &format!("Window {round} · Tick {tick} ({elapsed_sec:.2}s)"),
-                );
-                render_combat_tracker();
-            }
-        });
-    }
 }
 
 /// Formats an HTML snippet of tactical token chips (`label (x, y)`) for `#tabletop-token-list`.
