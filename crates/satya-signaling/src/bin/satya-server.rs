@@ -41,9 +41,16 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
     let addr = SocketAddr::new(host_ip, port);
-    info!("Satya WebRTC & Apache Iggy Event Server listening on http://{addr}");
-
+    let tls_paths = satya_signaling::tls::resolve_tls_paths_from_env()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+
+    if let Some(paths) = tls_paths {
+        let acceptor = satya_signaling::tls::build_tls_acceptor(&paths)?;
+        info!("Satya WebRTC & Apache Iggy Event Server listening on https://{addr}");
+        satya_signaling::tls::serve_https(listener, app, acceptor).await?;
+    } else {
+        info!("Satya WebRTC & Apache Iggy Event Server listening on http://{addr}");
+        axum::serve(listener, app).await?;
+    }
     Ok(())
 }

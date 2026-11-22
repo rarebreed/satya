@@ -28,6 +28,7 @@ pub mod player_ai_spatial;
 pub mod session_export;
 pub mod session_persistence;
 pub mod state;
+pub mod tls;
 pub mod ws;
 
 pub use characters::*;
