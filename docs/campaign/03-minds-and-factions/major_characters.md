@@ -48,7 +48,30 @@ rural areas he saw while serving in the military.  Deep down, Budi is a sucker f
 
 Alex is a nephew of Dr. Bandajara from his mother's side.  Alex's grandfather is Budi's uncle.  Alex however only spent a little time in Malaysia and grew up
 when his family moved to America in the 2010s.  Alex is in his mid 20s and only relatively recently graduated.  Alex is much more physically oriented than his
-uncle, though he is also quite smart.  His interests were always more in the physical and in the body, which is why he pursued a degree in Physical Therapy.
+uncle, though he is also quite smart.  His interests were always more in the physical and in the body, which is why he wants to pursue a degree in 
+Physical Therapy.  
 
-#### Education
+To pay for his education, Alex went into the Navy and became a Hospital Corpsmen and slogged it with the Marines as a dedicated HC for them.  
+
+#### Education and Experience
+
+Alex is currently using his GI benefits to get a degree in Physical Therapy, but also has 4 years of experience in the Navy as a Hospital Corpsmen with SARC.
+
+#### Description
+
+Alex is mostly Chinese but 1/4th Malay. He stands fairly tall at 178cm and is a little more on the ecto-endomorphic side.  He is a little on the darker side
+perhaps from his South East Asian ancestry.  He has jet-black hair.
+
+#### Personality
+
+Alex is a bit of an adrenaline junky, which perhaps is why he enjoys competing in martial arts competitions and joined the military. Like his uncle, he shares a
+sense of compassion for those who are in pain.  He also hates bullies or anyone who exceeds their authority.  As an Asian who came to America as a young boy,
+Alex had to struggle quite a bit finding himself.  As a consequence, he tries to fit in and find social groups, even though he sometimes finds it hard to do.
+
+## DAISE
+
+## Rogue AI
+
+## Big Tech
+
 

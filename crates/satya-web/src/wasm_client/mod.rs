@@ -141,6 +141,8 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleChatSettings" => satya_toggle_chat_settings(),
             "satyaToggleAiGmSettings" => satya_toggle_ai_gm_settings(),
             "satyaToggleAppearanceSettings" => satya_toggle_appearance_settings(),
+            "satyaToggleAdvancedSettings" => satya_toggle_advanced_settings(),
+            "satyaToggleAdvancedRollerControls" => satya_toggle_advanced_roller_controls(),
             "satyaApplyAppearanceSettings" => satya_apply_appearance_settings(),
             "satyaSelectThemePreset" => satya_select_theme_preset(String),
             "satyaResetAppearanceSettings" => satya_reset_appearance_settings(),

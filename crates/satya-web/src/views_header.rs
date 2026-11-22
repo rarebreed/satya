@@ -559,6 +559,31 @@ pub fn HeaderBar() -> impl IntoView {
                                     </div>
                                     <div id="menu-ai-player-feedback" class="feedback-box" aria-live="polite"></div>
                                 </div>
+                                <button
+                                    type="button"
+                                    id="btn-menu-toggle-advanced-settings"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaToggleAdvancedSettings()"
+                                    on:click=move |_| wasm_client::satya_toggle_advanced_settings()
+                                >
+                                    "Advanced"
+                                </button>
+                                <div
+                                    id="menu-advanced-settings-panel"
+                                    class="menu-chat-settings-panel"
+                                    style="display: none;"
+                                >
+                                    <label class="recip-option" for="menu-advanced-roller-controls">
+                                        <input
+                                            id="menu-advanced-roller-controls"
+                                            type="checkbox"
+                                            onchange="window.satyaToggleAdvancedRollerControls()"
+                                            on:change=move |_| wasm_client::satya_toggle_advanced_roller_controls()
+                                        />
+                                        <span>"Show Advanced Task Roller Controls (Carry Mode, Botch Rule, Triad Preset)"</span>
+                                    </label>
+                                    <span class="stat-note">"Off by default. Uses Markov Step, Closest Miss, and Balanced Triad."</span>
+                                </div>
                             </div>
                             <button
                                 type="button"
