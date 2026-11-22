@@ -435,6 +435,12 @@ fn test_workspace_float_controls_and_collapsed_grid_contracts() {
     assert!(triad_warn_idx > ttrpg_drawer_idx);
     assert!(!html.contains(r#"id="ttrpg-triad-readout""#));
     assert!(html.contains(r#"id="btn-toggle-ttrpg-odds-table""#));
+    assert!(html.contains(r#"class="ttrpg-advanced-control""#));
+    assert!(html.contains(r#"id="btn-menu-toggle-advanced-settings""#));
+    assert!(html.contains(r#"id="menu-advanced-settings-panel""#));
+    assert!(html.contains(r#"id="menu-advanced-roller-controls""#));
+    assert!(html.contains(".ttrpg-advanced-control { display: none; }"));
+    assert!(html.contains(r#"html[data-advanced-roller="true"] .ttrpg-advanced-control { display: flex; }"#));
 }
 
 #[test]

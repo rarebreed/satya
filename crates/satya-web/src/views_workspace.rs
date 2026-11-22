@@ -390,7 +390,7 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                             CASCADE_MAIN_NUMBER_INPUTS,
                             "window.satyaUpdateCascadePreview()",
                         )}
-                        <label>
+                        <label class="ttrpg-advanced-control">
                             <span>"Cascade Carry Mode"</span>
                             <select
                                 id="ttrpg-carry-mode"
@@ -401,7 +401,7 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 <option value="linear_margin">"Linear Margin"</option>
                             </select>
                         </label>
-                        <label>
+                        <label class="ttrpg-advanced-control">
                             <span>"Botch Severity Rule"</span>
                             <select
                                 id="ttrpg-botch-rule"
@@ -454,7 +454,7 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                     .collect_view()}
                             </select>
                         </label>
-                        <label>
+                        <label class="ttrpg-advanced-control">
                             <span>"Triad Allocation Preset"</span>
                             <select
                                 id="ttrpg-triad-preset"

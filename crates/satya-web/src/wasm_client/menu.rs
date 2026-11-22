@@ -4,8 +4,8 @@
 use crate::wasm_client::dom::{
     EYE_OFF_SVG, EYE_OPEN_SVG, active_session_and_token_or_feedback, fetch_json, get_element,
     input_checked, input_value, local_storage_get, local_storage_set, select_value, set_display,
-    set_feedback, set_input_value, set_root_data_attribute, set_select_value, set_text,
-    toggle_element_display,
+    set_feedback, set_input_checked, set_input_value, set_root_data_attribute, set_select_value,
+    set_text, toggle_element_display,
 };
 use crate::wasm_client::options::{
     APPEARANCE_THEME_OPTIONS, default_model_for_provider, normalize_corners_id,
@@ -130,12 +130,29 @@ pub fn satya_toggle_appearance_settings() {
     let _ = toggle_element_display("menu-appearance-settings-panel", "flex");
 }
 
+/// Toggles the `Settings -> Advanced` sub-panel (`#menu-advanced-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_advanced_settings() {
+    let _ = toggle_element_display("menu-advanced-settings-panel", "flex");
+}
+
 const STORAGE_KEY_THEME: &str = "satya.appearance.theme";
 const STORAGE_KEY_STYLE: &str = "satya.appearance.style";
 const STORAGE_KEY_DENSITY: &str = "satya.appearance.density";
 const STORAGE_KEY_CORNERS: &str = "satya.appearance.corners";
 const STORAGE_KEY_FONT: &str = "satya.appearance.font";
 const STORAGE_KEY_FONT_SIZE: &str = "satya.appearance.font_size";
+const STORAGE_KEY_ADVANCED_ROLLER: &str = "satya.settings.advanced_roller";
+
+/// Toggles visibility of advanced Task Roller controls (`Cascade Carry Mode`, `Botch Severity Rule`,
+/// and `Triad Allocation Preset`) via `data-advanced-roller` on `<html>` and persists to `localStorage`.
+#[wasm_bindgen]
+pub fn satya_toggle_advanced_roller_controls() {
+    let enabled = input_checked("menu-advanced-roller-controls");
+    let flag = if enabled { "true" } else { "false" };
+    local_storage_set(STORAGE_KEY_ADVANCED_ROLLER, flag);
+    set_root_data_attribute("data-advanced-roller", flag);
+}
 
 fn sync_theme_swatch_buttons(active_theme: &str) {
     for (theme_id, _) in APPEARANCE_THEME_OPTIONS {
@@ -187,6 +204,13 @@ pub fn restore_saved_appearance_settings() {
     set_select_value("menu-font-select", font);
     set_select_value("menu-font-size-select", font_size);
     apply_appearance_to_root(theme, style, density, corners, font, font_size);
+
+    let adv_roller = local_storage_get(STORAGE_KEY_ADVANCED_ROLLER).as_deref() == Some("true");
+    set_input_checked("menu-advanced-roller-controls", adv_roller);
+    set_root_data_attribute(
+        "data-advanced-roller",
+        if adv_roller { "true" } else { "false" },
+    );
 }
 
 /// Reads `#menu-theme-select`, `#menu-style-select`, `#menu-density-select`, `#menu-corners-select`, `#menu-font-select`,
