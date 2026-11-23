@@ -11,6 +11,7 @@ pub use crate::tactical_map_surfaces_dto::*;
 pub use crate::tactical_map_world_dto::*;
 
 use crate::events::MessageVisibility;
+use crate::protocol_map_ai::GmMapUpdateRequest;
 use serde::{Deserialize, Serialize};
 
 /// Default metric tactical grid cell scale in centimeters (`100 cm = 1.00 m`).
@@ -362,6 +363,9 @@ pub struct GenerateSessionMapRequest {
     /// Optional macro zoning wrapper override for composable building presets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zoning: Option<ZoningContext>,
+    /// Optional complete battlemap payload to load as the active session map (GM or Solo Host only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_map: Option<Box<GmMapUpdateRequest>>,
 }
 
 crate::define_wire_enum! {
@@ -439,6 +443,7 @@ impl Default for GenerateSessionMapRequest {
             set_active_floor: None,
             economic_tier: None,
             zoning: None,
+            load_map: None,
         }
     }
 }
@@ -487,6 +492,156 @@ impl MoveMapTokenRequest {
             self.to_y_cm.unwrap_or(self.to_y * s + s / 2),
         )
     }
+}
+
+/// Format version for portable `.satyamap` JSON bundles.
+pub const SAVED_MAP_FORMAT_VERSION: u16 = 1;
+
+const fn default_saved_map_format_version() -> u16 {
+    SAVED_MAP_FORMAT_VERSION
+}
+
+/// Portable `.satyamap` JSON bundle capturing a saved battlemap, all floors, props, walls,
+/// vector surfaces, and tokens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedMapBundle {
+    /// Snapshot schema format version (`1`).
+    #[serde(default = "default_saved_map_format_version")]
+    pub format_version: u16,
+    /// Save/export timestamp in UTC microseconds since Unix epoch.
+    #[serde(default)]
+    pub saved_at_us: i64,
+    /// Complete tactical battlemap payload.
+    pub map: GmMapUpdateRequest,
+}
+
+impl SavedMapBundle {
+    /// Parses either a wrapped [`SavedMapBundle`] or a bare [`GmMapUpdateRequest`] JSON payload.
+    pub fn parse_json_bytes(bytes: &[u8]) -> Result<GmMapUpdateRequest, String> {
+        if let Ok(bundle) = serde_json::from_slice::<Self>(bytes) {
+            return Ok(bundle.map);
+        }
+        serde_json::from_slice::<GmMapUpdateRequest>(bytes)
+            .map_err(|err| format!("Invalid .satyamap or battlemap JSON: {err}"))
+    }
+}
+
+/// Lightweight metadata summary of a saved battlemap in the Map Vault or browser storage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedMapSummary {
+    /// Unique identifier for the saved battlemap.
+    pub map_id: String,
+    /// Human-readable battlemap title.
+    pub title: String,
+    /// Grid width in cells (`1 cell = 1.0m` default).
+    pub grid_width: i32,
+    /// Grid height in cells (`1 cell = 1.0m` default).
+    pub grid_height: i32,
+    /// Physical cell edge scale in centimeters (`100 cm = 1.00 m`).
+    #[serde(default = "default_cell_size_cm")]
+    pub cell_size_cm: i32,
+    /// Optional procedural sector preset identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_preset: Option<String>,
+    /// Number of architectural floor levels (`>= 1`).
+    #[serde(default)]
+    pub floor_count: usize,
+    /// Total placed props across all floors.
+    #[serde(default)]
+    pub prop_count: usize,
+    /// Total wall/door/window edges across all floors.
+    #[serde(default)]
+    pub wall_count: usize,
+    /// Total vector ground surface zones across all floors.
+    #[serde(default)]
+    pub surface_count: usize,
+    /// Creation timestamp in UTC microseconds since Unix epoch.
+    #[serde(default)]
+    pub created_at_us: i64,
+    /// Last updated timestamp in UTC microseconds since Unix epoch.
+    pub updated_at_us: i64,
+}
+
+impl SavedMapSummary {
+    /// Builds a [`SavedMapSummary`] from a [`GmMapUpdateRequest`] and timestamps.
+    #[must_use]
+    pub fn from_map(map: &GmMapUpdateRequest, created_at_us: i64, updated_at_us: i64) -> Self {
+        let floor_count = map.floors.len().max(1);
+        let (prop_count, wall_count, surface_count) = if map.floors.is_empty() {
+            (map.props.len(), map.wall_edges.len(), map.surfaces.len())
+        } else {
+            map.floors.iter().fold((0, 0, 0), |(p, w, s), fl| {
+                if fl.floor_index == map.active_floor {
+                    (
+                        p + map.props.len(),
+                        w + map.wall_edges.len(),
+                        s + map.surfaces.len(),
+                    )
+                } else {
+                    (
+                        p + fl.props.len(),
+                        w + fl.wall_edges.len(),
+                        s + fl.surfaces.len(),
+                    )
+                }
+            })
+        };
+        Self {
+            map_id: map.map_id.clone(),
+            title: map.title.clone(),
+            grid_width: map.grid_width,
+            grid_height: map.grid_height,
+            cell_size_cm: map.cell_size_cm.max(25),
+            theme_preset: map.theme_preset.clone(),
+            floor_count,
+            prop_count,
+            wall_count,
+            surface_count,
+            created_at_us,
+            updated_at_us,
+        }
+    }
+}
+
+/// HTTP request body for `POST /api/maps` saving or updating a battlemap in the user's Map Vault.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveMapRequest {
+    /// Complete battlemap state to persist.
+    pub map: GmMapUpdateRequest,
+    /// When `true`, forces minting a fresh `map_id` instead of overwriting an existing saved map.
+    #[serde(default)]
+    pub save_as_new: bool,
+}
+
+/// HTTP response body for `POST /api/maps`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveMapResponse {
+    /// Summary metadata for the saved battlemap.
+    pub summary: SavedMapSummary,
+    /// Canonical sanitized battlemap stored on the server (with resolved `map_id` and `title`).
+    pub map: GmMapUpdateRequest,
+    /// Local filesystem mirror path under `~/Satya/maps/*.satyamap`, if written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_file_path: Option<String>,
+}
+
+/// HTTP response body for `GET /api/maps`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedMapListResponse {
+    /// Saved battlemaps owned by the authenticated user, ordered by `updated_at_us` descending.
+    pub maps: Vec<SavedMapSummary>,
+    /// Local directory where `.satyamap` backups are mirrored (`~/Satya/maps`), if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_directory: Option<String>,
+}
+
+/// HTTP response body for `GET /api/maps/:map_id`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedMapRecordResponse {
+    /// Summary metadata for the saved battlemap.
+    pub summary: SavedMapSummary,
+    /// Complete saved battlemap payload ready to load into an active session or offline viewport.
+    pub map: GmMapUpdateRequest,
 }
 
 #[cfg(test)]
@@ -597,5 +752,102 @@ mod tests {
         assert!(scaled_json.contains(r#""scale":"MASSIVE""#));
         let scaled_dec: GenerateSessionMapRequest = serde_json::from_str(&scaled_json).unwrap();
         assert_eq!(scaled_dec.scale, Some(MapScalePreset::Massive));
+    }
+
+    #[test]
+    fn saved_map_bundle_summary_and_load_map_roundtrip() {
+        use crate::tactical_map_dressing_dto::{EdgeSide, MapWallEdge, MaterialClass, WallEdgeKind};
+        use crate::tactical_map_floors_dto::MapFloorLevel;
+
+        let mut map = GmMapUpdateRequest {
+            map_id: "map_vault_1".to_string(),
+            title: "Dockyard Warehouse".to_string(),
+            grid_width: 24,
+            grid_height: 18,
+            wall_edges: vec![MapWallEdge {
+                x: 2,
+                y: 3,
+                side: EdgeSide::North,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::ConcreteBlock,
+            }],
+            ..Default::default()
+        };
+
+        // Single-floor summary
+        let single_sum = SavedMapSummary::from_map(&map, 100, 200);
+        assert_eq!(single_sum.floor_count, 1);
+        assert_eq!(single_sum.wall_count, 1);
+        assert_eq!(single_sum.prop_count, 0);
+        assert_eq!(single_sum.surface_count, 0);
+        assert_eq!(single_sum.created_at_us, 100);
+        assert_eq!(single_sum.updated_at_us, 200);
+
+        // Multi-floor summary sums across all floors
+        map.floors = vec![
+            MapFloorLevel {
+                floor_index: 0,
+                label: "1F".to_string(),
+                elevation_cm: 0,
+                wall_edges: map.wall_edges.clone(),
+                props: Vec::new(),
+                surfaces: Vec::new(),
+                ground_floor_override: None,
+                ground_tint_rgb: None,
+            },
+            MapFloorLevel {
+                floor_index: 1,
+                label: "2F".to_string(),
+                elevation_cm: 300,
+                wall_edges: vec![
+                    MapWallEdge {
+                        x: 4,
+                        y: 5,
+                        side: EdgeSide::West,
+                        kind: WallEdgeKind::DoorClosed,
+                        material: MaterialClass::SheetSteel,
+                    },
+                    MapWallEdge {
+                        x: 4,
+                        y: 6,
+                        side: EdgeSide::West,
+                        kind: WallEdgeKind::Window,
+                        material: MaterialClass::Glass,
+                    },
+                ],
+                props: Vec::new(),
+                surfaces: Vec::new(),
+                ground_floor_override: None,
+                ground_tint_rgb: None,
+            },
+        ];
+        let multi_sum = SavedMapSummary::from_map(&map, 100, 300);
+        assert_eq!(multi_sum.floor_count, 2);
+        assert_eq!(multi_sum.wall_count, 3);
+
+        // SavedMapBundle::parse_json_bytes accepts both wrapped bundle and raw GmMapUpdateRequest
+        let bundle = SavedMapBundle {
+            format_version: SAVED_MAP_FORMAT_VERSION,
+            saved_at_us: 300,
+            map: map.clone(),
+        };
+        let bundle_bytes = serde_json::to_vec(&bundle).unwrap();
+        assert_eq!(SavedMapBundle::parse_json_bytes(&bundle_bytes).unwrap(), map);
+
+        let raw_bytes = serde_json::to_vec(&map).unwrap();
+        assert_eq!(SavedMapBundle::parse_json_bytes(&raw_bytes).unwrap(), map);
+
+        assert!(SavedMapBundle::parse_json_bytes(b"{not valid json").is_err());
+
+        // GenerateSessionMapRequest load_map roundtrip
+        let load_req = GenerateSessionMapRequest {
+            load_map: Some(Box::new(map.clone())),
+            populate_roster_tokens: false,
+            ..Default::default()
+        };
+        let load_json = serde_json::to_string(&load_req).unwrap();
+        assert!(load_json.contains(r#""load_map""#));
+        let load_dec: GenerateSessionMapRequest = serde_json::from_str(&load_json).unwrap();
+        assert_eq!(load_dec, load_req);
     }
 }

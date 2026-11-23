@@ -21,6 +21,7 @@ pub mod gm_persistence;
 pub mod http_handlers;
 pub mod map_authoring_handlers;
 pub mod map_handlers;
+pub mod map_vault;
 pub mod npcs;
 pub mod npcs_store;
 pub mod player_ai_api;
@@ -37,6 +38,7 @@ pub use gm_docs::*;
 pub use gm_persistence::*;
 pub use http_handlers::*;
 pub use map_handlers::*;
+pub use map_vault::*;
 pub use npcs::*;
 pub use player_ai_api::*;
 pub use session_export::*;
@@ -144,6 +146,18 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/sessions/:session_id/map/move",
             post(session_move_map_token_handler),
+        )
+        .route(
+            "/api/maps",
+            get(list_saved_maps_handler).post(save_map_handler),
+        )
+        .route(
+            "/api/maps/:map_id",
+            get(get_saved_map_handler).delete(delete_saved_map_handler),
+        )
+        .route(
+            "/api/maps/:map_id/export",
+            get(export_saved_map_handler),
         )
         .route(
             "/api/sessions/:session_id/lookup",

@@ -158,6 +158,35 @@ pub async fn session_generate_or_edit_map_handler(
             && is_session_host
             && human_player_count == 1);
 
+    // Branch A0-Load: Load a complete saved/imported battlemap into the active session
+    if let Some(loaded_box) = req.load_map {
+        if !caller_is_gm_or_solo {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the Game Master or Solo Host can load a saved battlemap into the session" })),
+            )
+                .into_response();
+        }
+        let mut map = *loaded_box;
+        if let Err(msg) = crate::map_vault::sanitize_and_validate_map(&mut map) {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+        }
+        if let Ok(map_json) = serde_json::to_string(&map) {
+            let now_us = chrono::Utc::now().timestamp_micros();
+            let summary = satya_schema::SavedMapSummary::from_map(&map, now_us, now_us);
+            crate::map_vault::emit_saved_map_event(
+                &state,
+                &caller_part,
+                satya_schema::SavedMapEventType::MapLoaded,
+                &summary,
+                &map_json,
+                Some(&session_id),
+            )
+            .await;
+        }
+        return persist_and_broadcast_map(&state, &session_id, &ctx, &caller_part, map).await;
+    }
+
     // Branch A0-Floor: Switch active multi-floor level snapshot (`B1` / `1F` / `2F`, ...)
     if let Some(target_floor) = req.set_active_floor {
         if !caller_is_gm_or_solo {

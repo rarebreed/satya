@@ -63,6 +63,7 @@ pub mod map_3d_wgpu;
 pub mod map_edge_edit;
 pub mod map_editor;
 pub mod map_hover_inspect;
+pub mod map_vault;
 pub mod menu;
 pub mod model_3d_wgpu;
 pub mod notebook;
@@ -266,6 +267,13 @@ macro_rules! for_all_window_callbacks {
             "satyaEditorSetSelectedSurfaceKind" => satya_editor_set_selected_surface_kind(),
             "satyaEditorDuplicateSelected" => satya_editor_duplicate_selected(),
             "satyaEditorDeleteSelected" => satya_editor_delete_selected(),
+            "satyaToggleMapVault" => satya_toggle_map_vault(),
+            "satyaSaveBattlemap" => satya_save_battlemap(bool),
+            "satyaRefreshSavedMaps" => satya_refresh_saved_maps(),
+            "satyaLoadSavedMap" => satya_load_saved_map(),
+            "satyaDeleteSavedMap" => satya_delete_saved_map(),
+            "satyaExportBattlemapFile" => satya_export_battlemap_file(),
+            "satyaImportBattlemapFile" => satya_import_battlemap_file(),
             "satyaLoadSkillPreset" => satya_load_skill_preset(String, i32, i32),
             "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
             "satyaOpenCombatantDetails" => satya_open_combatant_details(String, String),

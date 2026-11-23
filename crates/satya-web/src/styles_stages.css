@@ -716,6 +716,33 @@ input[type="range"].dice-opacity-slider:focus-visible {
     color: #94a3b8;
     margin-left: auto;
 }
+.map-vault-bar {
+    border-color: rgba(16, 185, 129, 0.42);
+}
+.map-save-title-input {
+    width: clamp(150px, 22vw, 260px);
+    padding: 4px 8px;
+    font-size: 0.76rem;
+    background: var(--bg-input, #0f172a);
+    color: var(--text-primary, #f1f5f9);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+}
+.map-saved-select {
+    min-width: clamp(200px, 28vw, 340px);
+    max-width: 420px;
+}
+.map-import-file-btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+.map-vault-feedback-ok {
+    color: #34d399;
+}
+.map-vault-feedback-err {
+    color: #fb7185;
+}
 .wgpu-model-canvas-wrap {
     width: 100%;
     height: clamp(420px, 64dvh, 720px);

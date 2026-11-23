@@ -1874,3 +1874,487 @@ async fn test_combat_tracker_player_self_condition_sync_and_rbac() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_map_vault_save_list_get_export_delete_and_session_load() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_map_vault_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_map_vault.db")
+        .to_string_lossy()
+        .to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let p1_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+
+    // 1. Save an edited multi-floor map (from starter ID -> mints persistent map_id)
+    let mut custom_map = GmMapUpdateRequest {
+        map_id: "map-starter".to_string(),
+        title: "Edited Orbital Hub".to_string(),
+        grid_width: 22,
+        grid_height: 16,
+        notes: Some("GM secret vault note".to_string()),
+        wall_edges: vec![satya_schema::MapWallEdge {
+            x: 3,
+            y: 4,
+            side: satya_schema::EdgeSide::North,
+            kind: satya_schema::WallEdgeKind::Wall,
+            material: satya_schema::MaterialClass::ConcreteBlock,
+        }],
+        floors: vec![
+            satya_schema::MapFloorLevel {
+                floor_index: 0,
+                label: "1F".to_string(),
+                elevation_cm: 0,
+                wall_edges: vec![satya_schema::MapWallEdge {
+                    x: 3,
+                    y: 4,
+                    side: satya_schema::EdgeSide::North,
+                    kind: satya_schema::WallEdgeKind::Wall,
+                    material: satya_schema::MaterialClass::ConcreteBlock,
+                }],
+                props: Vec::new(),
+                surfaces: Vec::new(),
+                ground_floor_override: Some("concrete_slab".to_string()),
+                ground_tint_rgb: None,
+            },
+            satya_schema::MapFloorLevel {
+                floor_index: 1,
+                label: "2F".to_string(),
+                elevation_cm: 300,
+                wall_edges: vec![satya_schema::MapWallEdge {
+                    x: 5,
+                    y: 6,
+                    side: satya_schema::EdgeSide::West,
+                    kind: satya_schema::WallEdgeKind::DoorClosed,
+                    material: satya_schema::MaterialClass::SheetSteel,
+                }],
+                props: Vec::new(),
+                surfaces: Vec::new(),
+                ground_floor_override: None,
+                ground_tint_rgb: None,
+            },
+        ],
+        ..Default::default()
+    };
+    custom_map.sync_active_floor_snapshot();
+
+    let save_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::SaveMapRequest {
+                    map: custom_map.clone(),
+                    save_as_new: false,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(save_resp.status(), axum::http::StatusCode::OK);
+    let saved_body = axum::body::to_bytes(save_resp.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let saved: satya_schema::SaveMapResponse = serde_json::from_slice(&saved_body).unwrap();
+    assert_ne!(saved.summary.map_id, "map-starter");
+    assert_eq!(saved.summary.title, "Edited Orbital Hub");
+    assert_eq!(saved.summary.floor_count, 2);
+    assert_eq!(saved.summary.wall_count, 2);
+    if let Some(ref p) = saved.local_file_path {
+        let _ = std::fs::remove_file(p);
+    }
+
+    // 2. List maps: GM sees 1, other user sees 0
+    let list_gm = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(list_gm.status(), axum::http::StatusCode::OK);
+    let gm_list: satya_schema::SavedMapListResponse = serde_json::from_slice(
+        &axum::body::to_bytes(list_gm.into_body(), 128 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(gm_list.maps.len(), 1);
+    assert_eq!(gm_list.maps[0].map_id, saved.summary.map_id);
+
+    let list_p1 = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    let p1_list: satya_schema::SavedMapListResponse = serde_json::from_slice(
+        &axum::body::to_bytes(list_p1.into_body(), 128 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(p1_list.maps.is_empty());
+
+    // 3. Cross-user GET returns 404; owner GET returns full map
+    let get_p1 = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/api/maps/{}", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(get_p1.status(), axum::http::StatusCode::NOT_FOUND);
+
+    let get_gm = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/api/maps/{}", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(get_gm.status(), axum::http::StatusCode::OK);
+    let rec_gm: satya_schema::SavedMapRecordResponse = serde_json::from_slice(
+        &axum::body::to_bytes(get_gm.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(rec_gm.map.floors.len(), 2);
+
+    // 4. Update in-place preserves map_id & created_at_us; save_as_new mints a new ID
+    let mut updated_map = rec_gm.map.clone();
+    updated_map.title = "Edited Orbital Hub v2".to_string();
+    let upd_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::SaveMapRequest {
+                    map: updated_map.clone(),
+                    save_as_new: false,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    let upd: satya_schema::SaveMapResponse = serde_json::from_slice(
+        &axum::body::to_bytes(upd_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(upd.summary.map_id, saved.summary.map_id);
+    assert_eq!(upd.summary.created_at_us, saved.summary.created_at_us);
+    assert_eq!(upd.summary.title, "Edited Orbital Hub v2");
+    if let Some(ref p) = upd.local_file_path {
+        let _ = std::fs::remove_file(p);
+    }
+
+    let copy_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::SaveMapRequest {
+                    map: updated_map.clone(),
+                    save_as_new: true,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    let copy: satya_schema::SaveMapResponse = serde_json::from_slice(
+        &axum::body::to_bytes(copy_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(copy.summary.map_id, saved.summary.map_id);
+    if let Some(ref p) = copy.local_file_path {
+        let _ = std::fs::remove_file(p);
+    }
+
+    // Saving with another user's map_id must mint a fresh ID instead of overwriting
+    let p1_hijack_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/maps")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::SaveMapRequest {
+                    map: updated_map.clone(),
+                    save_as_new: false,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    let p1_saved: satya_schema::SaveMapResponse = serde_json::from_slice(
+        &axum::body::to_bytes(p1_hijack_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_ne!(p1_saved.summary.map_id, saved.summary.map_id);
+    if let Some(ref p) = p1_saved.local_file_path {
+        let _ = std::fs::remove_file(p);
+    }
+
+    // 5. Export .satyamap bundle
+    let export_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/api/maps/{}/export", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(export_resp.status(), axum::http::StatusCode::OK);
+    let disp = export_resp
+        .headers()
+        .get(axum::http::header::CONTENT_DISPOSITION)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(disp.contains(".satyamap\""));
+    let exp_bytes = axum::body::to_bytes(export_resp.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let parsed = satya_schema::SavedMapBundle::parse_json_bytes(&exp_bytes).unwrap();
+    assert_eq!(parsed.title, "Edited Orbital Hub v2");
+
+    // 6. Session load_map (GM allowed, Player 403, invalid dimensions 400)
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
+    let _ = state
+        .auth
+        .create_session(
+            &gm_user,
+            "ep-map-load-1",
+            "pw",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            Some("Sean".to_string()),
+            false,
+        )
+        .await
+        .unwrap();
+    let _ = state
+        .auth
+        .join_session(
+            &p1_user,
+            "ep-map-load-1",
+            "pw",
+            SessionRole::Player,
+            Some("Sara".to_string()),
+        )
+        .await
+        .unwrap();
+
+    let p1_load = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-map-load-1/map")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                    load_map: Some(Box::new(parsed.clone())),
+                    populate_roster_tokens: false,
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(p1_load.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let mut bad_map = parsed.clone();
+    bad_map.grid_width = 3;
+    let bad_load = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-map-load-1/map")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                    load_map: Some(Box::new(bad_map)),
+                    populate_roster_tokens: false,
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(bad_load.status(), axum::http::StatusCode::BAD_REQUEST);
+
+    let gm_load = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-map-load-1/map")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                    load_map: Some(Box::new(parsed.clone())),
+                    populate_roster_tokens: false,
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gm_load.status(), axum::http::StatusCode::OK);
+
+    // Player GET /map sees loaded map with GM notes filtered
+    let p1_get_session_map = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/sessions/ep-map-load-1/map")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(p1_get_session_map.status(), axum::http::StatusCode::OK);
+    let session_map: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(p1_get_session_map.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(session_map.title, "Edited Orbital Hub v2");
+    assert_eq!(session_map.floors.len(), 2);
+    assert_eq!(session_map.notes, None);
+
+    // 7. Delete: non-owner 404, owner 200, subsequent GET 404
+    let del_p1 = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/maps/{}", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(del_p1.status(), axum::http::StatusCode::NOT_FOUND);
+
+    let del_gm = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/maps/{}", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(del_gm.status(), axum::http::StatusCode::OK);
+
+    let get_after_del = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/api/maps/{}", saved.summary.map_id))
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(get_after_del.status(), axum::http::StatusCode::NOT_FOUND);
+
+    // 8. Verify all 8 Map Vault & session load operations emitted events to the `saved-maps` Iggy topic (Topic 11)
+    let metrics = state.storage.metrics_snapshot().await;
+    let saved_maps_metric = metrics
+        .iter()
+        .find(|m| m.topic == satya_schema::topics::SAVED_MAPS)
+        .expect("saved-maps topic metric must exist");
+    assert_eq!(saved_maps_metric.topic_id, 11);
+    assert_eq!(saved_maps_metric.total_messages_ingested, 8);
+    assert!(saved_maps_metric.flushed_batches_count >= 1);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

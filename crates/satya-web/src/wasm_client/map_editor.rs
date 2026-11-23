@@ -1218,6 +1218,11 @@ pub fn handle_editor_keydown(ev: &web_sys::KeyboardEvent) -> bool {
             return false;
         }
         let low = key.to_ascii_lowercase();
+        if low == "s" {
+            ev.prevent_default();
+            crate::wasm_client::map_vault::satya_save_battlemap(false);
+            return true;
+        }
         if low == "z" && !ev.shift_key() {
             ev.prevent_default();
             satya_editor_undo();

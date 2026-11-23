@@ -9,7 +9,7 @@ use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, PutPayload};
 use satya_schema::{
     AiGmTrajectoryEvent, CharacterSheetEvent, ChatMessageEvent, InteractionDynamicsEvent,
-    SchemaRegistry, SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent,
+    SavedMapEvent, SchemaRegistry, SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent,
     TabletopCanvasEvent, TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent,
     WireFrameHeader, subjects, topics,
 };
@@ -282,6 +282,7 @@ impl Default for StorageConfig {
             (topics::AI_GM_TRAJECTORY, 8, 2),
             (topics::SYSTEM_LOGS, 9, 4),
             (topics::CHARACTER_SHEETS, 10, 2),
+            (topics::SAVED_MAPS, 11, 2),
         ];
         for (name, id, parts) in defaults {
             topic_map.insert(
@@ -324,6 +325,9 @@ impl StorageConfig {
             if sibling_ai_path.exists() {
                 cfg.ai_gm = AiGmConfig::load_from_file(&sibling_ai_path)?;
             }
+        }
+        for (name, def) in StorageConfig::default().topics {
+            cfg.topics.entry(name).or_insert(def);
         }
         Ok(cfg)
     }
@@ -833,6 +837,15 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Publishes a [`SavedMapEvent`] to the `saved-maps` topic (`v1`) and immediately flushes it.
+    pub async fn log_saved_map(&self, event: &SavedMapEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(topics::SAVED_MAPS, subjects::SAVED_MAP, 1, event)
+            .await?;
+        self.flush_topic(topics::SAVED_MAPS).await?;
+        Ok(offset)
+    }
+
     /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
@@ -853,6 +866,7 @@ impl EventLogRouter {
                 topics::AI_GM_TRAJECTORY => subjects::AI_GM_TRAJECTORY,
                 topics::SYSTEM_LOGS => subjects::SESSION_LOG,
                 topics::CHARACTER_SHEETS => subjects::CHARACTER_SHEET,
+                topics::SAVED_MAPS => subjects::SAVED_MAP,
                 _ => subjects::CHAT_MESSAGE,
             };
             let target_version = if subject == subjects::CHARACTER_SHEET {
@@ -909,6 +923,21 @@ pub fn default_local_satya_characters_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
     home.join("Satya").join("characters")
+}
+
+/// Resolves the default local saved battlemaps folder (`~/Satya/maps`, or `USERPROFILE/Satya/maps` on Windows).
+#[must_use]
+pub fn default_local_satya_maps_dir() -> PathBuf {
+    if let Ok(custom) = std::env::var("SATYA_LOCAL_MAPS_DIR")
+        && !custom.trim().is_empty()
+    {
+        return PathBuf::from(custom);
+    }
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    home.join("Satya").join("maps")
 }
 
 #[cfg(test)]
@@ -1019,7 +1048,8 @@ mod tests {
         assert!(ai_cfg.fail_fast_when_offline);
 
         let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
-        assert_eq!(storage_cfg.topics.len(), 10);
+        assert_eq!(storage_cfg.topics.len(), 11);
+        assert!(storage_cfg.topics.contains_key(topics::SAVED_MAPS));
         assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
         assert_eq!(storage_cfg.ai_gm.request_timeout_secs, 180);
         assert!(storage_cfg.ai_gm.fail_fast_when_offline);

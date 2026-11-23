@@ -289,6 +289,24 @@ impl AuthAndSessionManager {
                 updated_at_us    INTEGER NOT NULL,
                 PRIMARY KEY (session_id, user_id)
             );
+
+            CREATE TABLE IF NOT EXISTS saved_maps (
+                map_id        TEXT PRIMARY KEY NOT NULL,
+                owner_user_id TEXT NOT NULL,
+                title         TEXT NOT NULL,
+                theme_preset  TEXT,
+                grid_width    INTEGER NOT NULL,
+                grid_height   INTEGER NOT NULL,
+                cell_size_cm  INTEGER NOT NULL DEFAULT 100,
+                floor_count   INTEGER NOT NULL DEFAULT 1,
+                prop_count    INTEGER NOT NULL DEFAULT 0,
+                wall_count    INTEGER NOT NULL DEFAULT 0,
+                surface_count INTEGER NOT NULL DEFAULT 0,
+                map_json      TEXT NOT NULL,
+                created_at_us INTEGER NOT NULL,
+                updated_at_us INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_saved_maps_owner ON saved_maps(owner_user_id, updated_at_us DESC);
             "#,
         )
         .execute(&db_pool)

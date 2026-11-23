@@ -25,6 +25,8 @@ pub mod subjects {
     pub const SESSION_LOG: &str = "com.satya.events.SessionLogEvent";
     /// Subject name for [`crate::character::CharacterSheetEvent`].
     pub const CHARACTER_SHEET: &str = "com.satya.events.CharacterSheetEvent";
+    /// Subject name for [`super::SavedMapEvent`].
+    pub const SAVED_MAP: &str = "com.satya.events.SavedMapEvent";
 }
 
 /// Canonical Apache Iggy topic names corresponding to each Satya event stream.
@@ -49,6 +51,8 @@ pub mod topics {
     pub const SYSTEM_LOGS: &str = "system-logs";
     /// Topic storing [`crate::character::CharacterSheetEvent`] records.
     pub const CHARACTER_SHEETS: &str = "character-sheets";
+    /// Topic storing [`super::SavedMapEvent`] records.
+    pub const SAVED_MAPS: &str = "saved-maps";
 }
 
 /// Schema evolution compatibility policy enforced for a registered subject.
@@ -737,4 +741,56 @@ pub struct SessionLogEvent {
     pub parent_lineage_ids: Vec<String>,
     /// Complete formatted plain-text log line ready for direct text embedding.
     pub log_line: String,
+}
+
+/// Lifecycle operation recorded by a [`SavedMapEvent`] on the `saved-maps` topic (`Topic 11`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SavedMapEventType {
+    /// A new battlemap was saved to the Map Vault.
+    MapSaved,
+    /// An existing battlemap in the Map Vault was updated in place.
+    MapUpdated,
+    /// A saved battlemap was loaded from the vault or imported into an active session.
+    MapLoaded,
+    /// A saved battlemap was exported as a `.satyamap` bundle.
+    MapExported,
+    /// A saved battlemap was deleted from the Map Vault.
+    MapDeleted,
+}
+
+/// Avro event (`v1`, `schema_id = 14`) emitted to the `saved-maps` topic on Map Vault
+/// save, update, load, export, and delete operations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedMapEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Map Vault lifecycle operation type.
+    pub map_event_type: SavedMapEventType,
+    /// Authenticated participant performing the Map Vault operation.
+    pub actor: Participant,
+    /// Unique identifier of the saved battlemap.
+    pub map_id: String,
+    /// Human-readable battlemap title.
+    pub title: String,
+    /// Tactical grid width in cells.
+    pub grid_width: i32,
+    /// Tactical grid height in cells.
+    pub grid_height: i32,
+    /// Physical cell edge scale in centimeters.
+    pub cell_size_cm: i32,
+    /// Optional procedural sector preset identifier.
+    pub theme_preset: Option<String>,
+    /// Number of architectural floor levels (`>= 1`).
+    pub floor_count: i32,
+    /// Total placed props across all floors.
+    pub prop_count: i32,
+    /// Total wall/door/window edges across all floors.
+    pub wall_count: i32,
+    /// Total vector ground surface zones across all floors.
+    pub surface_count: i32,
+    /// Hex-encoded SHA-256 digest of the canonical battlemap JSON snapshot.
+    pub content_sha256: String,
+    /// Complete serialized [`crate::protocol_map_ai::GmMapUpdateRequest`] JSON snapshot (`None` on `MAP_DELETED` or GDPR erasure).
+    pub map_json: Option<String>,
 }

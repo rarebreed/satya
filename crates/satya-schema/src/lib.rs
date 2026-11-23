@@ -188,7 +188,11 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 13);
+        assert_eq!(all.len(), 14);
+        let saved_map_v1 = registry
+            .get_by_subject_version(subjects::SAVED_MAP, 1)
+            .unwrap();
+        assert_eq!(saved_map_v1.schema_id, 14);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -451,6 +455,54 @@ mod tests {
         assert_eq!(anon_ev.actor.user_id, "anon-sara888");
         assert_eq!(anon_ev.character.owner_user_id, "anon-sara888");
         assert_eq!(anon_ev.character.notes, None);
+    }
+
+    #[test]
+    fn test_saved_map_event_framing_and_gdpr_anonymization() {
+        let registry = SchemaRegistry::default();
+        let gm = Participant::human("u-gm-1", "gm_sean", "Sean (GM)", SessionRole::Gm);
+        let mut meta = registry
+            .build_metadata(55, subjects::SAVED_MAP, 1, "map-vault", SessionMode::Ttrpg)
+            .unwrap();
+        meta.timezone_offset_min = -300;
+        let snapshot = r#"{"map_id":"map_1","title":"Dockyard","grid_width":24,"grid_height":18,"image_url":""}"#;
+        let ev = SavedMapEvent {
+            metadata: meta,
+            map_event_type: SavedMapEventType::MapSaved,
+            actor: gm,
+            map_id: "map_1".to_string(),
+            title: "Dockyard".to_string(),
+            grid_width: 24,
+            grid_height: 18,
+            cell_size_cm: 100,
+            theme_preset: Some("industrial_warehouse".to_string()),
+            floor_count: 2,
+            prop_count: 6,
+            wall_count: 18,
+            surface_count: 3,
+            content_sha256: "abc123def456".to_string(),
+            map_json: Some(snapshot.to_string()),
+        };
+
+        let framed = registry
+            .encode_framed(subjects::SAVED_MAP, 1, &ev)
+            .unwrap();
+        let (hdr, decoded): (_, SavedMapEvent) = registry.decode_framed(&framed, None).unwrap();
+        assert_eq!(hdr.schema_id, 14);
+        assert_eq!(hdr.schema_version, 1);
+        assert_eq!(decoded.map_event_type, SavedMapEventType::MapSaved);
+        assert_eq!(decoded.content_sha256, "abc123def456");
+        assert_eq!(decoded.map_json.as_deref(), Some(snapshot));
+
+        let (match_kind, anon_bytes) = registry
+            .anonymize_framed_for_subject(&framed, "u-gm-1", "anon-gm-1")
+            .unwrap();
+        assert_eq!(match_kind, GdprSubjectMatchKind::PrimaryActor);
+        let (_, anon_ev): (_, SavedMapEvent) =
+            registry.decode_framed(&anon_bytes, None).unwrap();
+        assert_eq!(anon_ev.actor.user_id, "anon-gm-1");
+        assert_eq!(anon_ev.metadata.timezone_offset_min, 0);
+        assert_eq!(anon_ev.map_json, None);
     }
 
     #[test]

@@ -228,6 +228,7 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     });
     sync_google_auth_status_from_server();
     satya_refresh_saved_sessions();
+    crate::wasm_client::map_vault::satya_refresh_saved_maps();
 
     if is_admin {
         set_display("iggy-non-admin-notice", "none");
@@ -605,6 +606,8 @@ pub fn cleanup_client_session_state() {
         st.selected_recipients.clear();
         ids
     });
+
+    crate::wasm_client::map_vault::reset_map_vault_client_cache();
 
     for uid in remote_ids {
         if let Some(tile) = get_element(&format!("video-tile-{uid}")) {

@@ -13,6 +13,7 @@ pub use crate::wasm_client::map_3d_input::*;
 pub use crate::wasm_client::map_3d_wgpu::*;
 pub use crate::wasm_client::map_edge_edit::*;
 pub use crate::wasm_client::map_editor::*;
+pub use crate::wasm_client::map_vault::*;
 
 use crate::wasm_client::dom::{
     escape_html, get_element, set_class, set_display, set_html, set_input_value, set_select_value,
@@ -544,6 +545,7 @@ pub fn refresh_map_dom_and_wgpu() {
     }
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
     crate::wasm_client::map_editor::sync_map_editor_dom();
+    crate::wasm_client::map_vault::sync_map_vault_dom();
 }
 
 /// Formats the floating floor switcher pill bar + cross-floor move buttons for multi-floor maps.

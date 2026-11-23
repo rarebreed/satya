@@ -122,6 +122,16 @@ pub fn NotebookMapPane() -> impl IntoView {
                     >
                         "Editor [E]"
                     </button>
+                    <button
+                        type="button"
+                        id="btn-map-vault-toggle"
+                        class="btn btn-sm btn-secondary"
+                        title="Save, load, export, or import edited battlemaps (.satyamap)"
+                        onclick="window.satyaToggleMapVault()"
+                        on:click=move |_| wasm_client::satya_toggle_map_vault()
+                    >
+                        "Save / Load"
+                    </button>
                     <label
                         id="map-ink-style-wrap"
                         class="inline-label"
@@ -410,6 +420,108 @@ pub fn NotebookMapPane() -> impl IntoView {
             </div>
 
             <div
+                id="map-vault-bar"
+                class="map-editor-toolbar map-vault-bar"
+                style="display: none;"
+                role="region"
+                aria-label="Save and Load Battlemaps"
+            >
+                <div class="map-editor-row">
+                    <label class="inline-label" for="map-save-title-input">
+                        <span>"Map Title"</span>
+                        <input
+                            type="text"
+                            id="map-save-title-input"
+                            class="map-save-title-input"
+                            maxlength="120"
+                            placeholder="Untitled Battlemap"
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-map-save"
+                        class="btn btn-sm btn-accent"
+                        title="Save current battlemap (Ctrl+S in Editor mode)"
+                        onclick="window.satyaSaveBattlemap(false)"
+                        on:click=move |_| wasm_client::satya_save_battlemap(false)
+                    >
+                        "Save"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-save-as"
+                        class="btn btn-sm btn-secondary"
+                        title="Save a new copy with a fresh map ID"
+                        onclick="window.satyaSaveBattlemap(true)"
+                        on:click=move |_| wasm_client::satya_save_battlemap(true)
+                    >
+                        "Save As New"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-export-file"
+                        class="btn btn-sm btn-secondary"
+                        title="Download this battlemap as a portable .satyamap JSON file"
+                        onclick="window.satyaExportBattlemapFile()"
+                        on:click=move |_| wasm_client::satya_export_battlemap_file()
+                    >
+                        "Export .satyamap"
+                    </button>
+                    <label
+                        class="btn btn-sm btn-secondary map-import-file-btn"
+                        for="map-import-file-input"
+                        title="Load a battlemap from a .satyamap or .json file"
+                    >
+                        "Import .satyamap"
+                        <input
+                            type="file"
+                            id="map-import-file-input"
+                            accept=".satyamap,.json,application/json"
+                            style="display: none;"
+                            onchange="window.satyaImportBattlemapFile()"
+                            on:change=move |_| wasm_client::satya_import_battlemap_file()
+                        />
+                    </label>
+                </div>
+                <div class="map-editor-row">
+                    <label class="inline-label" for="map-saved-select">
+                        <span>"Saved Maps"</span>
+                        <select id="map-saved-select" class="map-saved-select">
+                            <option value="">"-- No saved maps yet --"</option>
+                        </select>
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-map-load-saved"
+                        class="btn btn-sm btn-accent"
+                        onclick="window.satyaLoadSavedMap()"
+                        on:click=move |_| wasm_client::satya_load_saved_map()
+                    >
+                        "Load"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-delete-saved"
+                        class="btn btn-sm btn-danger"
+                        onclick="window.satyaDeleteSavedMap()"
+                        on:click=move |_| wasm_client::satya_delete_saved_map()
+                    >
+                        "Delete"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-refresh-saved"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaRefreshSavedMaps()"
+                        on:click=move |_| wasm_client::satya_refresh_saved_maps()
+                    >
+                        "Refresh"
+                    </button>
+                    <span id="map-vault-feedback" class="map-editor-status-pill"></span>
+                </div>
+            </div>
+
+            <div
                 id="map-editor-toolbar"
                 class="map-editor-toolbar"
                 style="display: none;"
@@ -499,6 +611,26 @@ pub fn NotebookMapPane() -> impl IntoView {
                         on:click=move |_| wasm_client::satya_editor_redo()
                     >
                         "↷ Redo"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-save-map"
+                        class="btn btn-sm btn-accent"
+                        title="Save active battlemap (Ctrl+S)"
+                        onclick="window.satyaSaveBattlemap(false)"
+                        on:click=move |_| wasm_client::satya_save_battlemap(false)
+                    >
+                        "Save Map"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-vault-open"
+                        class="btn btn-sm btn-secondary"
+                        title="Open Save / Load / Export battlemap bar"
+                        onclick="window.satyaToggleMapVault()"
+                        on:click=move |_| wasm_client::satya_toggle_map_vault()
+                    >
+                        "Load / Export"
                     </button>
                     <span id="map-editor-status-pill" class="map-editor-status-pill">
                         "Click prop/zone to select · Drag prop to move"

@@ -52,6 +52,8 @@ pub const CHARACTER_SHEET_V2_AVSC: &str =
 /// `institutional_status`/`street_cred`/`debt_tier`) for [`crate::character::CharacterSheetEvent`].
 pub const CHARACTER_SHEET_V3_AVSC: &str =
     include_str!("../../../schemas/v3/character_sheet_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::SavedMapEvent`].
+pub const SAVED_MAP_V1_AVSC: &str = include_str!("../../../schemas/v1/saved_map_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -291,6 +293,13 @@ pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
         topics::CHARACTER_SHEETS,
         3,
         CHARACTER_SHEET_V3_AVSC,
+    ),
+    (
+        14,
+        subjects::SAVED_MAP,
+        topics::SAVED_MAPS,
+        1,
+        SAVED_MAP_V1_AVSC,
     ),
 ];
 

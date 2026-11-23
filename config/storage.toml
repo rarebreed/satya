@@ -114,3 +114,12 @@ local_path = "data/topics/character-sheets"
 s3_bucket = "satya-analytics-lake"
 s3_region = "us-east-1"
 s3_prefix = "raw/character-sheets"
+
+[topics.saved-maps]
+topic_id = 11
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/saved-maps"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/saved-maps"
