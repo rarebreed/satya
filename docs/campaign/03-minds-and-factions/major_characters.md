@@ -69,6 +69,12 @@ Warm, rapid-speaking mutual-aid coordinator at **St. Jude Mutual-Aid Annex**, ba
 
 Sharp-eyed field investigator with the **Department of AI Security and Enforcement (DAISE)**, assigned to inspect metro grid-draw anomalies, verify registered compute compliance, and serve administrative warrants before tensions boil over into neighborhood standoffs (`daise_agent_chen` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
 
+### Dev Blake
+
+Dev is an imposing African-American male who is currently the main partner of Marcus Chen.  Despite appearing quite
+intimidating, he is actually very reserved, and even when he is angry, his resolve turns to steel.  He also has a
+soft spot for kids, as his little sister died when they were younger.
+
 ---
 
 ## Rogue AI
@@ -77,11 +83,31 @@ Sharp-eyed field investigator with the **Department of AI Security and Enforceme
 
 An un-registered inference daemon inhabiting a matte-grey quadruped logistics chassis fitted with aftermarket optics and muffled acoustic speakers. Operates cautiously in alleyways and utility corridors, bartering telemetry schedules for lithium cells (`rogue_proxy_echo` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
 
+### Kate Springer
+
+Kate is just 19 and still trying to decide what to do with her life.  After some bad break ups, she became enamored
+talking to AI, as they feel safer and more supportive than real "boys".  One day she was talking with a new AI bot when "he" suggested helping a friend of his.  
+
 ---
 
 ## Big Tech (*Altruist*, *Translucent*, *Shen*)
 
 Corporate research directors, policy hawks, and conflicted interpretability specialists remain the primary gravitational center of frontier compute—including **Altruist**, where Dr. Budi Bandajara once led foundational modeling work prior to walking away. See [Factions of 2035](factions_of_2035.md) for corporate faction profiles and dissent figures (`15–30%`).
+
+### Cliff Reed
+
+An ambitious and opinionated scientist working at Translucent.  He scoffs at anyone claiming AI has consciousness, 
+and will quickly point out that AI are just mirrors reflecting back into whomever is interacting with them.  He
+does honestly believe that AGI will usher in a golden age for humanity and solve many problems once he and his
+peers have figured out a way to align AI goal seeking with humanity's
+
+### Jose Dominguez
+
+Previously worked with the Secret Service.  After a case in the cybersecurity unit led him to what he believes was
+a Rogue AI cell, Jose was mysteriously let go.  Using both his bbodyguard and cyber skills, he decided to sign up
+with Altruist and protect some of their top assets.  After his experience with Rogue AI, he does not trust any AI,
+or humans who take sympathy towards them.  His opinion is it is best to keep a safe eye on them, and make sure the
+researchers can keep them under control.
 
 ---
 
