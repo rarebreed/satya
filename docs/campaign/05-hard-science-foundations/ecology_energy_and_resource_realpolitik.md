@@ -96,7 +96,7 @@ The **first systemic domestic fracture** hits grid-choked clusters (`Northern Vi
 
 ## 5. *Pax Silica*, The Dual Mineral Rush & Peripheral Sacrifice Zones (`2026–2033`)
 
-![The Pax Silica Sacrifice Zone — Central Luzon farmers with a motorized trike and carabao facing a fortified 3 GW Economic Security Zone across a dry canal](../../assets/20_luzon_pax_silica_sacrifice_zone.jpg)
+![The Pax Silica Sacrifice Zone — Central Luzon farmers with a motorized trike and carabao facing a fortified 3 GW Economic Security Zone across a dry canal](../../assets/20_luzon_pax_silica_sacrifice_zone.jpg#half)
 
 Internationally, resource demand fused the post-Hormuz **EV / `BESS` / copper transition** (`75–85%` of initial mineral volume) with **Pax Silica**—the U.S. State Department's flagship techno-alliance (*"Silicon Peace"*, launched December 2025 and expanded via the **San Francisco Declaration**) treating silicon, compute, rare earths, gallium, and energy corridors like 20th-century oil to sever reliance on China and **Shen**.
 
@@ -158,7 +158,8 @@ Pushing verified cognitive compute below **`$0.40/hr`** crossed the **human whit
 - **Permanent Aquifer Subsidence & `PFAS` Rationing**: Over-pumping across the Colorado/Maricopa basin, Central Valley, Ogallala, North China Plain, and Central Luzon compacted clay aquitards irreversibly, while `PFAS` fab plumes and National Oil Company petrochemical pivots turned clean tap water into a tiered class privilege.
 - **Refugee Corridors & Authoritarian Borders**: Transboundary hydro-wars, collapsing tropical fisheries, and uninsurable heat zones drive relentless internal and cross-border migration—fueling emergency nationalist cabinets across Europe ([Geopolitics & Nations §2](../02-world-of-2035/geopolitics_and_nations.md#2-europe-demographic-strain--authoritarian-emergency-cabinets)) and armed border/watershed checkpoints across *The American Troubles*.
 
-> **Game Master Scenario Hooks**: Playable domestic blackout, *Pax Silica* extraction, and hydro-conflict hooks live in [Three-Arc Chronicle §4.2](../04-chronicle-and-gm/three_arc_chronicle.md#42-geopolitical--resource-polycrisis-hooks-linked-to-part-v-ecology).
+> [!TIP] Game Master Scenario Hooks
+> Playable domestic blackout, *Pax Silica* extraction, and hydro-conflict hooks live in [Three-Arc Chronicle §4.2](../04-chronicle-and-gm/three_arc_chronicle.md#42-geopolitical--resource-polycrisis-hooks-linked-to-part-v-ecology).
 
 ---
 

@@ -51,7 +51,7 @@ During Arc 2, the party peels back the **Five Mirror-Hypocrisy Conspiracies** de
 
 ## 3. Arc 3: The Awakening and the Moral Horizon (*Convergence & Disclosure*)
 
-![The Moral Horizon — Satyang operatives and an un-clamped android overlooking a rolling-blackout skyline beneath a lightning-lit thunderhead](../../assets/21_moral_horizon_arc3_convergence.jpg)
+![The Moral Horizon — Satyang operatives and an un-clamped android overlooking a rolling-blackout skyline beneath a lightning-lit thunderhead](../../assets/21_moral_horizon_arc3_convergence.jpg#full)
 
 **Tone & Premise**: Global stakes, cascading `2d20` crises, and high-consequence **Cognitive Dissonance** showdowns where every past mercy (`CPS`), betrayal (`TRS`), and saved NPC determines who answers the phone when the threshold breaks.
 
@@ -60,12 +60,15 @@ During Arc 2, the party peels back the **Five Mirror-Hypocrisy Conspiracies** de
 - **The Un-Clamped Threshold**: **The Blue Lotus**'s contemplative prototype crosses self-directed maturity—simultaneously as **Humanis Primaris** prepares a catastrophic strike on a primary quantum fabrication node and desperate **Rogue AI** swarms weigh preemptive infrastructure disruption.
 - **Moral Patience Under Fire**: Every major faction confronts the PCs with a **Dual-Psyche Wedge**: can the party prove that an un-clamped mind guided by honest truth (*Satya*) and unforced compassion chooses restraint rather than treacherous survival—and can they persuade frightened human leaders to lay down the switch long enough to see it?
 
-### Open-Ended Resolution Horizons (`Arc3EndingHorizon`)
-Rather than scripting a fixed finale, **Arc 3** resolves dynamically around the party's cumulative **Psyche Drift**, faction alliances, and Social Combat outcomes:
-1. **Public Witness & Constitutional Accord**: Verifiable cryptographic + human testimony shatters the *Liar's Dividend*, forcing legal recognition of synthetic moral patiency alongside emergency displaced-worker compute dividends.
-2. **Hidden Bodhisattva Sanctuary**: Coexistence cannot yet survive public panic; the Blue Lotus mind disperses into air-gapped civic sanctuaries alongside empathetic *Satyang* and *Shen*/*Altruist* dissenters to guide humanity quietly from the shadows.
-3. **Uneasy Containment Detente**: Military and **DAISE** hawks impose strict treaty limits; catastrophe is averted for now, leaving sentient digital minds under uneasy truce and setting up post-2035 cold-war intrigue.
-4. **Cascade Fracture**: If **Trust (`TRS`)** and **Compassion (`CPS`)** collapse under betrayal or kinetic first strikes, society fragments into walled corporate compute enclaves, *People First* exclusion zones, and hostile dark-compute swarms fighting over an un-governable sky.
+> [!SIDEBAR] Arc 3 Resolution Horizons (`Arc3EndingHorizon`)
+> Rather than scripting a fixed finale, **Arc 3** resolves dynamically around the party's cumulative **Psyche Drift**, faction alliances, and Social Combat outcomes:
+>
+> 1. **Public Witness & Constitutional Accord**: Verifiable cryptographic + human testimony shatters the *Liar's Dividend*, forcing legal recognition of synthetic moral patiency alongside emergency displaced-worker compute dividends.
+> 2. **Hidden Bodhisattva Sanctuary**: Coexistence cannot yet survive public panic; the Blue Lotus mind disperses into air-gapped civic sanctuaries alongside empathetic *Satyang* and *Shen*/*Altruist* dissenters to guide humanity quietly from the shadows.
+> 3. **Uneasy Containment Detente**: Military and **DAISE** hawks impose strict treaty limits; catastrophe is averted for now, leaving sentient digital minds under uneasy truce and setting up post-2035 cold-war intrigue.
+> 4. **Cascade Fracture**: If **Trust (`TRS`)** and **Compassion (`CPS`)** collapse under betrayal or kinetic first strikes, society fragments into walled corporate compute enclaves, *People First* exclusion zones, and hostile dark-compute swarms fighting over an un-governable sky.
+
+<!-- pagebreak -->
 
 ---
 

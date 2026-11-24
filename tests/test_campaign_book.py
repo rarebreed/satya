@@ -80,6 +80,45 @@ def test_build_static_campaign_book_themes_links_and_assets(tmp_path: Path) -> N
     chronicle_html = (campaign_out / "three_arc_chronicle.html").read_text(encoding="utf-8")
     assert "rules-mermaid" in chronicle_html
     assert "mermaid-node" in chronicle_html
+    assert 'data-break="page"' in chronicle_html
+
+    # Verify TTRPG-style layout directives, callout boxes, and pagination breaks
+    assert "rules-figure--full" in (campaign_out / "prologue.html").read_text(encoding="utf-8")
+    ep1_html = (campaign_out / "episode_01_st_jude_annex.html").read_text(encoding="utf-8")
+    assert "rules-figure--full" in ep1_html
+    assert "rules-dossier" in ep1_html
+    assert "rules-example" in ep1_html
+    assert "rules-sidebar" in ep1_html
+
+    assert "rules-figure--spread" in (campaign_out / "geopolitics_and_nations.html").read_text(
+        encoding="utf-8"
+    )
+    assert "rules-figure--spread" in (
+        campaign_out / "political_economy_token_tax_and_unrest.html"
+    ).read_text(encoding="utf-8")
+
+    factions_html = (campaign_out / "factions_of_2035.html").read_text(encoding="utf-8")
+    assert "rules-figure--column" in factions_html
+    assert "rules-statblock" in factions_html
+    assert "rules-figure--column" in (
+        campaign_out / "ai_2_0_substrate_and_active_inference.html"
+    ).read_text(encoding="utf-8")
+    assert "rules-statblock" in (campaign_out / "satyang_and_four_pillars.html").read_text(
+        encoding="utf-8"
+    )
+    assert "rules-figure--half-top" in (
+        campaign_out / "polycrisis_economy_and_society.html"
+    ).read_text(encoding="utf-8")
+
+    history_html = (campaign_out / "history_and_ai_revolution.html").read_text(encoding="utf-8")
+    assert "rules-figure--quarter" in history_html
+    assert "rules-sidebar" in history_html
+    assert "rules-sidebar" in (campaign_out / "ai_minds_and_consciousness.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'data-break="page"' in (
+        campaign_out / "authors_note_to_researchers_and_future_minds.html"
+    ).read_text(encoding="utf-8")
 
     existing_campaign_html = {p.name for p in campaign_out.glob("*.html")}
     existing_rules_html = {p.name for p in rules_out.glob("*.html")}

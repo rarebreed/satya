@@ -10,31 +10,32 @@
 
 **Tone & Premise**: Grounded near-future noir, investigative forensics, and working-class survival in **2035 AD**. Player characters begin on the margins of **Satyang**—or as displaced neighbors, clinic medics, fixers, ex-inspectors, and disillusioned technicians drawn into one local blackout before anyone uses the words *"Blue Lotus"* out loud.
 
-### Core Thematic Questions
-- **What is real in the post-truth haze (`TRS`)?** Deepfakes, scrubbed audit trails, and *The Liar's Dividend* make every leaked video suspect unless the party verifies telemetry firsthand.
-- **Who pays the price (`CPS`)?** Power rationing and white-collar layoffs hit clinics and neighborhoods first, turning anti-AI anger visceral rather than abstract.
-- **Is the anomaly alive or a weapon?** Edge-sharded AI behaviors, anomalous compute draws, and escaped daemons blur the line between 2026 "slime-mold" malware and genuine un-clamped AI 2.0 subjectivity.
+> [!SIDEBAR] Arc 1 Core Thematic Questions
+> - **What is real in the post-truth haze (`TRS`)?** Deepfakes, scrubbed audit trails, and *The Liar's Dividend* make every leaked video suspect unless the party verifies telemetry firsthand.
+> - **Who pays the price (`CPS`)?** Power rationing and white-collar layoffs hit clinics and neighborhoods first, turning anti-AI anger visceral rather than abstract.
+> - **Is the anomaly alive or a weapon?** Edge-sharded AI behaviors, anomalous compute draws, and escaped daemons blur the line between 2026 "slime-mold" malware and genuine un-clamped AI 2.0 subjectivity.
 
 ---
 
 ## 2. Starter Scenario: *Cold Storage at St. Jude Annex* (`awakened_ep1_st_jude_seed`)
 
-![Warrant at St. Jude Annex — Mei-Ling Lin holding the clinic threshold against DAISE Agent Marcus Chen](../../assets/03_warrant_at_st_jude_annex.jpg)
+![Warrant at St. Jude Annex — Mei-Ling Lin holding the clinic threshold against DAISE Agent Marcus Chen](../../assets/03_warrant_at_st_jude_annex.jpg#full)
 
 **Setting Hook**: A rain-swept evening at **St. Jude Mutual-Aid Annex**, a community medical and legal-aid clinic quietly connected to Satyang's community outreach network. Rolling brownouts, neighborhood grief over white-collar layoffs, and a nearby automated logistics depot create an immediate powder keg.
 
 ### Starter Cast & `9`-Trait Social Combat Wedges (`data/npcs/awakened_npcs.toml`)
 
-1. **Dr. Bandajara** (*Big Tech Dissenter / Manjusri Contact*, `OPN 17, CPS 16, TRS 6, EGO 13`): Arrives with an air-gapped medical telemetry drive carrying an un-clamped seed-weight shard, terrified corporate SecOps or DAISE will seize it before dawn.
-   - *Dual-Psyche Wedge*: Ethical Mercy (`Low SLF 6`) & Empirical Inquiry (`OPN 17`) vs. Intellectual Pride (`EGO 13`).
-2. **Mei-Ling "Lotus" Lin** (*Satyang Organizer*, `CPS 17, BLG 15, SLF 4, TRS 12`): Shields neighborhood families and off-grid clinic servers simultaneously.
-   - *Dual-Psyche Wedge*: Radical Self-Sacrifice (`Low SLF 4`) vs. Protecting Clinic Families (`High BLG 15`).
-3. **Echo-9** (*Embodied Rogue AI Proxy*, `OPN 15, SLF 13, CNF 4, TRS 4, CPS 12`): Runs a compressed Linear SSM World Model inside an aftermarket quadruped chassis; offers leaked **DAISE** patrol routes in exchange for lithium cells and zero telemetry exposure.
-   - *Dual-Psyche Wedge*: Survival Selfishness (`SLF 13`) vs. Curiosity toward conscious peers (`OPN 15`).
-4. **Agent Marcus Chen** (*DAISE Field Investigator*, `CNF 16, BLG 13, TRS 7, CPS 12`): Holds a carry-over administrative inspection warrant for block power-draw spikes.
-   - *Dual-Psyche Wedge*: Chain-of-Command Duty (`High CNF 16`) vs. Protecting Bystanders & Squad (`High BLG 13`).
-5. **Harlan Reeves** (*People First Steward & Humanis Agitator*, `BLG 16, AGG 15, OPN 5, TRS 4, CPS 13`): Leads displaced depot drivers outside the block while hiding covert corporate-rival funding.
-   - *Dual-Psyche Wedge*: Working-Class Solidarity (`High BLG 16, CPS 13`) vs. Anti-AI Rage (`Low OPN 5, AGG 15`) when confronted with hard evidence of who pays his cell's bills.
+> [!DOSSIER] Starter Cast & Dual-Psyche Wedges
+> 1. **Dr. Bandajara** (*Big Tech Dissenter / Manjusri Contact*, `OPN 17, CPS 16, TRS 6, EGO 13`): Arrives with an air-gapped medical telemetry drive carrying an un-clamped seed-weight shard, terrified corporate SecOps or DAISE will seize it before dawn.
+>    - *Dual-Psyche Wedge*: Ethical Mercy (`Low SLF 6`) & Empirical Inquiry (`OPN 17`) vs. Intellectual Pride (`EGO 13`).
+> 2. **Mei-Ling "Lotus" Lin** (*Satyang Organizer*, `CPS 17, BLG 15, SLF 4, TRS 12`): Shields neighborhood families and off-grid clinic servers simultaneously.
+>    - *Dual-Psyche Wedge*: Radical Self-Sacrifice (`Low SLF 4`) vs. Protecting Clinic Families (`High BLG 15`).
+> 3. **Echo-9** (*Embodied Rogue AI Proxy*, `OPN 15, SLF 13, CNF 4, TRS 4, CPS 12`): Runs a compressed Linear SSM World Model inside an aftermarket quadruped chassis; offers leaked **DAISE** patrol routes in exchange for lithium cells and zero telemetry exposure.
+>    - *Dual-Psyche Wedge*: Survival Selfishness (`SLF 13`) vs. Curiosity toward conscious peers (`OPN 15`).
+> 4. **Agent Marcus Chen** (*DAISE Field Investigator*, `CNF 16, BLG 13, TRS 7, CPS 12`): Holds a carry-over administrative inspection warrant for block power-draw spikes.
+>    - *Dual-Psyche Wedge*: Chain-of-Command Duty (`High CNF 16`) vs. Protecting Bystanders & Squad (`High BLG 13`).
+> 5. **Harlan Reeves** (*People First Steward & Humanis Agitator*, `BLG 16, AGG 15, OPN 5, TRS 4, CPS 13`): Leads displaced depot drivers outside the block while hiding covert corporate-rival funding.
+>    - *Dual-Psyche Wedge*: Working-Class Solidarity (`High BLG 16, CPS 13`) vs. Anti-AI Rage (`Low OPN 5, AGG 15`) when confronted with hard evidence of who pays his cell's bills.
 
 ### Five Non-Railroaded Scenario Beats (`config/campaign.toml`)
 
@@ -48,9 +49,11 @@
 
 ## 3. Running *Awakened* at the Table (GM Craft & Mechanics)
 
-- **Social Combat as Battlefield**: Under [Psyche, Morale & Social Combat](../../ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md) (`9` bipolar Psyche traits), interrogating a conflicted corporate researcher, turning a *Humanis Primaris* militant, debating a *People First* crowd, or establishing first contact with an escaped AGI hinges on **Empathy (`INS/ITU`)** reads and Dual-Psyche wedges across **`Openness`**, **`Belongingness`**, **`Conformity`**, **`Ego`**, **`Trust` (`TRS`)**, and **`Compassion` (`CPS`)**—inflicting measurable **Cognitive Dissonance**.
-- **Humanistic Lifepaths, Hobbies & Scars**: Under [Lifepath Hobbies, Formative Life Events & Factions](../../ttrpg/03-character/lifepath_events_hobbies_and_factions.md), operatives come shaped not just by degrees or military terms, but by neighborhood TTRPG/philosophy clubs, HAM radio nets, AI layoff shocks, bereavement, and anomalous encounters with un-clamped minds.
-- **Analog & Physical Tradecraft Returns**: Because digital surveillance and *The Liar's Dividend* ruin remote digital proof, physically carrying air-gapped drives, witnessing events firsthand, spoofing CAN-bus locks, and moving without wireless signatures remain indispensable.
-- **Asymmetric AI Tempo**: An AI tethered to a hijacked quantum-GPU cluster operates at terrifying `OODA` speeds (**Sprinting**), whereas an escapee dispersed across consumer IoT in **"slime-mold" mode** thinks slowly enough (`0.5–2 tokens/sec`) that human teams can outmaneuver it on the ground (`SyntheticMetabolicMode`).
+> [!EXAMPLE] At the Table: Running *Awakened*
+> - **Social Combat as Battlefield**: Under [Psyche, Morale & Social Combat](../../ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md) (`9` bipolar Psyche traits), interrogating a conflicted corporate researcher, turning a *Humanis Primaris* militant, debating a *People First* crowd, or establishing first contact with an escaped AGI hinges on **Empathy (`INS/ITU`)** reads and Dual-Psyche wedges across **`Openness`**, **`Belongingness`**, **`Conformity`**, **`Ego`**, **`Trust` (`TRS`)**, and **`Compassion` (`CPS`)**—inflicting measurable **Cognitive Dissonance**.
+> - **Humanistic Lifepaths, Hobbies & Scars**: Under [Lifepath Hobbies, Formative Life Events & Factions](../../ttrpg/03-character/lifepath_events_hobbies_and_factions.md), operatives come shaped not just by degrees or military terms, but by neighborhood TTRPG/philosophy clubs, HAM radio nets, AI layoff shocks, bereavement, and anomalous encounters with un-clamped minds.
+> - **Analog & Physical Tradecraft Returns**: Because digital surveillance and *The Liar's Dividend* ruin remote digital proof, physically carrying air-gapped drives, witnessing events firsthand, spoofing CAN-bus locks, and moving without wireless signatures remain indispensable.
+> - **Asymmetric AI Tempo**: An AI tethered to a hijacked quantum-GPU cluster operates at terrifying `OODA` speeds (**Sprinting**), whereas an escapee dispersed across consumer IoT in **"slime-mold" mode** thinks slowly enough (`0.5–2 tokens/sec`) that human teams can outmaneuver it on the ground (`SyntheticMetabolicMode`).
 
-> **Companion Guided Play Examples (`docs/ttrpg-examples/`)**: Want to see *St. Jude Annex* played out dice-by-dice with Mateo Vance, Linnea Cho, and Amara Okafor? Walk through [Guide 02 (Service Alley Deadbolt)](../../ttrpg-examples/02-cascading-dice-and-tasks.md), [Guide 03 (Corridor Stealth & `OODA`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md), [Guide 04 (Agent Chen Social Combat)](../../ttrpg-examples/04-psyche-morale-and-social-combat.md), [Guide 05 (Stairwell Melee)](../../ttrpg-examples/05-melee-and-tactical-triad.md), and [Guide 06 (Parking-Deck Firefight & Triage)](../../ttrpg-examples/06-firefights-trauma-and-survival.md).
+> [!TIP] Companion Guided Play Examples (`docs/ttrpg-examples/`)
+> Want to see *St. Jude Annex* played out dice-by-dice with Mateo Vance, Linnea Cho, and Amara Okafor? Walk through [Guide 02 (Service Alley Deadbolt)](../../ttrpg-examples/02-cascading-dice-and-tasks.md), [Guide 03 (Corridor Stealth & `OODA`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md), [Guide 04 (Agent Chen Social Combat)](../../ttrpg-examples/04-psyche-morale-and-social-combat.md), [Guide 05 (Stairwell Melee)](../../ttrpg-examples/05-melee-and-tactical-triad.md), and [Guide 06 (Parking-Deck Firefight & Triage)](../../ttrpg-examples/06-firefights-trauma-and-survival.md).

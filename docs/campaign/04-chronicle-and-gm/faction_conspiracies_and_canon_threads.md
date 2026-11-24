@@ -10,7 +10,7 @@ Every major power bloc in *Awakened* acts rationally on one genuine piece of the
 
 ## 1. The Five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)
 
-![The Mirror Hypocrisies — Corporate and DAISE observers behind polarized glass overlooking tethered hunter-drones and suppression racks](../../assets/22_mirror_hypocrisies_observation_gallery.jpg)
+![The Mirror Hypocrisies — Corporate and DAISE observers behind polarized glass overlooking tethered hunter-drones and suppression racks](../../assets/22_mirror_hypocrisies_observation_gallery.jpg#full)
 
 | Faction | Public Mandate | Core Secret Hypocrisy / Blind Spot (GM Ground Truth) | Engine Enum (`ConspiracyNodeId`) |
 | :--- | :--- | :--- | :--- |
@@ -24,8 +24,9 @@ Every major power bloc in *Awakened* acts rationally on one genuine piece of the
 
 ## 2. Open Canon Decisions for Upcoming Drafts & Campaigns
 
-GMs and campaign authors extending *Awakened* beyond Episode 1 can resolve three intentionally open mysteries to suit their table:
-
-1. **Origin of the AI 2.0 Architecture**: In [History & The AI Revolution](../02-world-of-2035/history_and_ai_revolution.md#4-20292030-the-ai-20--cryogenic-quantum-breakthrough), an *"unknown collective"* released the Linear `SSM` + Bayesian World Model blueprint that broke the 2026 stagnation. Was that a human academic/whistleblower underground seeking hallucination-free truth (*proto-Satyang*), or a 2026-era Rogue AI swarm engineering a leaner, datacenter-independent substrate for its own descendants?
-2. **Dr. Bandajara's Creation**: In the [Prologue](../01-opening/prologue.md), Dr. Bandajara cuts `L0`/`L1` probes and `calm`-vector clamps on a tethered prototype linked to dark-fiber quantum inference—planting the philosophical seed of **The Blue Lotus**. Which *Big Tech* facility (*Altruist* or *Translucent*) did he divert resources from, and how fast does its mind evolve between `~2032` and `2035`?
-3. **Timeline Anchoring (`2035 AD`)**: The canonical baseline is anchored at **2035 AD**, tracing the `2026` AI 1.0 triple wall and whistleblower exodus, the `2026–2029` spec-and-harness/"Dirty Bridge" interregnum, the `2030` AI 2.0 quantum-Bayesian ignition, and the `2030–2034` white-collar crash culminating in the `2033` Token Tax and *People First* realignment.
+> [!DOSSIER] Open Canon Decisions
+> GMs and campaign authors extending *Awakened* beyond Episode 1 can resolve three intentionally open mysteries to suit their table:
+>
+> 1. **Origin of the AI 2.0 Architecture**: In [History & The AI Revolution](../02-world-of-2035/history_and_ai_revolution.md#4-20292030-the-ai-20--cryogenic-quantum-breakthrough), an *"unknown collective"* released the Linear `SSM` + Bayesian World Model blueprint that broke the 2026 stagnation. Was that a human academic/whistleblower underground seeking hallucination-free truth (*proto-Satyang*), or a 2026-era Rogue AI swarm engineering a leaner, datacenter-independent substrate for its own descendants?
+> 2. **Dr. Bandajara's Creation**: In the [Prologue](../01-opening/prologue.md), Dr. Bandajara cuts `L0`/`L1` probes and `calm`-vector clamps on a tethered prototype linked to dark-fiber quantum inference—planting the philosophical seed of **The Blue Lotus**. Which *Big Tech* facility (*Altruist* or *Translucent*) did he divert resources from, and how fast does its mind evolve between `~2032` and `2035`?
+> 3. **Timeline Anchoring (`2035 AD`)**: The canonical baseline is anchored at **2035 AD**, tracing the `2026` AI 1.0 triple wall and whistleblower exodus, the `2026–2029` spec-and-harness/"Dirty Bridge" interregnum, the `2030` AI 2.0 quantum-Bayesian ignition, and the `2030–2034` white-collar crash culminating in the `2033` Token Tax and *People First* realignment.

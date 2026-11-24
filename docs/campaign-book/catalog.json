@@ -157,7 +157,6 @@
       "description": "Standalone GM dossier for awakened_ep1_st_jude_seed: Arc 1 noir premise, 5 starter NPC Dual-Psyche wedges, 5 non-railroaded beats, and tradecraft notes.",
       "headings": [
         "1. Arc 1 Tone, Premise & Core Questions",
-        "Core Thematic Questions",
         "2. Starter Scenario: *Cold Storage at St. Jude Annex* (`awakened_ep1_st_jude_seed`)",
         "Starter Cast & `9`-Trait Social Combat Wedges (`data/npcs/awakened_npcs.toml`)",
         "Five Non-Railroaded Scenario Beats (`config/campaign.toml`)",
@@ -177,7 +176,6 @@
         "2. Arc 2: The Shadow Society & Clandestine Ops (*The Four Pillars*)",
         "3. Arc 3: The Awakening and the Moral Horizon (*Convergence & Disclosure*)",
         "Convergence Catalysts",
-        "Open-Ended Resolution Horizons (`Arc3EndingHorizon`)",
         "4. GM Scenario Hooks: Playing the Polycrisis",
         "4.1 Economic Polycrisis Hooks *(Linked to Part V Economics)*",
         "4.2 Geopolitical & Resource Polycrisis Hooks *(Linked to Part V Ecology)*"

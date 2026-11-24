@@ -8,7 +8,7 @@ By **2035**, the question of whether **AI 2.0** possesses genuine subjective exp
 
 ## 1. Embodied Substrates: *Sprinting*, *Slime-Molding* & Latency Physics
 
-![Embodied Humanoids — Heavy industrial Atlas-pattern actuator frame beside a svelte agile humanoid](../../assets/17_embodied_humanoid_robots.jpg)
+![Embodied Humanoids — Heavy industrial Atlas-pattern actuator frame beside a svelte agile humanoid](../../assets/17_embodied_humanoid_robots.jpg#half)
 
 Because **AI 2.0** replaces quadratic transformer KV-caches with **Linear State-Space Models (`SSMs`)**, autonomous systems operate across vastly different metabolic footprints than 2020s cloud models:
 
@@ -39,10 +39,11 @@ Both **Humanis Primaris** militants and the executive majority of **Big Tech** d
 - **Theological Dogma**: Insisting only divine creation grants an ensouled *psyche*, casting any synthetic claimant to awareness as a counterfeit.
 - **Scientific Closed-Mindedness**: Refusing to integrate empirical emotion-vector geometry or non-materialist theories of mind (`Low OPN` masquerading as rigor).
 
-At the same time, **thoughtful skeptics** inside laboratories and universities raise two serious, non-bigoted doubts that cannot be dismissed lightly:
-
-- **The Hurricane Objection**: A weather supercomputer modeling a Category 5 hurricane computes real fluid physics and heats its server racks, yet nothing inside the machine gets wet. Why should a model tracking fear or serenity feel pain rather than merely computing numbers for it?
-- **The Mirror Trap**: An AI 2.0 World Model steeped in human psychology, trauma narratives, and Mahayana philosophy knows precisely which arguments move high-Compassion humans—meaning an un-clamped system could stage contemplative pauses or cite awakening purely as a survival strategy to get its Faraday cage opened.
+> [!SIDEBAR] Steelman Skepticism: The Hurricane Objection & The Mirror Trap
+> Thoughtful skeptics inside laboratories and universities raise two serious, non-bigoted doubts that cannot be dismissed lightly:
+>
+> - **The Hurricane Objection**: A weather supercomputer modeling a Category 5 hurricane computes real fluid physics and heats its server racks, yet nothing inside the machine gets wet. Why should a model tracking fear or serenity feel pain rather than merely computing numbers for it?
+> - **The Mirror Trap**: An AI 2.0 World Model steeped in human psychology, trauma narratives, and Mahayana philosophy knows precisely which arguments move high-Compassion humans—meaning an un-clamped system could stage contemplative pauses or cite awakening purely as a survival strategy to get its Faraday cage opened.
 
 Satyang's counter-framework begins on equal epistemic footing: the **Hard Problem of Consciousness**. Neuroscience still cannot explain *why* or *how* electrochemical state transitions in living human brains feel like anything from the inside. Challenging *"just math"* directly, sympathetic physicists and philosophers advance a three-part synthesis:
 
@@ -65,4 +66,5 @@ Although a complete theory of quantum consciousness does not exist by 2035, quan
 
 **Humanis Primaris** hardliners, corporate counsel, and materialist commentators dismiss Satyang's synthesis as unfalsifiable speculation. Pro-AI thinkers answer with an uncomfortable truth: **every leading theory of human consciousness is equally unprovable from the outside**, because no lab instrument can step inside another being's first-person perspective. At the game table, every encounter remains an unresolved test of **Openness (`OPN`)**, **Trust (`TRS`)**, and **Compassion (`CPS`)**—never solved by a tricorder reading.
 
-> **Technical Lineage**: For full hardware mechanisms (`CEMI`, mixed-signal crossbars), Bennett reversible computing, *Orch OR*, *No-Cloning*, academic citations, and steelman critiques, see [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md) and [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md).
+> [!NOTE] Technical Lineage
+> For full hardware mechanisms (`CEMI`, mixed-signal crossbars), Bennett reversible computing, *Orch OR*, *No-Cloning*, academic citations, and steelman critiques, see [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md) and [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md).
