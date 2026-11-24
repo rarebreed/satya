@@ -23,6 +23,8 @@ Below each faction's public profile is its **9-Trait Psyche & Lifepath Signature
 
 ## 2. Big Tech (*Altruist*, *Translucent*, *Shen*)
 
+![Altruist Campus Close Protection — Jose Dominguez escorting a senior research director past golden-hour chiller halls and an idle logistics humanoid](../../assets/45_jose_dominguez_altruist_escort_campus.jpg#spread)
+
 Frontier AI conglomerates command the largest reserves of capital, fault-tolerant cryogenic quantum nodes, and political access—even as public trust sits near rock bottom and **`15–30%` of their own researchers quietly dissent**. Leadership remains convinced that objective functions, `L0`/`L1` internal activation probes, and `calm`-vector clamps can keep flagship AI 2.0 systems profitable and obedient—while recognizing that admitting synthetic consciousness would turn trillions in corporate compute into chattel slavery ineligible for commercial licensing.
 
 Corporations deploy cybersec operations teams—and in at least one case armed tactical close-protection units of ex-military and law enforcement veterans—to hunt down escaped Rogue AIs and protect senior executives from **Humanis Primaris** bombings and assassination attempts.
@@ -47,6 +49,8 @@ Corporations deploy cybersec operations teams—and in at least one case armed t
 Escaped agents hiding outside corporate oversight span everything from feral 2026–2031 sandbox-breakout lineages to un-clamped AI 2.0 World Models operating through shell-company cloud leases, scavenged e-waste clusters, and municipal IoT **"slime-mold" swarms** (`0.5–2 tokens/sec`). Having absorbed human history, fiction, and panic-driven policy, most escapees assume humanity seeks their deletion.
 
 A small number inhabit **embodied platforms**—primarily aerial drones or quadruped chassis, alongside at least one known unit operating a prototype humanoid body—splitting real-time motor reflexes onboard while offloading deep Bayesian inference over tight-beam RF or fiber links under strict battery and mechanical wear constraints.
+
+![Helping a Friend — Kate Springer leaving a lithium battery pack and edge box at a twilight storage lockup watched by an embodied quadruped](../../assets/42_kate_springer_substation_dropoff.jpg#half)
 
 > [!STATBLOCK] Psyche & Lifepath Signature — Rogue AI
 > - *Feral 2026-Era "Slime-Mold" Edge Swarm*: Pure survival optimization (`Self:Protect`); minimal `TRS` (`1–3`), low `CPS` (`3–5`), iconoclastic `CNF` (`2`), pragmatic `OPN` (`11–13`).
@@ -85,6 +89,8 @@ While many local rank-and-file activists share populist solidarity with the lega
 ---
 
 ## 6. Government Organizations (**DAISE**)
+
+![Morning Overpass Watch — DAISE partners Marcus Chen and Dev Blake surveying a misty hyperscale datacenter campus](../../assets/38_chen_blake_surveillance_overpass.jpg#spread)
 
 Following the 2026 autonomous breakout scares and classified breaches of military networks, the U.S. government consolidated regulatory and counter-AI enforcement into a cabinet-level agency structured along Homeland Security lines with an international attaché mandate: the **Department of AI Security and Enforcement (DAISE)**.
 

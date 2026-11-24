@@ -47,6 +47,8 @@ During **Active Observation**, the searcher declares **one primary channel** (an
 
 ## 2. Escalating Alertness & Suspicion Ladder (`AlertnessLevel`)
 
+![Suspicion Threshold — Alex Wen confronting DAISE investigators Marcus Chen and Dev Blake in a dry sodium-lit service alley](../../assets/40_chen_blake_alley_interception.jpg#half)
+
 In realistic tactical stealth, a single slightly imperfect die roll rarely teleports every guard in a compound into lethal gunfight awareness. Instead, **Alertness escalates across four discrete rungs**, controlled directly by the infiltrator's `2d20` Contested Outcome (`evaluate_alertness_transition`):
 
 ```mermaid
@@ -141,6 +143,8 @@ When infiltrating a corporate lobby, hospital wing, or checkpoint crowd rather t
 ---
 
 ## 4. Surveillance, Tail Craft, Forensic Clues & Post-Truth Verification
+
+![Long-Range Surveillance — Agents Marcus Chen and Dev Blake logging RF and grid anomalies from a misty overpass](../../assets/38_chen_blake_surveillance_overpass.jpg#spread)
 
 ### 4.1 Urban Surveillance & Surveillance Detection Routes (`SDR`)
 

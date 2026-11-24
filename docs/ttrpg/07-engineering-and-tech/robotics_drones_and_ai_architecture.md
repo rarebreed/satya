@@ -60,6 +60,8 @@ Called shots (`+2` to `+4` $\Delta_{\text{ext}}$ depending on chassis size) or r
 
 ## 3. AI 2.0 Architecture Engineering, Human–AI Co-Design & Verification Debt
 
+![The Alignment Skeptic — Translucent researcher Cliff Reed lecturing beside flat-panel activation monitors](../../assets/43_cliff_reed_translucent_mirror_lecture.jpg#column)
+
 Engineers in 2035 design model pipelines, autonomous firmware, and drone SLAM stacks across **five architectural paradigms** mapped directly onto `awakened_ai_substrate.rs` (`SyntheticMetabolicMode`):
 
 | Paradigm (`AiArchitectureParadigm`) | VRAM | Power | Latency | `SyntheticMetabolicMode` | Co-Design $\Delta_{\text{tool}}$ | Hallucination $\Delta_{\text{ext}}$ | Hardware Cost |

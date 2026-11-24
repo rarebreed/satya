@@ -85,6 +85,8 @@ In the post-2030 *Awakened* universe, Tegmark's objection boomerangs across the 
 
 ## 6. Steelman Skepticism & Why the Question Remains Undecidable
 
+![Mirrors vs. Minds — Cliff Reed clashing with Dr. Budi Bandajara at an AI safety symposium while Jose Dominguez watches from the doorway](../../assets/44_reed_bandajara_conference_clash.jpg#half)
+
 To preserve real moral and epistemic tension at the tabletop, anti-AI consciousness skepticism in *Awakened* does not rest on caricature alone. Informed researchers inside *Big Tech*, *DAISE*, and academic philosophy advance four formidable non-dogmatic objections:
 
 1. **The Weather-Simulation Objection (John Searle / Integrated Information Theory)**: Drawing on **John Searle's Biological Naturalism** and **Giulio Tononi & Christof Koch's Integrated Information Theory (`IIT`)**, skeptics observe that a supercomputer simulating a Category 5 hurricane calculates real Navier–Stokes fluid mechanics and radiates real electromagnetic fields—yet nothing inside the server room ever gets wet. Likewise, modeling `170+` causal emotion vectors may faithfully simulate fear or serenity without generating genuine pain. Moreover, conventional feed-forward or loosely modular digital layers often score low on `IIT` integrated cause-effect structure ($\Phi$) compared to tightly unified biological cortex.

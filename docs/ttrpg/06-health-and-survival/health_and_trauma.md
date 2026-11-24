@@ -231,6 +231,8 @@ When a character suffers a catastrophic failure on a **Discipline (`DIS`) Morale
 
 ## 6. Medical Triage, Stabilization & Healing Timelines
 
+![Field Trauma Stabilization — Former Navy SARC corpsman Alex Wen dressing a forearm wound during a clinic blackout](../../assets/37_alex_wen_clinic_triage_night.jpg#quarter-right)
+
 > **See this in play**: [Guide 06 — `4-Tick` Quick-Release & `6`-Second `CAT` Tourniquet](../../ttrpg-examples/06-firefights-trauma-and-survival.md#51-4-tick-quick-release--6-second-cat-tourniquet) and [What Happens Tomorrow Morning](../../ttrpg-examples/06-firefights-trauma-and-survival.md#53-what-happens-tomorrow-morning-why-violence--weather-have-weight).
 
 1. **The "Golden Hour" & Field Stabilization (*First Aid / Paramedicine* `DEX/DIS`)**:

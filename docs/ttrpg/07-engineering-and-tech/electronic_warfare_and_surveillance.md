@@ -9,6 +9,8 @@ In **Satya**, fighting 2035 surveillance and autonomous hunter-killer networks i
 
 ## 1. The 2035 Surveillance Stack & Network Intrusion
 
+![Perimeter RF Sweep — Jose Dominguez scanning for rogue signals across an Altruist compute campus](../../assets/45_jose_dominguez_altruist_escort_campus.jpg#spread)
+
 ### 1.1 Surveillance Node Catalog (`SurveillanceNodeKind`)
 
 | Surveillance Node (`SurveillanceNodeKind`) | Base $\Delta_{\text{ext}}$ | Sensor Vector | Air-Gapped? | Trip `Heat` | Operational Role |
@@ -57,6 +59,8 @@ flowchart LR
 ---
 
 ## 3. Electronic Counter-Countermeasures (`ECCM`) & Contested EW
+
+![Counter-Intrusion Watch — Ex-Secret Service cyber specialist Jose Dominguez auditing anomaly telemetry](../../assets/46_jose_dominguez_cyber_watch.jpg#quarter-left)
 
 | Hardening Tier (`EccmHardeningId`) | $P_{\text{ECCM}}$ | RF Immune? | Auto-`DF` Bonus | Cost | `[Access]` |
 | :--- | :---: | :---: | :---: | :---: | :---: |

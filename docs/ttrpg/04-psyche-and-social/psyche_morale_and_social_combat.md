@@ -13,6 +13,8 @@ This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trai
 
 ## 1. Acting Against One's Psyche: Friction Checks & Trait Drift
 
+![Parasocial Trust & Belonging — Kate Springer leaning into an attentive AI companion during a quiet suburban evening](../../assets/41_kate_springer_bedroom_companion.jpg#quarter-right)
+
 While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits--behavioral-architecture)**) creates internal psychological friction.
 
 ### 1.1 When a Psyche Friction Check Triggers
@@ -175,6 +177,8 @@ $$\text{TN}_P = 31 - C_{\text{morale}}, \qquad \text{TN}_{GM} = 21 - \Delta_{\te
 ## 4. Social Combat, Debate & Cognitive Dissonance ("Mental Wounds")
 
 ![Warrant at St. Jude Annex — Social combat standoff pitting duty against protecting bystanders](../../assets/03_warrant_at_st_jude_annex.jpg#full)
+
+![Ideological Wedge — Cliff Reed challenging Dr. Bandajara's thesis while corporate security lead Jose Dominguez watches closely](../../assets/44_reed_bandajara_conference_clash.jpg#half)
 
 Satya treats high-stakes debates, ideological arguments, courtroom cross-examinations, boardroom takeovers, and interrogations with the same tactical depth as physical firefights. Just as physical combat targets a body's structural integrity and blood volume, **Social Combat** targets a character's **Psyche** to inflict **Doubt**, **Ego Wounds**, and **Cognitive Dissonance**.
 

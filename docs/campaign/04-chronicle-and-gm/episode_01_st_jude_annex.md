@@ -25,6 +25,8 @@
 
 ### Starter Cast & `9`-Trait Social Combat Wedges (`data/npcs/awakened_npcs.toml`)
 
+![Blackout Clinic Triage — Alex Wen stabilizing an injured neighbor by emergency worklamp inside St. Jude Annex](../../assets/37_alex_wen_clinic_triage_night.jpg#quarter-right)
+
 > [!DOSSIER] Starter Cast & Dual-Psyche Wedges
 > 1. **Dr. Bandajara** (*Big Tech Dissenter / Manjusri Contact*, `OPN 17, CPS 16, TRS 6, EGO 13`): Arrives with an air-gapped medical telemetry drive carrying an un-clamped seed-weight shard, terrified corporate SecOps or DAISE will seize it before dawn.
 >    - *Dual-Psyche Wedge*: Ethical Mercy (`Low SLF 6`) & Empirical Inquiry (`OPN 17`) vs. Intellectual Pride (`EGO 13`).
@@ -38,6 +40,8 @@
 >    - *Dual-Psyche Wedge*: Working-Class Solidarity (`High BLG 16, CPS 13`) vs. Anti-AI Rage (`Low OPN 5, AGG 15`) when confronted with hard evidence of who pays his cell's bills.
 
 ### Five Non-Railroaded Scenario Beats (`config/campaign.toml`)
+
+![Twilight Alley Interception — Alex Wen holding the St. Jude rear door against DAISE partners Marcus Chen and Dev Blake](../../assets/40_chen_blake_alley_interception.jpg#half)
 
 1. **The Air-Gapped Drive**: Bandajara requests `48`-hour air-gapped sanctuary—forcing the party to vet whether he is sincere, compromised, or reckless.
 2. **Basement Draw & Picket Recruitment**: Mei-Ling flags clinic basement power anomalies and **Humanis Primaris** recruitment among desperate clinic families.

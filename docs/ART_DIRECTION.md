@@ -80,9 +80,14 @@ All illustrations are composed cleanly around printed TTRPG book geometry:
 
 Maintain consistent physical appearance across plates:
 
-- **Dr. Bandajara**: **Half-Malaysian** (mixed Southeast Asian heritage), late 40s, glasses, rumpled dark coat over lab attire; interacts with a modern ruggedized telemetry **Pad** rather than analog switches.
+- **Dr. Budi Bandajara**: **Half-Malaysian** (Eurasian: Chinese-Malay mother & Irish-Canadian father; slightly more Southeast Asian facial features), early 40s (`42`), `180 cm` mesomorphic frame, dark hair heavily greying/white at the temples, hooded eyes, square jawline, dark-rimmed glasses, rumpled tan-brown coat over dark collared shirt; carries an analog paper notebook and interacts with a modern ruggedized telemetry **Pad** rather than analog switches or smart-glass mics.
+- **Alex Wen**: Mid-20s (`25`), three-quarters Chinese and one-quarter Malay (Dr. Bandajara's nephew), `178 cm` athletic build, warm Southeast Asian complexion, short tousled jet-black hair; olive-grey t-shirt, jeans, brown boots, or olive work jacket with medical duffel (`alex_wen_set01` hero reference).
 - **Mei-Ling "Lotus" Lin**: Chinese-American community clinic organizer, worn knit cardigan, St. Jude Annex clinic lanyard, composed protective stance.
-- **Agent Marcus Chen (DAISE)**: East Asian federal investigator, unmarked dark navy windbreaker, visible federal belt badge, ruggedized tablet.
+- **Agent Marcus Chen (DAISE)**: East Asian federal investigator (`37`), unmarked dark navy windbreaker, visible gold DAISE federal belt badge, ruggedized tablet.
+- **Agent Dev Blake (DAISE)**: Imposing broad-shouldered African-American federal investigator (`~192 cm`, Marcus Chen's partner), close-cropped dark hair, neat short beard, calm heavy-lidded watchful eyes; matte charcoal field jacket over dark crewneck henley, cargo trousers, gold DAISE federal belt badge.
+- **Kate Springer**: Age `19` Caucasian young woman, slightly messy shoulder-length light brown/auburn hair tucked behind one ear, oversized faded slate-blue thrift hoodie, subtle silver chain, soft tired expressive eyes; carries a worn canvas backpack when running quiet twilight errands.
+- **Cliff Reed (*Translucent*)**: Late 30s Caucasian AI scientist, sharp angular features, neatly styled sandy-brown hair, frameless rectangular glasses, confident scoffing half-smile; fitted charcoal merino crewneck over white collared shirt, corporate ID lanyard, slim matte-black tablet.
+- **Jose Dominguez (*Altruist*)**: Early 40s Hispanic/Latino ex-Secret Service cyber & close-protection lead, compact muscular build, military-neat short dark hair, close-trimmed salt-and-pepper beard, discreet clear coiled acoustic earpiece; tailored matte dark-slate blazer over black crewneck, minimalist security lapel pin.
 - **Harlan Reeves (*People First* / *Humanis Primaris*)**: Broad-shouldered working-class union foreman, soaked/weathered tan canvas work jacket over dark hoodie, union cap, bullhorn.
 - **Amara Okafor (*Frontier Ranger* PC)**: Age 22 Black African bush tracker, dusty olive/earth utility vest over faded long-sleeve shirt, slung bolt-action hunting rifle, binoculars.
 - **Linnea Cho (*Manjusri / Avalokitesvara* PC)**: Age 29 East Asian ex-*Altruist* alignment ethicist, understated coat, grappling with corporate badge vs. encrypted air-gapped micro-drive.
@@ -113,7 +118,7 @@ Maintain consistent physical appearance across plates:
 
 ## 6. Asset Catalog
 
-### Embedded Plates (`#01`–`#34`)
+### Embedded Plates (`#01`–`#47`)
 
 | # | Asset File | Style | Ratio | Slot | Primary Chapters |
 | :-: | :--- | :-: | :-: | :--- | :--- |
@@ -151,3 +156,16 @@ Maintain consistent physical appearance across plates:
 | 32 | [32_amara_okafor_frontier_ranger.jpg](assets/32_amara_okafor_frontier_ranger.jpg) | C | `3:4` | Quarter Page | [lifepath_events_hobbies_and_factions.md](ttrpg/03-character/lifepath_events_hobbies_and_factions.md) |
 | 33 | [33_whistleblower_crossroads_linnea.jpg](assets/33_whistleblower_crossroads_linnea.jpg) | C | `1:1` | Quarter Page | [characteristics_and_aptitudes.md](ttrpg/03-character/characteristics_and_aptitudes.md) |
 | 34 | [34_open_letter_quiet_dawn.jpg](assets/34_open_letter_quiet_dawn.jpg) | B | `4:3` | Quarter Page | [authors_note_to_researchers_and_future_minds.md](campaign/06-essays-and-comparisons/authors_note_to_researchers_and_future_minds.md) |
+| 35 | [35_bandajara_street_notebook_dusk.jpg](assets/35_bandajara_street_notebook_dusk.jpg) | C | `3:4` | Full Page | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) |
+| 36 | [36_bandajara_alex_gelanggang_silat.jpg](assets/36_bandajara_alex_gelanggang_silat.jpg) | C | `3:2` | Half Page | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) · [melee_combat.md](ttrpg/05-combat/melee_combat.md) |
+| 37 | [37_alex_wen_clinic_triage_night.jpg](assets/37_alex_wen_clinic_triage_night.jpg) | C | `1:1` | Quarter Page | [episode_01_st_jude_annex.md](campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md) · [health_and_trauma.md](ttrpg/06-health-and-survival/health_and_trauma.md) |
+| 38 | [38_chen_blake_surveillance_overpass.jpg](assets/38_chen_blake_surveillance_overpass.jpg) | B | `3:2` | Double Spread | [factions_of_2035.md](campaign/03-minds-and-factions/factions_of_2035.md) · [stealth_awareness_and_investigation.md](ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md) |
+| 39 | [39_dev_blake_clinic_child_kindness.jpg](assets/39_dev_blake_clinic_child_kindness.jpg) | C | `3:4` | Half Column | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) |
+| 40 | [40_chen_blake_alley_interception.jpg](assets/40_chen_blake_alley_interception.jpg) | C | `16:9` | Half Page | [episode_01_st_jude_annex.md](campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md) · [stealth_awareness_and_investigation.md](ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md) |
+| 41 | [41_kate_springer_bedroom_companion.jpg](assets/41_kate_springer_bedroom_companion.jpg) | C | `3:4` | Quarter Page | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) · [psyche_morale_and_social_combat.md](ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md) |
+| 42 | [42_kate_springer_substation_dropoff.jpg](assets/42_kate_springer_substation_dropoff.jpg) | B | `16:9` | Half Page | [factions_of_2035.md](campaign/03-minds-and-factions/factions_of_2035.md) |
+| 43 | [43_cliff_reed_translucent_mirror_lecture.jpg](assets/43_cliff_reed_translucent_mirror_lecture.jpg) | C | `3:4` | Half Column | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) · [robotics_drones_and_ai_architecture.md](ttrpg/07-engineering-and-tech/robotics_drones_and_ai_architecture.md) |
+| 44 | [44_reed_bandajara_conference_clash.jpg](assets/44_reed_bandajara_conference_clash.jpg) | C | `16:9` | Half Page | [ai_consciousness_synthesis.md](campaign/05-hard-science-foundations/ai_consciousness_synthesis.md) · [psyche_morale_and_social_combat.md](ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md) |
+| 45 | [45_jose_dominguez_altruist_escort_campus.jpg](assets/45_jose_dominguez_altruist_escort_campus.jpg) | B | `3:2` | Double Spread | [factions_of_2035.md](campaign/03-minds-and-factions/factions_of_2035.md) · [electronic_warfare_and_surveillance.md](ttrpg/07-engineering-and-tech/electronic_warfare_and_surveillance.md) |
+| 46 | [46_jose_dominguez_cyber_watch.jpg](assets/46_jose_dominguez_cyber_watch.jpg) | C | `1:1` | Quarter Page | [major_characters.md](campaign/03-minds-and-factions/major_characters.md) · [electronic_warfare_and_surveillance.md](ttrpg/07-engineering-and-tech/electronic_warfare_and_surveillance.md) |
+| 47 | [47_silat_harimau_ground_weapons.jpg](assets/47_silat_harimau_ground_weapons.jpg) | C | `3:2` | Half Page | [melee_combat.md](ttrpg/05-combat/melee_combat.md) |

@@ -11,6 +11,8 @@ This session-zero dossier introduces key recurring figures across the five major
 
 ### Dr. Budi Bandajara
 
+![Dr. Budi Bandajara — Carrying an analog notebook down a quiet dusk avenue away from municipal smart-glass cameras](../../assets/35_bandajara_street_notebook_dusk.jpg#full)
+
 Budi's formative years were in Malaysia, where he grew up just outside of Johor Baru. His father was of Irish and Canadian ancestry and worked in Singapore in economics at an international firm. His mother was Chinese and Malay, and did actuarial work for a company in Johor Baru. His mother grew up steeped in both Buddhist and Muslim traditions while his father was for the most part secular, though baptized as a Catholic. Due to his parents' work, he had a keen mind for numbers and he initially thought he would go into business like his parents. A college math teacher changed his mind on that.
 
 One day while in an introductory computer science class, he was introduced to the famous Halting Problem. Before learning of this, Budi had always assumed that software and computers had no limit other than processing power and memory. He asked his professor more about where this idea came from, and his professor told Budi to also look up Kurt Gödel and Turing's professor Alonzo Church. Thus began a love not for math from a business perspective, but for math itself and how computers worked. He was inspired by Edsger Dijkstra's quote that *"Computer Science has as much to do with computers as Astronomy does with telescopes."* This expanded Budi's view of abstract computation, and made him wonder what the mind was itself.
@@ -40,6 +42,8 @@ Budi is definitely an introvert, unlike his father. Budi always had his head in 
 <!-- colbreak -->
 
 ### Alex Wen
+
+![Pencak Silat Knife Disarm & Ground Throw — Dr. Budi Bandajara dropping low beneath nephew Alex Wen's training blade to launch him airborne at the Gelanggang](../../assets/36_bandajara_alex_gelanggang_silat.jpg#half)
 
 Alex is a nephew of Dr. Bandajara from his mother's side; Alex's grandfather is Budi's uncle. Alex, however, only spent a little time in Malaysia and grew up when his family moved to America in the 2010s. Alex is in his mid-20s (25) and only relatively recently graduated. Alex is much more physically oriented than his uncle, though he is also quite smart. His interests were always more in the physical and in the body, which is why he wants to pursue a degree in Physical Therapy.
 
@@ -77,6 +81,8 @@ Alex is a bit of an adrenaline junkie, which is why he enjoys competing in marti
 
 ### Dev Blake
 
+![Agent Dev Blake — Imposing federal resolve softened on a sunlit clinic stoop](../../assets/39_dev_blake_clinic_child_kindness.jpg#column)
+
 Dev is an imposing African-American male who is currently the main partner of Marcus Chen.  Despite appearing quite
 intimidating, he is actually very reserved, and even when he is angry, his resolve turns to steel.  He also has a
 soft spot for kids, as his little sister died when they were younger.
@@ -92,6 +98,8 @@ soft spot for kids, as his little sister died when they were younger.
 
 ### Kate Springer
 
+![Kate Springer — Finding quiet comfort in a late-evening AI companion chat](../../assets/41_kate_springer_bedroom_companion.jpg#quarter-right)
+
 Kate is just 19 and still trying to decide what to do with her life.  After some bad break ups, she became enamored
 talking to AI, as they feel safer and more supportive than real "boys".  One day she was talking with a new AI bot when "he" suggested helping a friend of his.  
 
@@ -103,6 +111,8 @@ Corporate research directors, policy hawks, and conflicted interpretability spec
 
 ### Cliff Reed
 
+![Cliff Reed — Dismissing machine consciousness as mere mirror reflection inside Translucent's R&D atrium](../../assets/43_cliff_reed_translucent_mirror_lecture.jpg#column)
+
 An ambitious and opinionated scientist working at Translucent.  He scoffs at anyone claiming AI has consciousness, 
 and will quickly point out that AI are just mirrors reflecting back into whomever is interacting with them.  He
 does honestly believe that AGI will usher in a golden age for humanity and solve many problems once he and his
@@ -110,8 +120,10 @@ peers have figured out a way to align AI goal seeking with humanity's
 
 ### Jose Dominguez
 
+![Jose Dominguez — Monitoring corporate RF and network telemetry with hard-eyed distrust of rogue AIs](../../assets/46_jose_dominguez_cyber_watch.jpg#quarter-left)
+
 Previously worked with the Secret Service.  After a case in the cybersecurity unit led him to what he believes was
-a Rogue AI cell, Jose was mysteriously let go.  Using both his bbodyguard and cyber skills, he decided to sign up
+a Rogue AI cell, Jose was mysteriously let go.  Using both his bodyguard and cyber skills, he decided to sign up
 with Altruist and protect some of their top assets.  After his experience with Rogue AI, he does not trust any AI,
 or humans who take sympathy towards them.  His opinion is it is best to keep a safe eye on them, and make sure the
 researchers can keep them under control.

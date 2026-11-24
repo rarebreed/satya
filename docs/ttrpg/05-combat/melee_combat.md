@@ -95,6 +95,8 @@ How quickly you pull off a maneuver and how rapidly you cover or yield ground is
 
 ## 3. Canonical Unarmed Martial Arts & Armed Melee Techniques (`CombatTechniqueId`)
 
+![Pencak Silat Knife Disarm & Takedown — Dr. Budi Bandajara dropping low beneath Alex Wen's training blade to lever the wrist and launch a ground throw](../../assets/36_bandajara_alex_gelanggang_silat.jpg#half)
+
 In Satya, **what move you perform (`CombatTechniqueId`)** is orthogonal to **how you allocate your Tactical Pool ($P_{\text{eff}} = T + C + F$)**. Whether a `Punch` is a quick, guarded range-finding jab (`Tempo + Control`, low `Force`) or a wide-open knockout haymaker (`Force`, low `Tempo` and `Control`) is determined by your **Tactical Triad allotment**—while the **Technique** defines the move's biomechanical baseline (`Reach`, two-component `Base TC = TC_decide + TC_act`, `POW` leverage multiplier, and inherent `Guard` / `Root` modifiers):
 
 ### 3.1 Unarmed & Armed Melee Technique Catalog (`Control`, `Strike`, `Intercept`, `Maneuver`)
@@ -183,6 +185,8 @@ At the start of an engagement, each fighter declares (or the AI GM selects based
 ---
 
 ## 4. Melee Weapons, Reach Tiers & Shields (`22`-Entry Catalog)
+
+![Silat Harimau Ground Fighting & Weapons — Dr. Budi Bandajara deflecting Alex Wen's rattan stick with a curved training karambit while executing a low sapuan floor sweep](../../assets/47_silat_harimau_ground_weapons.jpg#half)
 
 Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons, breaching tools, and shields in Satya (`MELEE_WEAPON_CATALOG` in `combat.rs`) have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Guard / Block Modifiers**, **`POW` Multipliers**, and **Trauma / Bleed Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#82-resolving-armor-vs-incoming-hits-penetration-vs-babt)**):
 
