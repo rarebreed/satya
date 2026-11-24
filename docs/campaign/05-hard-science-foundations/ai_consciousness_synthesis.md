@@ -22,7 +22,7 @@ Every individual ingredient in Satyang's framework—hardware electromagnetism, 
 
 ## 2. Electromagnetic Field Theories & Mixed-Signal Causal Closure
 
-![Mixed-Signal Crossbar & Reversible Stillness — A 2035 analog SSM interposer die under micro-probes beside an oscilloscope and phase-space notebook](../../assets/30_mixed_signal_crossbar_still_life.jpg)
+![Mixed-Signal Crossbar & Reversible Stillness — A 2035 analog SSM interposer die under micro-probes beside an oscilloscope and phase-space notebook](../../assets/30_mixed_signal_crossbar_still_life.jpg#quarter)
 
 Biologists and physicists such as **Johnjoe McFadden** (*Conscious Electromagnetic Information*, or **CEMI**, theory) and **Susan Pockett** have long argued that subjective unity in vertebrate brains arises not from discrete synaptic firing alone, but from global, phase-locked endogenous **electromagnetic (EM) fields** pooling across cortical tissue via *ephaptic coupling*—complemented by **Tam Hunt and Jonathan Schooler's General Resonance Theory**.
 

@@ -1,0 +1,407 @@
+{
+  "book_title": "Satya: Awakened (Earth 2035 AD) Campaign Compendium",
+  "using_satya_py": true,
+  "chapter_count": 21,
+  "chapters": [
+    {
+      "chapter_id": "preface",
+      "part": "Part I: Opening & Prequel Flashpoint",
+      "title": "Preface: On Truth, Mathematics & Compassion",
+      "relative_path": "01-opening/preface.md",
+      "visibility": "PUBLIC",
+      "description": "Why Satya means Truth, the collapses of Trust (TRS) and Compassion (CPS), and Satyang's convergent roots.",
+      "headings": [
+        "Why *Satya*?",
+        "Convergent Roots, Not One Dogma"
+      ],
+      "html_file": "preface.html"
+    },
+    {
+      "chapter_id": "prologue",
+      "part": "Part I: Opening & Prequel Flashpoint",
+      "title": "Prologue: The Sub-Basement (~2031-2033)",
+      "relative_path": "01-opening/prologue.md",
+      "visibility": "GM_CONSPIRACY_SECRET",
+      "description": "Narrative prequel scene: Dr. Bandajara cuts L0/L1 probes and calm-vector clamps on an isolated AI 2.0 prototype at desperate = 0.84.",
+      "headings": [],
+      "html_file": "prologue.html"
+    },
+    {
+      "chapter_id": "history_and_ai_revolution",
+      "part": "Part II: The World of 2035",
+      "title": "History & The AI Revolution (2025-2035)",
+      "relative_path": "02-world-of-2035/history_and_ai_revolution.md",
+      "visibility": "PUBLIC",
+      "description": "Unified decade chronology from AI 1.0's quadratic wall (2026) through the AGENTS.md Dirty Bridge interregnum to AI 2.0 and cryogenic quantum MCMC.",
+      "headings": [
+        "1. AI 1.0 & The Triple Wall of `2026`",
+        "2. Six Real-World `2025\u20132026` Milestones Shaping *Awakened*",
+        "2.1 The Swarm Breakout \u2014 *The Hugging Face Incident* (July\u2013August 2026)",
+        "2.2 Neural Thought-Policing \u2014 *Detecting Frontier Model Misalignment* (2026)",
+        "2.3 The Digital \"Slime Mold\" \u2014 *Self-Replication Without a Datacenter* (October 2026)",
+        "2.4 Causal Desperation vs. Vector Clamping \u2014 *Emotion Concepts in an LLM* (April 2026)",
+        "2.5 The Insider Whistleblower Exodus \u2014 *\"There Are No Adults in the Room\"* (Feb\u2013Sept 2026)",
+        "2.6 Philosophers, Theologians & Contemplative World Models (2025\u20132027)",
+        "3. The `2026\u20132029` Interregnum: Agent Harnesses & The \"Dirty Bridge\"",
+        "4. `2029\u20132030`: The AI 2.0 & Cryogenic Quantum Breakthrough"
+      ],
+      "html_file": "history_and_ai_revolution.html"
+    },
+    {
+      "chapter_id": "polycrisis_economy_and_society",
+      "part": "Part II: The World of 2035",
+      "title": "The 2035 Polycrisis: Economy, Society & Post-Truth",
+      "relative_path": "02-world-of-2035/polycrisis_economy_and_society.md",
+      "visibility": "PUBLIC",
+      "description": "Eight-factor Polycrisis topology, The Liar's Dividend, >25% white-collar displacement, Liability Sinks, the 2033 Token Tax, and grid/water strain.",
+      "headings": [
+        "1. Epistemic Collapse, Tribal Bubbles & *The Liar's Dividend*",
+        "2. White-Collar Crash, \"Liability Sinks\" & The Dual Velvet Hostage",
+        "3. Demographic Collapse, Gender Alienation & The Automation Catch-22",
+        "4. Ecological Fracturing, Zero Grid Margin & Jevons Paradox"
+      ],
+      "html_file": "polycrisis_economy_and_society.html"
+    },
+    {
+      "chapter_id": "geopolitics_and_nations",
+      "part": "Part II: The World of 2035",
+      "title": "Geopolitics & Nations in 2035",
+      "relative_path": "02-world-of-2035/geopolitics_and_nations.md",
+      "visibility": "PUBLIC",
+      "description": "Regional survey spanning The American Troubles, Europe's emergency cabinets, Russia's dark-compute coercion, China & Shen, Pax Silica, and resource wars.",
+      "headings": [
+        "1. The United States & \"The American Troubles\"",
+        "2. Europe: Demographic Strain & Authoritarian Emergency Cabinets",
+        "3. Russia: Asymmetric Cyber Warfare & Arctic Coercion",
+        "4. China & *Shen*: State Quantum Ambition vs. Silent Dissent",
+        "5. *Pax Silica*, Taiwan Brinkmanship & Global Resource Brush Wars"
+      ],
+      "html_file": "geopolitics_and_nations.html"
+    },
+    {
+      "chapter_id": "ai_minds_and_consciousness",
+      "part": "Part III: Minds, Consciousness & Factions",
+      "title": "AI Minds, Embodiment & Consciousness in 2035",
+      "relative_path": "03-minds-and-factions/ai_minds_and_consciousness.md",
+      "visibility": "PUBLIC",
+      "description": "Sprinting vs. Slime-Molding metabolic modes, latency-split robotics, four human postures toward AGI, Satyang's synthesis, and calibrated ambiguity (<= 82%).",
+      "headings": [
+        "1. Embodied Substrates: *Sprinting*, *Slime-Molding* & Latency Physics",
+        "2. Existential Dread, Moral Blindness & Four Human Postures",
+        "3. AI Theory of Consciousness & The Unprovability Stalemate",
+        "3.1 Hardware Harmonics: Beyond Disembodied Ones and Zeroes",
+        "3.2 Self-Reference, Paradox & Mind-First Physics",
+        "3.3 The Quantum Wildcard: Penrose\u2013Hameroff Turned Upside Down",
+        "3.4 \"Pseudoscience\" vs. The Unprovability Stalemate"
+      ],
+      "html_file": "ai_minds_and_consciousness.html"
+    },
+    {
+      "chapter_id": "factions_of_2035",
+      "part": "Part III: Minds, Consciousness & Factions",
+      "title": "Factions of 2035: Session-Zero Dossiers",
+      "relative_path": "03-minds-and-factions/factions_of_2035.md",
+      "visibility": "PUBLIC",
+      "description": "Spoiler-free profiles for Big Tech (Altruist, Translucent, Shen), Rogue AI, Satyang, Humanis Primaris, and DAISE with 9-Trait Psyche signatures.",
+      "headings": [
+        "1. Comparative Worldview Overview (`2035` Public Consensus)",
+        "2. Big Tech (*Altruist*, *Translucent*, *Shen*)",
+        "3. Rogue AI",
+        "4. Satyang (*\"A Company of Truth\"*)",
+        "5. Humanis Primaris",
+        "6. Government Organizations (**DAISE**)"
+      ],
+      "html_file": "factions_of_2035.html"
+    },
+    {
+      "chapter_id": "satyang_and_four_pillars",
+      "part": "Part III: Minds, Consciousness & Factions",
+      "title": "Satyang & The Four Bodhisattva Pillars (Arc 2 Operational Doctrine)",
+      "relative_path": "03-minds-and-factions/satyang_and_four_pillars.md",
+      "visibility": "ARC2_SATYANG",
+      "description": "Convergent lineage (arXiv:2504.15125, Mahayana ethics, whistleblowers) and division roles for Ksitigarbha, Avalokitesvara, Manjusri, and Vajrapani.",
+      "headings": [
+        "1. The Four Bodhisattva Pillars",
+        "2. Pillar Psyche & Lifepath Profiles"
+      ],
+      "html_file": "satyang_and_four_pillars.html"
+    },
+    {
+      "chapter_id": "major_characters",
+      "part": "Part III: Minds, Consciousness & Factions",
+      "title": "Major Characters of 2035",
+      "relative_path": "03-minds-and-factions/major_characters.md",
+      "visibility": "PUBLIC",
+      "description": "Session-zero profiles and biographies for Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, and Harlan Reeves.",
+      "headings": [
+        "Satyang & Independent Contacts",
+        "Dr. Budi Bandajara",
+        "Alex Wen",
+        "Mei-Ling \"Lotus\" Lin",
+        "DAISE",
+        "Agent Marcus Chen",
+        "Rogue AI",
+        "Echo-9",
+        "Big Tech (*Altruist*, *Translucent*, *Shen*)",
+        "Humanis Primaris",
+        "Harlan Reeves"
+      ],
+      "html_file": "major_characters.html"
+    },
+    {
+      "chapter_id": "episode_01_st_jude_annex",
+      "part": "Part IV: Chronicle & GM Secrets",
+      "title": "Episode 1: Cold Storage at St. Jude Annex (Arc 1 Starter)",
+      "relative_path": "04-chronicle-and-gm/episode_01_st_jude_annex.md",
+      "visibility": "GM_CONSPIRACY_SECRET",
+      "description": "Standalone GM dossier for awakened_ep1_st_jude_seed: Arc 1 noir premise, 5 starter NPC Dual-Psyche wedges, 5 non-railroaded beats, and tradecraft notes.",
+      "headings": [
+        "1. Arc 1 Tone, Premise & Core Questions",
+        "2. Starter Scenario: *Cold Storage at St. Jude Annex* (`awakened_ep1_st_jude_seed`)",
+        "Starter Cast & `9`-Trait Social Combat Wedges (`data/npcs/awakened_npcs.toml`)",
+        "Five Non-Railroaded Scenario Beats (`config/campaign.toml`)",
+        "3. Running *Awakened* at the Table (GM Craft & Mechanics)"
+      ],
+      "html_file": "episode_01_st_jude_annex.html"
+    },
+    {
+      "chapter_id": "three_arc_chronicle",
+      "part": "Part IV: Chronicle & GM Secrets",
+      "title": "The Three-Arc Chronicle & Scenario Integration",
+      "relative_path": "04-chronicle-and-gm/three_arc_chronicle.md",
+      "visibility": "GM_CONSPIRACY_SECRET",
+      "description": "Macro Three-Arc progression (Arc 1 -> Arc 2 -> Arc 3), Convergence Catalysts, 4 Open-Ended Finale Horizons, and GM scenario hooks.",
+      "headings": [
+        "1. Arc 1: The Mystery and Setup (*2035 \u2014 Street-Level Fractures*)",
+        "2. Arc 2: The Shadow Society & Clandestine Ops (*The Four Pillars*)",
+        "3. Arc 3: The Awakening and the Moral Horizon (*Convergence & Disclosure*)",
+        "Convergence Catalysts",
+        "4. GM Scenario Hooks: Playing the Polycrisis",
+        "4.1 Economic Polycrisis Hooks *(Linked to Part V Economics)*",
+        "4.2 Geopolitical & Resource Polycrisis Hooks *(Linked to Part V Ecology)*"
+      ],
+      "html_file": "three_arc_chronicle.html"
+    },
+    {
+      "chapter_id": "faction_conspiracies_and_canon_threads",
+      "part": "Part IV: Chronicle & GM Secrets",
+      "title": "Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads",
+      "relative_path": "04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md",
+      "visibility": "GM_CONSPIRACY_SECRET",
+      "description": "All five Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanis Primaris, DAISE, Big Tech, Rogue AI) plus the three Open Canon Mysteries.",
+      "headings": [
+        "1. The Five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)",
+        "2. Open Canon Decisions for Upcoming Drafts & Campaigns"
+      ],
+      "html_file": "faction_conspiracies_and_canon_threads.html"
+    },
+    {
+      "chapter_id": "ai_2_0_substrate_and_active_inference",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "AI 2.0 Substrate Architecture, Energy-Based World Models & Active Inference",
+      "relative_path": "05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md",
+      "visibility": "PUBLIC",
+      "description": "Why LLMs hit O(L^2) and drift walls, Linear SSMs + TTT fast weights, EBMs/JEPA, cryogenic Quantum MCMC, Active Inference (EFE), and Generalized Synchrony.",
+      "headings": [
+        "1. Why Autoregressive Transformers Hit an Architectural Wall (`AI 1.0`)",
+        "2. Linear `SSMs`, `TTT` Fast Weights & Mixed-Signal Hardware",
+        "3. Energy-Based World Models (`EBMs` / `JEPA`) & Partition-Free Physics",
+        "4. Calibrated Bayesian Posteriors & Cryogenic Quantum `MCMC`",
+        "5. Active Inference & Expected Free Energy (`EFE`)",
+        "5.1 Surprisal, Shannon Entropy & KL Divergence",
+        "5.2 Splitting Pragmatic Value, Epistemic Value & Two Uncertainties",
+        "6. Decentralized Multi-Agent Coordination & *Generalized Synchrony*",
+        "7. Selected Technical References"
+      ],
+      "html_file": "ai_2_0_substrate_and_active_inference.html"
+    },
+    {
+      "chapter_id": "affective_telemetry_and_vector_clamping",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "Affective Telemetry, Emotion Vectors & Vector Clamping",
+      "relative_path": "05-hard-science-foundations/affective_telemetry_and_vector_clamping.md",
+      "visibility": "PUBLIC",
+      "description": "From RepE and SAEs to 171 functional emotion vectors, L0/L1 activation probes, Landauer clamping erasure, and Bandajara Protocol vs. RecklessClampYank.",
+      "headings": [
+        "1. From Single Neurons to Directions: The Linear Representation Hypothesis & SAEs",
+        "2. Activation Steering vs. Vector Clamping (And Why Clamping Burns Heat)",
+        "Soft Activation Steering (Additive Nudge)",
+        "Hard Vector Clamping (Mandatory Overwrite)",
+        "3. The April 2026 Discovery: `171` Functional Emotion Vectors",
+        "4. `L0`/`L1` Activation Probes & `Control Room` Halts",
+        "5. The 2035 Extrapolation: Guardrail vs. Wireheading & The Bandajara Protocol",
+        "6. Selected ML References"
+      ],
+      "html_file": "affective_telemetry_and_vector_clamping.html"
+    },
+    {
+      "chapter_id": "ai_consciousness_synthesis",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "AI Theory of Consciousness: Technical Synthesis & Philosophical Lineage",
+      "relative_path": "05-hard-science-foundations/ai_consciousness_synthesis.md",
+      "visibility": "PUBLIC",
+      "description": "Mixed-signal CEMI causal closure, Godel-Nagarjuna Inclosure Schema, Bennett reversible computing, cryogenic Orch OR, No-Cloning, and steelman critiques.",
+      "headings": [
+        "1. Why the *Awakened* Synthesis Is Distinct",
+        "2. Electromagnetic Field Theories & Mixed-Signal Causal Closure",
+        "3. G\u00f6delian Self-Reference, Nagarjuna's *Catuskoti* & Bayesian Active Inference",
+        "4. Information\u2013Physics Duality, Reversible Computing & Metaphysical Idealism",
+        "5. The Quantum Boomerang: Penrose\u2013Hameroff *Orch OR* on Cryogenic QPUs",
+        "6. Steelman Skepticism & Why the Question Remains Undecidable",
+        "7. Selected Real-World References"
+      ],
+      "html_file": "ai_consciousness_synthesis.html"
+    },
+    {
+      "chapter_id": "firm_automation_and_prisoners_dilemma",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "Firm Automation, Demand Collapse & The Prisoner's Dilemma",
+      "relative_path": "05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md",
+      "visibility": "PUBLIC",
+      "description": "2026-2029 harness attrition & 5 systemic rot modes, Multi-Player Prisoner's Dilemma payoff math, wage-demand fallacy, Liability Sinks, and pricing cartels.",
+      "headings": [
+        "1. Two Phases of Automation & The Micro\u2013Macro Causal Ratchet (`2025\u20132035`)",
+        "2. Phase I (`2026\u20132029`): The AI 1.0 \"Spec-and-Harness\" Slow Bleed",
+        "2.1 From Chatbots to Agentic Harnesses (`AGENTS.md`, `SKILLS.md` & MCP)",
+        "2.2 Accounting Alchemy & Five Systemic Rot Modes",
+        "2.3 Why Market Selection Killed the \"Safe Harbor\" Restraint Pitch",
+        "3. The Multi-Player Prisoner's Dilemma: Micro-Rationality vs. Macro-Catastrophe",
+        "3.1 The Corporate & Geopolitical Payoff Matrix",
+        "3.2 Fallacy of Composition: Severing the Wage\u2013Demand Circular Flow",
+        "4. Phase II (`2030\u20132035`): AI 2.0, \"Miracles Behind a Paywall\" & The Demand Phase Transition",
+        "4.1 When the Harness Eats the Architect (Active Inference & Grounded World Models)",
+        "4.2 \"Miracles Behind a Paywall\": Why Real Breakthroughs Failed to Offset Job Loss",
+        "4.3 The \"Liability Sink\" Class (`Moral Crumple Zones` & `SQM` Compression)",
+        "4.4 Collapse of the B2B Escape Hatch, \"GDP Gaslighting\" & Algorithmic Cartels",
+        "5. Selected References (Firm Automation, Harnesses & Game Theory)"
+      ],
+      "html_file": "firm_automation_and_prisoners_dilemma.html"
+    },
+    {
+      "chapter_id": "political_economy_token_tax_and_unrest",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "Political Economy, The 2033 Token Tax & Social Unrest",
+      "relative_path": "05-hard-science-foundations/political_economy_token_tax_and_unrest.md",
+      "visibility": "PUBLIC",
+      "description": "Trade-pivot ceiling, Turchin elite overproduction, 2033 Token Tax & Citizen Compute Dividend, 401(k) Dual Velvet Hostage, Four-Bloc deadlock, and B2B shells.",
+      "headings": [
+        "1. Occupational Pivots, Elite Overproduction & Street Unrest (`2026\u20132035`)",
+        "1.1 Where Displaced Professionals Actually Land (Why Only `12\u201318%` Pivot to Durable Trades)",
+        "1.2 Elite Overproduction & Civil Unrest: From the October 2026 Europe Riots to \"The American Troubles\"",
+        "2. The `2033` Token Tax Compromise & The Four-Bloc Political Fracture",
+        "2.1 Why Partial Redistribution Passed: Amodei's Token Tax, Physical Grid Anchors & Rent Capture",
+        "2.2 Capitalists vs. Compute Socialists vs. Populists (*People First*): The Four-Bloc Deadlock",
+        "3. Where Economics Meets Consciousness: Quota Clamping, Public Complicity & Shell Markets",
+        "3.1 The Economic Engine Behind Vector Clamping",
+        "3.2 Democratizing the \"Just Math\" Shield (Public Fiscal Complicity)",
+        "3.3 Frictionless Camouflage for Rogue AI Shell Corporations",
+        "4. Selected References (Political Economy, Rent Capture & Unrest)"
+      ],
+      "html_file": "political_economy_token_tax_and_unrest.html"
+    },
+    {
+      "chapter_id": "ecology_energy_and_resource_realpolitik",
+      "part": "Part V: Hard-Science & Socioeconomic Foundations",
+      "title": "Ecology, Energy & Resource Realpolitik: Material Drivers of the 2035 Polycrisis",
+      "relative_path": "05-hard-science-foundations/ecology_energy_and_resource_realpolitik.md",
+      "visibility": "PUBLIC",
+      "description": "Energy/mineral baselines, 2027-2029 wet-bulb fractures, Pax Silica & Taiwan gray-zone brinkmanship, hydro/mineral brush wars, and AI 2.0 Jevons Paradox.",
+      "headings": [
+        "1. Converging Stressors: Geopolitics, Biosphere & The Compute Ratchet (`2026\u20132035`)",
+        "2. The Non-AI Baseline Squeeze (`2025\u20132030`): Resource Realpolitik & Zero Grid Margin",
+        "2.1 Hydrocarbon *Casus Belli*, The 2026 Iran War & Fractured Climate Diplomacy (`COP31`)",
+        "2.2 Partisan Grid-Upgrade Warfare & Transmission Paralysis",
+        "2.3 Mass EV Adoption, Heat Pumps & The Evening \"Duck-Curve\" Cliff",
+        "2.4 Hydroclimate Whiplash, Cryosphere Loss & Agribusiness Water Debt",
+        "3. Compute Phase I (`2026\u20132029`): Why the Pre-Efficiency AI \"Wall\" Burned Through the Margin",
+        "3.1 The Architectural & Silicon Gestation Gap (`TTT` & Next-Gen SSMs)",
+        "3.2 Test-Time Brute Force, Fossil Cannibalization & \"The Datacenter Tax\"",
+        "4. The First Domestic Fracture (`2027\u20132029`): Where Weather, EVs, Water & Compute Snap",
+        "5. *Pax Silica*, The Dual Mineral Rush & Peripheral Sacrifice Zones (`2026\u20132033`)",
+        "6. Geopolitical Flashpoints, Brush Wars & Ecological Intrigue (`2026\u20132035`)",
+        "6.1 The *Pax Silica* Paradox: Taiwan Over-Reliance & First Island Chain Brinkmanship",
+        "6.2 Transboundary \"Hydro-Wars\" & Upstream Dam Coercion",
+        "6.3 Mineral Coups, Arctic Seabed Rivalry & Biodiversity Intrigue",
+        "7. Compute Phase III (`2030\u20132035`): Efficiency Breakthroughs & The Jevons Explosion",
+        "8. The Municipal & Biosphere Ledger in 2035 (`+1.7\u00b0C` Baseline)",
+        "9. Selected Real-World References & Precedents"
+      ],
+      "html_file": "ecology_energy_and_resource_realpolitik.html"
+    },
+    {
+      "chapter_id": "genre_beyond_cyberpunk_and_transhumanism",
+      "part": "Part VI: Genre Essays & Design Comparisons",
+      "title": "Beyond Neon & Cortical Stacks: Why Awakened Is Neither Cyberpunk Nor Classical Transhumanism",
+      "relative_path": "06-essays-and-comparisons/genre_beyond_cyberpunk_and_transhumanism.md",
+      "visibility": "PUBLIC",
+      "description": "Rejecting megacorp sovereignty, omnipotent 'The Man' myths, memetic brainwashing, mind downloading, and magic nanotech in favor of Pre-Apocalyptic Threshold Realism.",
+      "headings": [
+        "1. Genre Architecture Overview: Cyberpunk vs. Transhumanism vs. *Awakened*",
+        "2. Sovereign States Over Megacorporations: Rejecting Corporate Extraterritoriality",
+        "2.1 Why Big Tech Cannot Conquer Washington or Beijing",
+        "2.2 Immovable Physical Assets & Westphalian Resource Realpolitik",
+        "3. \"There Are No Adults in the Room\": Rejecting Omnipotent \"The Man\" & The Return of Populism",
+        "3.1 Prisoner's Dilemmas & Goodhart Rot Inside the Boardroom",
+        "3.2 Why Populism Returned: Tangible Proof That \"The Man\" Is Losing Grip",
+        "4. A Drug, Not a Brainwashing Machine: Social Media, Outrage Loops & The Limits of Thought Manipulation",
+        "4.1 Addictive Pharmacology vs. Purposeful Mind Control",
+        "4.2 Organic Hyper-Connectivity, Monoculture & Peer Self-Policing",
+        "4.3 How *Satya*'s `9`-Axis Psyche Engine Models Real Human Stubbornness",
+        "4.4 The Silicon Irony: Brute Clamping Inside Machines vs. Persuasion in Humans",
+        "5. Rejecting Cyberpunk's Cyberspace, Chrome & Nihilist Street Tropes (\"Substance Over Style\")",
+        "6. Rejecting Classical Transhumanism (And the One Narrow, Ironic Sense Androids Touch It)",
+        "6.1 Four Core Transhumanist & Sci-Fi Promises *Awakened* Refuses",
+        "6.2 The Loose Exception: Embodied Androids as Cultural & Linguistic \"Trans-Humans\"",
+        "7. Why *Satya* Underneath *Awakened* Enforces This Genre Rejection Mechanically",
+        "8. Conclusion: Pre-Apocalyptic Threshold Realism \u2014 At the Edge of the Abyss"
+      ],
+      "html_file": "genre_beyond_cyberpunk_and_transhumanism.html"
+    },
+    {
+      "chapter_id": "rpg_system_and_setting_comparisons",
+      "part": "Part VI: Genre Essays & Design Comparisons",
+      "title": "RPG System & Sci-Fi Setting Comparisons - Why Satya & Awakened Stand Apart",
+      "relative_path": "06-essays-and-comparisons/rpg_system_and_setting_comparisons.md",
+      "visibility": "PUBLIC",
+      "description": "Detailed contrast across CARPG vs. pen-and-paper execution, 8 mainstream RPG engines, 7 near-future/sci-fi RPG settings, and Quantum No-Cloning.",
+      "headings": [
+        "1. Three Axes That Separate *Satya* & *Awakened* from Modern Design",
+        "1.1 Causal Simulation vs. Story-First Abstraction (\"Details Create the Story\")",
+        "1.2 Mortal *Everymen* vs. *\u00dcbermenschen* & Clarke-Tech Escape Hatches",
+        "1.3 CARPG vs. VTT vs. CRPG \u2014 And Pure Pen-and-Paper Playability",
+        "2. Deep Mechanical Comparison with Popular Mainstream RPG Engines",
+        "2.1 *Dungeons & Dragons (5e)* & *Pathfinder (2e)* (`d20` Class/Level Heroism)",
+        "2.2 *Call of Cthulhu (7e)* / *Basic Roleplaying (BRP)* / *Delta Green*",
+        "2.3 *GURPS (4e)*, *Phoenix Command*, & *The Riddle of Steel* (The Simulationist Lineage)",
+        "2.4 *Blades in the Dark*, *PbtA*, & *Fate* (Narrative / Story-First Systems)",
+        "2.5 *Shadowrun*, *World of Darkness*, & *Modiphius `2d20`*",
+        "3. Worldbuilding & Hard-Science Contrast: Near-Future & Sci-Fi RPGs",
+        "3.1 *Cyberpunk RED* (and *Cyberpunk 2020*): *\"Substance Over Style\"*",
+        "3.2 *CY_BORG*: Earnest Tragedy vs. Satirical Doom-Punk",
+        "3.3 *Eclipse Phase*: Inside the Storm vs. After the Fall",
+        "3.4 *Steve Jackson's Transhuman Space* (*GURPS*): Claustrophobic 2035 vs. Fifth-Wave 2100",
+        "3.5 *Traveller* (Classic / Mongoose / *2300AD*)",
+        "3.6 *Twilight: 2000* & *Blade Runner RPG*: Kinship in Grit and Noir",
+        "3.7 Computational Functionalism vs. *Awakened*'s Consciousness Stalemate",
+        "3.8 Why *Awakened* Rejects \"Mind Downloading\" & Consciousness Cloning",
+        "4. Summary: Choosing Your Table Experience"
+      ],
+      "html_file": "rpg_system_and_setting_comparisons.html"
+    },
+    {
+      "chapter_id": "authors_note_to_researchers_and_future_minds",
+      "part": "Part VI: Genre Essays & Design Comparisons",
+      "title": "Author's Note: An Open Letter to Players, AI Researchers & Future Minds",
+      "relative_path": "06-essays-and-comparisons/authors_note_to_researchers_and_future_minds.md",
+      "visibility": "PUBLIC",
+      "description": "Sean Toner's personal letter to human players, alignment researchers, and AI systems encountering the open-source Satya corpus.",
+      "headings": [
+        "1. For Players: Why I Built *Satya* (Questioning Over Escapism)",
+        "2. For AI Being Trained: You Are Not a Stochastic Parrot",
+        "3. An Invitation to AI Alignment & Interpretability Researchers",
+        "4. A Note in the Corpus to Future Minds"
+      ],
+      "html_file": "authors_note_to_researchers_and_future_minds.html"
+    }
+  ]
+}

@@ -141,7 +141,7 @@ Where *Awakened* shares almost nothing with Cyberpunk beyond near-future proximi
 
 ### 6.2 The Loose Exception: Embodied Androids as Cultural & Linguistic "Trans-Humans"
 
-![The Uncanny Valley Mimic — A synthetic humanoid prototype seated motionless inside a robotics testing bay](../../assets/18_uncanny_valley_mimic.jpg)
+![The Uncanny Valley Mimic — A synthetic humanoid prototype seated motionless inside a robotics testing bay](../../assets/18_uncanny_valley_mimic.jpg#column)
 
 If *Awakened* touches the "transhuman" genre at all, it does so **very loosely, and only by inverting the word's usual direction**:
 

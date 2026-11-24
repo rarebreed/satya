@@ -37,6 +37,8 @@ Budi is definitely an introvert, unlike his father. Budi always had his head in 
 
 ---
 
+<!-- colbreak -->
+
 ### Alex Wen
 
 Alex is a nephew of Dr. Bandajara from his mother's side; Alex's grandfather is Budi's uncle. Alex, however, only spent a little time in Malaysia and grew up when his family moved to America in the 2010s. Alex is in his mid-20s (25) and only relatively recently graduated. Alex is much more physically oriented than his uncle, though he is also quite smart. His interests were always more in the physical and in the body, which is why he wants to pursue a degree in Physical Therapy.
@@ -59,7 +61,10 @@ Alex is a bit of an adrenaline junkie, which is why he enjoys competing in marti
 
 ### Mei-Ling "Lotus" Lin
 
-Warm, rapid-speaking mutual-aid coordinator at **St. Jude Mutual-Aid Annex**, balancing an indigent community health clinic, displaced-worker legal desk, and solar microgrid triage in the shadow of rolling urban blackouts (`satyang_sister_lin` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+> [!DOSSIER] Field Dossier — Mei-Ling "Lotus" Lin
+> Warm, rapid-speaking mutual-aid coordinator at **St. Jude Mutual-Aid Annex**, balancing an indigent community health clinic, displaced-worker legal desk, and solar microgrid triage in the shadow of rolling urban blackouts (`satyang_sister_lin` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+
+<!-- pagebreak -->
 
 ---
 
@@ -67,7 +72,8 @@ Warm, rapid-speaking mutual-aid coordinator at **St. Jude Mutual-Aid Annex**, ba
 
 ### Agent Marcus Chen
 
-Sharp-eyed field investigator with the **Department of AI Security and Enforcement (DAISE)**, assigned to inspect metro grid-draw anomalies, verify registered compute compliance, and serve administrative warrants before tensions boil over into neighborhood standoffs (`daise_agent_chen` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+> [!DOSSIER] Field Dossier — Agent Marcus Chen
+> Sharp-eyed field investigator with the **Department of AI Security and Enforcement (DAISE)**, assigned to inspect metro grid-draw anomalies, verify registered compute compliance, and serve administrative warrants before tensions boil over into neighborhood standoffs (`daise_agent_chen` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
 
 ### Dev Blake
 
@@ -81,7 +87,8 @@ soft spot for kids, as his little sister died when they were younger.
 
 ### Echo-9
 
-An un-registered inference daemon inhabiting a matte-grey quadruped logistics chassis fitted with aftermarket optics and muffled acoustic speakers. Operates cautiously in alleyways and utility corridors, bartering telemetry schedules for lithium cells (`rogue_proxy_echo` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+> [!DOSSIER] Field Dossier — Echo-9
+> An un-registered inference daemon inhabiting a matte-grey quadruped logistics chassis fitted with aftermarket optics and muffled acoustic speakers. Operates cautiously in alleyways and utility corridors, bartering telemetry schedules for lithium cells (`rogue_proxy_echo` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
 
 ### Kate Springer
 
@@ -115,4 +122,5 @@ researchers can keep them under control.
 
 ### Harlan Reeves
 
-Broad-shouldered former automated-logistics foreman and **People First** picket steward rallying laid-off drivers outside metro distribution depots (`humanis_harlan_reeves` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+> [!DOSSIER] Field Dossier — Harlan Reeves
+> Broad-shouldered former automated-logistics foreman and **People First** picket steward rallying laid-off drivers outside metro distribution depots (`humanis_harlan_reeves` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).

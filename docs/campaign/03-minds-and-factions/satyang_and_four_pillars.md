@@ -12,7 +12,7 @@ Because default player characters work alongside or inside **Satyang**, its four
 
 ## 1. The Four Bodhisattva Pillars
 
-![The Four Pillars in Shadow — A Satyang cell briefing inside a copper Faraday-mesh safehouse](../../assets/05_four_pillars_satyang_safehouse.jpg)
+![The Four Pillars in Shadow — A Satyang cell briefing inside a copper Faraday-mesh safehouse](../../assets/05_four_pillars_satyang_safehouse.jpg#half)
 
 | Bodhisattva Pillar | Meaning & Mandate in an Epistemic Dark Age | Typical Operational Roles & Careers |
 | :--- | :--- | :--- |
@@ -25,9 +25,10 @@ Because default player characters work alongside or inside **Satyang**, its four
 
 ## 2. Pillar Psyche & Lifepath Profiles
 
-Across the `9`-Axis Psyche, Satyang cells balance high **Compassion (`CPS 14–18`)**, high **Openness (`OPN 14–18`)**, low **Selfishness (`SLF 4–7`)**, and anti-authoritarian **Conformity (`CNF 4–8`)**, specializing by division:
-
-- **Manjusri Cell**: Humanities or STEM university tracks paired with *OSINT* or *Contemplative Sangha* hobbies (`OPN 16+`, elevated `ANA` and `INS`).
-- **Avalokitesvara Cell**: Journalism, Nursing/Clinic, or Grassroots Organizing tracks paired with *Music/Theater* or *Mutual Aid* (`CPS 17`, `TRS 13–15`, restrained `AGG 4–6`, `ELO 14+`).
-- **Ksitigarbha Cell**: Cyber-Underground or Ex-Red-Team tracks paired with *CTF* or *Parkour* (`CNF 3–5`, cautious `TRS 5–7`, high `FOC` and `DEX`).
-- **Vajrapani Cell**: Ex-Military or SecOps Defector tracks paired with *Combat Sports* or *HAM Radio* (`BLG 15`, `DIS 15`, `AGG 12`, wary `TRS 5–7`).
+> [!STATBLOCK] Pillar Psyche & Lifepath Profiles
+> Across the `9`-Axis Psyche, Satyang cells balance high **Compassion (`CPS 14–18`)**, high **Openness (`OPN 14–18`)**, low **Selfishness (`SLF 4–7`)**, and anti-authoritarian **Conformity (`CNF 4–8`)**, specializing by division:
+>
+> - **Manjusri Cell**: Humanities or STEM university tracks paired with *OSINT* or *Contemplative Sangha* hobbies (`OPN 16+`, elevated `ANA` and `INS`).
+> - **Avalokitesvara Cell**: Journalism, Nursing/Clinic, or Grassroots Organizing tracks paired with *Music/Theater* or *Mutual Aid* (`CPS 17`, `TRS 13–15`, restrained `AGG 4–6`, `ELO 14+`).
+> - **Ksitigarbha Cell**: Cyber-Underground or Ex-Red-Team tracks paired with *CTF* or *Parkour* (`CNF 3–5`, cautious `TRS 5–7`, high `FOC` and `DEX`).
+> - **Vajrapani Cell**: Ex-Military or SecOps Defector tracks paired with *Combat Sports* or *HAM Radio* (`BLG 15`, `DIS 15`, `AGG 12`, wary `TRS 5–7`).

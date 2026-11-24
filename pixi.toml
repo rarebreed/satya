@@ -81,6 +81,7 @@ rules-book-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on 
 notebook-rules = { cmd = "marimo edit notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book: launch interactive Marimo Rules Book notebook" }
 notebook-rules-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book-app: launch the Satya TTRPG Rules Book Marimo web app" }
 build-book = { cmd = "python -m satya_ml.build_rules_book", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
+build-campaign-book = { cmd = "python -m satya_ml.build_campaign_book", env = { PYTHONPATH = "src" }, description = "Generate static HTML Awakened Campaign Book pages and catalog.json into docs/campaign-book/" }
 check-py-ext = { cmd = "cargo check -p satya-py", description = "Type-check the satya-py PyO3 Python extension crate" }
 gen-stubs = { cmd = "python -m satya_py._stubgen", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Auto-generate src/satya_py/_native.pyi from Rust sources and compiled satya_py._native signatures" }
 check-stubs = { cmd = "python -m satya_py._stubgen --check", env = { PYTHONPATH = "src" }, description = "Verify src/satya_py/_native.pyi matches Rust sources and compiled satya_py._native signatures" }

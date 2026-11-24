@@ -428,6 +428,24 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         out = out.replace(&format!("href=\"{src}#"), &format!("href=\"{dst}#"));
     }
     out.replace("href=\"../../ttrpg-examples/", "href=\"../ttrpg-examples/")
+        .replace(
+            "href=\"../../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md",
+            "href=\"../campaign-book/rpg_system_and_setting_comparisons.html",
+        )
+        .replace(
+            "href=\"../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md",
+            "href=\"../campaign-book/rpg_system_and_setting_comparisons.html",
+        )
+        .replace(
+            "href=\"../../campaign/03-minds-and-factions/factions_of_2035.md",
+            "href=\"../campaign-book/factions_of_2035.html",
+        )
+        .replace(
+            "href=\"../campaign/03-minds-and-factions/factions_of_2035.md",
+            "href=\"../campaign-book/factions_of_2035.html",
+        )
+        .replace("href=\"../../campaign/SUMMARY.md", "href=\"../campaign-book/index.html")
+        .replace("href=\"../campaign/SUMMARY.md", "href=\"../campaign-book/index.html")
         .replace("href=\"../../campaign/", "href=\"../campaign/")
         .replace("src=\"/docs-assets/", "src=\"../assets/")
         .replace("src=\"../../assets/", "src=\"../assets/")
@@ -553,7 +571,7 @@ fn wrap_book_page_html(
     </div>
     <div class="toolbar-cluster">
       <div class="toolbar-group" role="group" aria-label="Book Theme">
-        <button type="button" class="toolbar-btn is-active" data-set-theme="sangha-robes" title="Korean Seon grey, Japanese Zen black &amp; Vietnamese Thiền saffron robes">Sangha Robes</button>
+        <button type="button" class="toolbar-btn is-active" data-set-theme="sangha-robes" title="Korean Seon grey &amp; Japanese Zen black robes with subdued saffron borders">Sangha Robes</button>
         <button type="button" class="toolbar-btn" data-set-theme="chan-sanctuary">Chan Wood</button>
         <button type="button" class="toolbar-btn" data-set-theme="tactical-hud">Tactical HUD</button>
       </div>
@@ -578,6 +596,7 @@ fn wrap_book_page_html(
     <aside id="book-sidebar" class="book-sidebar">
       <div class="book-brand">SATYA // RULES BOOK</div>
       <div class="book-sub">2d20xN Cascade &amp; Tactical Triad</div>
+      <a href="../campaign-book/index.html" class="book-cross-link">Awakened Campaign Book &rarr;</a>
       {nav_items}
     </aside>
     <main class="book-workspace">

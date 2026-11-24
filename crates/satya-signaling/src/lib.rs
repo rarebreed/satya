@@ -60,7 +60,7 @@ fn resolve_static_dir(rel: &'static str, manifest_fallback: &'static str) -> &'s
     }
 }
 
-/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg`, `/maps`, `/book`, `/assets`, and `/docs-assets` serving,
+/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg`, `/maps`, `/book`, `/campaign-book`, `/assets`, and `/docs-assets` serving,
 /// Backend GM REST endpoints (`/api/gm/sessions/:id/*`), and the `/ws/session` WebSocket upgrade route.
 pub fn build_router(state: Arc<SignalingAppState>) -> Router {
     Router::new()
@@ -68,6 +68,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .nest_service("/pkg", tower_http::services::ServeDir::new("pkg"))
         .nest_service("/maps", tower_http::services::ServeDir::new("data/maps"))
         .nest_service("/book", tower_http::services::ServeDir::new("docs/book"))
+        .nest_service(
+            "/campaign-book",
+            tower_http::services::ServeDir::new("docs/campaign-book"),
+        )
         .nest_service(
             "/assets",
             tower_http::services::ServeDir::new(resolve_static_dir(
