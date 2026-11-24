@@ -5,10 +5,9 @@
 (function () {
   "use strict";
 
-  const THEME_KEY = "satya.book.theme";
   const VIEW_KEY = "satya.book.view";
   const TOC_KEY = "satya.book.toc";
-  const VALID_THEMES = new Set(["sangha-robes", "chan-sanctuary", "tactical-hud"]);
+  const VALID_THEMES = new Set(["sangha-robes", "awakened-lotus", "chan-sanctuary", "tactical-hud"]);
   const VALID_VIEWS = new Set(["spread", "single", "scroll"]);
   const MAX_PAGES_PER_CHAPTER = 120;
 
@@ -19,6 +18,17 @@
   let widgetPlaceholder = null;
   let widgetPageBand = null;
 
+  function getThemeKey() {
+    const kind = document.body && document.body.dataset ? (document.body.dataset.bookKind || "rules") : "rules";
+    return kind === "rules" ? "satya.book.theme" : `satya.${kind}.theme`;
+  }
+
+  function getDefaultTheme() {
+    const ds = document.body && document.body.dataset ? document.body.dataset : {};
+    const candidate = ds.defaultTheme || ds.bookTheme || "sangha-robes";
+    return VALID_THEMES.has(candidate) ? candidate : "sangha-robes";
+  }
+
   function meta() {
     const ds = document.body.dataset;
     return {
@@ -27,6 +37,10 @@
       chapterNum: ds.chapterNum || "0",
       chapterTitle: ds.chapterTitle || document.title,
       chapterId: ds.chapterId || "index",
+      bookHeader: ds.bookHeader || "SATYA // CORE RULES",
+      bookFooterLeft: ds.bookFooterLeft || "GROUNDED 2035 CARPG",
+      bookFooterRight: ds.bookFooterRight || "SATYA // RULES BOOK",
+      bookNotesLabel: ds.bookNotesLabel || "Operations Field Log // Margin Notes",
     };
   }
 
@@ -34,7 +48,7 @@
     if (!root) return;
     const isHttpBook =
       (window.location.protocol === "http:" || window.location.protocol === "https:") &&
-      window.location.pathname.includes("/book");
+      (window.location.pathname.includes("/book") || window.location.pathname.includes("/campaign-book"));
     const isFile = window.location.protocol === "file:";
     const imgs = root.querySelectorAll("img");
     for (const img of imgs) {
@@ -185,7 +199,7 @@
   }
 
   function romanNumeral(val) {
-    const map = { "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI" };
+    const map = { "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI", "7": "VII" };
     return map[String(val)] || String(val);
   }
 
@@ -200,15 +214,15 @@
 
       const chPrefix = info.chapterNum === "0" ? "INDEX" : "CH. " + info.chapterNum;
       if (isVerso) {
-        p.headerLeft.textContent = "SATYA // CORE RULES";
+        p.headerLeft.textContent = info.bookHeader;
         p.headerRight.textContent = info.partLabel;
-        p.footerLeft.textContent = "GROUNDED 2035 CARPG";
+        p.footerLeft.textContent = info.bookFooterLeft;
         p.footerRight.textContent = chPrefix;
       } else {
         p.headerLeft.textContent = chPrefix;
         p.headerRight.textContent = info.chapterTitle;
         p.footerLeft.textContent = info.partLabel;
-        p.footerRight.textContent = "SATYA // RULES BOOK";
+        p.footerRight.textContent = info.bookFooterRight;
       }
     });
   }
@@ -300,7 +314,9 @@
     const banner = document.createElement("div");
     banner.className = "field-notes-banner";
     banner.innerHTML =
-      "<span>Operations Field Log // Margin Notes</span><span>" +
+      "<span>" +
+      info.bookNotesLabel.replace(/</g, "&lt;") +
+      "</span><span>" +
       info.chapterTitle.replace(/</g, "&lt;") +
       "</span>";
     pageObj.body.appendChild(banner);
@@ -1019,10 +1035,11 @@
   }
 
   function applyTheme(theme) {
-    const chosen = VALID_THEMES.has(theme) ? theme : "sangha-robes";
+    const defaultTheme = getDefaultTheme();
+    const chosen = VALID_THEMES.has(theme) ? theme : defaultTheme;
     document.body.dataset.bookTheme = chosen;
     try {
-      localStorage.setItem(THEME_KEY, chosen);
+      localStorage.setItem(getThemeKey(), chosen);
     } catch (_) {}
     document.querySelectorAll("[data-set-theme]").forEach((btn) => {
       btn.classList.toggle("is-active", btn.getAttribute("data-set-theme") === chosen);
@@ -1133,11 +1150,11 @@
     resolveAssetUrls(sourceEl);
     bindUi();
 
-    let savedTheme = "sangha-robes";
+    let savedTheme = getDefaultTheme();
     let savedView = window.innerWidth >= 1024 ? "spread" : "single";
     let savedToc = document.body.dataset.chapterId === "index" ? "1" : "0";
     try {
-      savedTheme = localStorage.getItem(THEME_KEY) || savedTheme;
+      savedTheme = localStorage.getItem(getThemeKey()) || savedTheme;
       savedView = localStorage.getItem(VIEW_KEY) || savedView;
       const tocPref = localStorage.getItem(TOC_KEY);
       if (tocPref === "1" || tocPref === "0") savedToc = tocPref;

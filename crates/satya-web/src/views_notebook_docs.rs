@@ -258,6 +258,14 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                     >
                         "Open TTRPG Rules Book"
                     </a>
+                    <a
+                        href="/campaign-book/index.html"
+                        target="_blank"
+                        rel="noopener"
+                        class="btn btn-sm btn-secondary"
+                    >
+                        "Open Awakened Campaign Book"
+                    </a>
                 </div>
             </div>
             <div

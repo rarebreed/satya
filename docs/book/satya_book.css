@@ -1,6 +1,6 @@
 /* ============================================================================
- * Satya TTRPG Rules Book — Multi-Theme Paginated Spread & Print Stylesheet
- * Themes: sangha-robes (default), chan-sanctuary, tactical-hud
+ * Satya TTRPG & Campaign Book — Multi-Theme Paginated Spread & Print Stylesheet
+ * Themes: sangha-robes (default for rules), awakened-lotus (default for campaign), chan-sanctuary, tactical-hud
  * ============================================================================ */
 
 :root {
@@ -13,57 +13,57 @@
   --page-h: 1056px;
   --book-scale: 1;
   --part-idx: 1;
-  --part-color: #5c5851;
+  --part-color: #4a5159;
 
-  /* Default Theme: sangha-robes (Korean Seon Grey, Japanese Zen Black & Vietnamese Thiền Saffron/Brown/Orange) */
-  --desk-bg: #111110;
-  --desk-radial: radial-gradient(circle at 50% 20%, #282623 0%, #10100f 76%);
-  --toolbar-bg: #171615;
-  --toolbar-border: #46433e;
-  --toolbar-text: #efece5;
-  --toolbar-muted: #aba59b;
-  --toolbar-accent: #e09a2b;
+  /* Default Theme: sangha-robes (Korean Seon Grey, Japanese Zen Black & Subdued Antique Saffron Borders) */
+  --desk-bg: #0c0e11;
+  --desk-radial: radial-gradient(circle at 50% 18%, #1d2127 0%, #0a0c0f 78%);
+  --toolbar-bg: #121519;
+  --toolbar-border: #383e46;
+  --toolbar-text: #e6eaee;
+  --toolbar-muted: #939ba4;
+  --toolbar-accent: #b8843c;
 
-  --page-bg: #f1efea;
-  --page-bg-alt: #e4e1d9;
+  --page-bg: #dfe3e6;
+  --page-bg-alt: #cfd5da;
   --page-paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.036'/%3E%3C/svg%3E");
   --page-shadow: 0 18px 45px rgba(0, 0, 0, 0.58), 0 2px 8px rgba(0, 0, 0, 0.36);
 
-  --beam-outer-edge: #524f49;
-  --beam-bg: linear-gradient(180deg, #161514 0%, #252422 48%, #141312 100%);
-  --beam-inner: #d4891e;
-  --beam-hairline: #c86419;
-  --beam-text: #f3efe6;
-  --beam-muted: #c2bbb0;
-  --corner-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M2 2h32v4H6v28H2z' fill='%23d4891e'/%3E%3Cpath d='M9 9h17v3H12v14H9z' fill='%23c85a19'/%3E%3Crect x='15' y='15' width='5' height='5' fill='%23e4a842'/%3E%3C/svg%3E");
+  --beam-outer-edge: #0c0e11;
+  --beam-bg: linear-gradient(180deg, #101317 0%, #1c2026 50%, #0e1014 100%);
+  --beam-inner: #9e6d2c;
+  --beam-hairline: #687079;
+  --beam-text: #eaedf0;
+  --beam-muted: #9aa2ab;
+  --corner-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M2 2h32v4H6v28H2z' fill='%23687079'/%3E%3Cpath d='M9 9h17v3H12v14H9z' fill='%239e6d2c'/%3E%3Crect x='15' y='15' width='5' height='5' fill='%23b8843c'/%3E%3C/svg%3E");
 
-  --ink: #1b1a18;
-  --ink-muted: #55514a;
-  --ink-heading: #131210;
-  --accent: #a84912;
-  --accent-deep: #5e3c23;
-  --seal-red: #9e3915;
-  --emerald: #445c3c;
-  --rule: #c2bdb3;
-  --rule-strong: #7a7368;
+  --ink: #16191d;
+  --ink-muted: #4b525b;
+  --ink-heading: #0e1114;
+  --accent: #33414e;
+  --accent-deep: #1f242a;
+  --seal-red: #8c3d2b;
+  --emerald: #3a5648;
+  --rule: #b8c0c7;
+  --rule-strong: #69727c;
 
-  --table-head-bg: #232220;
-  --table-head-ink: #f6ecd7;
-  --table-stripe: rgba(94, 60, 35, 0.07);
-  --code-bg: #e5e2da;
-  --code-border: #c0bab0;
-  --math-bg: #eae5da;
+  --table-head-bg: #181c21;
+  --table-head-ink: #e8ecf0;
+  --table-stripe: rgba(45, 53, 62, 0.075);
+  --code-bg: #d3d9de;
+  --code-border: #aeb7bf;
+  --math-bg: #d5dbe0;
 
-  --sidebar-bg: #e5e2da;
-  --sidebar-border: #252422;
-  --sidebar-accent: #c85a19;
-  --example-bg: #f6f3ec;
-  --example-line: rgba(94, 60, 35, 0.085);
-  --dossier-bg: #e1e0dc;
-  --dossier-accent: #9e3915;
-  --statblock-bg: #e8e1d5;
-  --statblock-accent: #5e3c23;
-  --fig-mat: #e2dfd7;
+  --sidebar-bg: #d3d8dd;
+  --sidebar-border: #1b1f25;
+  --sidebar-accent: #9e6d2c;
+  --example-bg: #e7eaed;
+  --example-line: rgba(45, 53, 62, 0.085);
+  --dossier-bg: #cfd5db;
+  --dossier-accent: #8c5d23;
+  --statblock-bg: #d4dadf;
+  --statblock-accent: #2c333c;
+  --fig-mat: #d2d7dc;
 }
 
 body[data-book-theme="chan-sanctuary"] {
@@ -166,6 +166,54 @@ body[data-book-theme="tactical-hud"] {
   --fig-mat: #121b2b;
 }
 
+body[data-book-theme="awakened-lotus"] {
+  --desk-bg: #0a1019;
+  --desk-radial: radial-gradient(circle at 50% 18%, #162438 0%, #080d15 78%);
+  --toolbar-bg: #0e1726;
+  --toolbar-border: #2a415e;
+  --toolbar-text: #e6eef8;
+  --toolbar-muted: #8fa6c2;
+  --toolbar-accent: #5ba8de;
+
+  --page-bg: #f1f4f8;
+  --page-bg-alt: #e3e9f2;
+  --beam-outer-edge: #09101a;
+  --beam-bg: linear-gradient(180deg, #0e1929 0%, #182b44 50%, #0c1523 100%);
+  --beam-inner: #3e86bd;
+  --beam-hairline: #b46e3c;
+  --beam-text: #eef5fc;
+  --beam-muted: #9eb6d1;
+  --corner-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M2 2h32v4H6v28H2z' fill='%233e86bd'/%3E%3Cpath d='M9 9h17v3H12v14H9z' fill='%23b46e3c'/%3E%3Crect x='15' y='15' width='5' height='5' fill='%235ba8de'/%3E%3C/svg%3E");
+
+  --ink: #161e2b;
+  --ink-muted: #4b5d73;
+  --ink-heading: #0d1624;
+  --accent: #1f5c8a;
+  --accent-deep: #153450;
+  --seal-red: #9b2c3b;
+  --emerald: #266b5c;
+  --rule: #c3cfde;
+  --rule-strong: #6e85a1;
+
+  --table-head-bg: #14253b;
+  --table-head-ink: #eaf2fb;
+  --table-stripe: rgba(31, 92, 138, 0.065);
+  --code-bg: #e5ebf3;
+  --code-border: #bdcadb;
+  --math-bg: #e7edf6;
+
+  --sidebar-bg: #e5ecf4;
+  --sidebar-border: #14253b;
+  --sidebar-accent: #3e86bd;
+  --example-bg: #f4f7fb;
+  --example-line: rgba(31, 92, 138, 0.085);
+  --dossier-bg: #e8e9f0;
+  --dossier-accent: #9b2c3b;
+  --statblock-bg: #e3ebf3;
+  --statblock-accent: #1f5c8a;
+  --fig-mat: #e2e8f0;
+}
+
 /* Part I-VII Thumb-Index Tab Colors */
 body[data-part-index="1"] { --part-idx: 1; --part-color: #8b5e34; }
 body[data-part-index="2"] { --part-idx: 2; --part-color: #2c5282; }
@@ -175,13 +223,21 @@ body[data-part-index="5"] { --part-idx: 5; --part-color: #9b3a2b; }
 body[data-part-index="6"] { --part-idx: 6; --part-color: #24616c; }
 body[data-part-index="7"] { --part-idx: 7; --part-color: #4c4a8a; }
 
-body[data-book-theme="sangha-robes"][data-part-index="1"] { --part-color: #5c5851; }
-body[data-book-theme="sangha-robes"][data-part-index="2"] { --part-color: #9c5f0f; }
-body[data-book-theme="sangha-robes"][data-part-index="3"] { --part-color: #6b4426; }
-body[data-book-theme="sangha-robes"][data-part-index="4"] { --part-color: #ab4916; }
-body[data-book-theme="sangha-robes"][data-part-index="5"] { --part-color: #2b2a28; }
-body[data-book-theme="sangha-robes"][data-part-index="6"] { --part-color: #4a5d3f; }
-body[data-book-theme="sangha-robes"][data-part-index="7"] { --part-color: #853d1c; }
+body[data-book-theme="sangha-robes"][data-part-index="1"] { --part-color: #4a5159; }
+body[data-book-theme="sangha-robes"][data-part-index="2"] { --part-color: #2c323a; }
+body[data-book-theme="sangha-robes"][data-part-index="3"] { --part-color: #5a636c; }
+body[data-book-theme="sangha-robes"][data-part-index="4"] { --part-color: #7c5628; }
+body[data-book-theme="sangha-robes"][data-part-index="5"] { --part-color: #1d2127; }
+body[data-book-theme="sangha-robes"][data-part-index="6"] { --part-color: #42544b; }
+body[data-book-theme="sangha-robes"][data-part-index="7"] { --part-color: #3b4654; }
+
+body[data-book-theme="awakened-lotus"][data-part-index="1"] { --part-color: #26466d; }
+body[data-book-theme="awakened-lotus"][data-part-index="2"] { --part-color: #3b556e; }
+body[data-book-theme="awakened-lotus"][data-part-index="3"] { --part-color: #1f6a96; }
+body[data-book-theme="awakened-lotus"][data-part-index="4"] { --part-color: #8c2d3b; }
+body[data-book-theme="awakened-lotus"][data-part-index="5"] { --part-color: #1f6b64; }
+body[data-book-theme="awakened-lotus"][data-part-index="6"] { --part-color: #8c5a36; }
+body[data-book-theme="awakened-lotus"][data-part-index="7"] { --part-color: #3c4b78; }
 
 * { box-sizing: border-box; }
 
@@ -387,6 +443,49 @@ body.toc-open aside.book-sidebar {
   background: var(--toolbar-accent);
   color: #0d1015;
   font-weight: 700;
+}
+
+.book-cross-link {
+  display: block;
+  padding: 6px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--toolbar-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--toolbar-accent);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.book-cross-link:hover {
+  border-color: var(--toolbar-accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.book-vis-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 5px;
+  vertical-align: middle;
+  border: 1px solid currentColor;
+}
+
+.book-vis-badge--public {
+  color: var(--emerald);
+}
+
+.book-vis-badge--arc2 {
+  color: #b8843c;
+}
+
+.book-vis-badge--gm {
+  color: var(--seal-red);
 }
 
 main.book-workspace {
@@ -883,6 +982,18 @@ p.chapter-dropcap::first-letter {
   box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18);
 }
 
+body[data-book-theme="sangha-robes"] p.chapter-dropcap::first-letter {
+  background: #181c21;
+  color: #eaedf0;
+  border-color: var(--beam-inner);
+}
+
+body[data-book-theme="awakened-lotus"] p.chapter-dropcap::first-letter {
+  background: #14253b;
+  color: #eef5fc;
+  border-color: var(--beam-inner);
+}
+
 .rules-divider {
   border: none;
   height: 1px;
@@ -960,7 +1071,8 @@ p.chapter-dropcap::first-letter {
   break-inside: avoid;
 }
 
-body[data-book-theme="sangha-robes"] .rules-table-wrap {
+body[data-book-theme="sangha-robes"] .rules-table-wrap,
+body[data-book-theme="awakened-lotus"] .rules-table-wrap {
   border-top-color: var(--beam-inner);
 }
 
