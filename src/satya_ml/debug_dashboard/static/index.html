@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Satya AI GM &amp; Player — LangGraph Debugger</title>
+  <link rel="icon" type="image/svg+xml" href="/debug/static/debug-brain.svg" />
+  <link rel="stylesheet" href="/debug/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <img src="/debug/static/debug-brain.svg" alt="" class="brand-icon" width="22" height="22" aria-hidden="true" />
+      <span class="brand">SATYA // LANGGRAPH DEBUGGER</span>
+      <span id="sse-pill" class="pill pill-muted" title="Server-Sent Events stream status">SSE: Connecting</span>
+      <span id="signaling-pill" class="pill pill-muted">Signaling: ...</span>
+    </div>
+    <div class="topbar-center">
+      <div class="segmented" role="group" aria-label="Agent Graph Switch">
+        <button id="btn-agent-gm" class="seg-btn active" data-agent="ai_gm">AI GM (7 nodes)</button>
+        <button id="btn-agent-player" class="seg-btn" data-agent="ai_player">AI Player (4 nodes)</button>
+      </div>
+      <div class="session-controls">
+        <label for="session-input" class="sr-only">Session ID</label>
+        <input id="session-input" type="text" value="debug-session-1" placeholder="session_id" />
+        <button id="btn-seed-session" class="btn btn-sm" title="Seed offline character, map, and stores">Seed</button>
+        <button id="btn-reset-session" class="btn btn-sm btn-danger" title="Clear session stores and checkpoints">Reset</button>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="active-run-badge" class="pill pill-muted">Idle</span>
+      <button id="btn-clear-runs" class="btn btn-sm" title="Clear run history">Clear Runs</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- Left Sidebar: Run History -->
+    <aside class="panel sidebar">
+      <div class="panel-header">
+        <h2>Run History</h2>
+        <select id="run-filter-agent" aria-label="Filter runs by agent">
+          <option value="">All Agents</option>
+          <option value="ai_gm">AI GM</option>
+          <option value="ai_player">AI Player</option>
+        </select>
+      </div>
+      <div id="run-list" class="run-list">
+        <div class="empty-state">No turns observed yet. Trigger a prompt, run a scenario, or send a message in Satya.</div>
+      </div>
+    </aside>
+
+    <!-- Center Column: Live Graph + Step Timeline + Prompt/Scenario Workbench -->
+    <section class="center-col">
+      <div class="panel graph-panel">
+        <div class="panel-header">
+          <div class="graph-title-row">
+            <h2 id="graph-title">AI GM StateGraph</h2>
+            <span class="hint">Click a node's red dot to toggle an <code>interrupt_before</code> breakpoint</span>
+          </div>
+          <div class="graph-actions">
+            <span id="bp-summary" class="hint">No breakpoints</span>
+            <button id="btn-clear-bps" class="btn btn-xs">Clear BPs</button>
+            <button id="btn-download-trace" class="btn btn-xs" disabled>Download JSON</button>
+          </div>
+        </div>
+
+        <!-- Pause / Breakpoint Control Banner -->
+        <div id="pause-banner" class="pause-banner hidden">
+          <div class="pause-info">
+            <span class="pill pill-warn">PAUSED</span>
+            <span>Stopped before: <strong id="pause-next-nodes"></strong></span>
+          </div>
+          <div class="pause-actions">
+            <button id="btn-step-node" class="btn btn-sm btn-accent">Step 1 Node</button>
+            <button id="btn-continue-run" class="btn btn-sm btn-success">Continue</button>
+            <button id="btn-toggle-patch" class="btn btn-sm">Patch State</button>
+            <button id="btn-abort-run" class="btn btn-sm btn-danger">Abort</button>
+          </div>
+          <div id="patch-drawer" class="patch-drawer hidden">
+            <textarea id="patch-json" rows="3" placeholder='{"operating_mode": "autonomous"}'></textarea>
+            <button id="btn-apply-patch-resume" class="btn btn-sm btn-accent">Apply Patch &amp; Continue</button>
+          </div>
+        </div>
+
+        <div class="svg-wrap">
+          <svg id="graph-svg" viewBox="0 0 980 280" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+
+        <div class="timeline-bar">
+          <span class="timeline-label">Steps:</span>
+          <div id="step-timeline" class="step-timeline">
+            <span class="hint">Waiting for execution...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prompt & Integration Scenario Workbench -->
+      <div class="panel workbench-panel">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-workbench="prompt">Prompt Runner</button>
+          <button class="tab-btn" data-workbench="scenarios">Integration Scenarios</button>
+          <div class="workbench-right">
+            <label class="checkbox-label" title="Bypass satya-signaling HTTP calls cleanly">
+              <input id="chk-offline-mode" type="checkbox" checked />
+              Offline (No Satya Signaling)
+            </label>
+          </div>
+        </div>
+
+        <!-- Tab 1: Single Turn Prompt Runner -->
+        <div id="wb-prompt" class="workbench-body">
+          <div class="form-grid">
+            <label>
+              Target
+              <select id="prompt-target">
+                <option value="gm">AI GM Turn</option>
+                <option value="player">AI Player Turn</option>
+                <option value="scenario_beat">Scenario Beat</option>
+              </select>
+            </label>
+            <label>
+              Provider
+              <select id="prompt-provider">
+                <option value="">Config Default</option>
+                <option value="mock">Mock (Zero-LLM)</option>
+                <option value="ollama">Ollama</option>
+                <option value="gemini">Gemini</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </label>
+            <label>
+              Model Override
+              <input id="prompt-model" type="text" placeholder="(default from ai.toml)" />
+            </label>
+            <label>
+              Operating Mode
+              <select id="prompt-op-mode">
+                <option value="AUTONOMOUS">AUTONOMOUS</option>
+                <option value="CO_PILOT">CO_PILOT</option>
+                <option value="SOLO_CO_GM">SOLO_CO_GM</option>
+              </select>
+            </label>
+            <label>
+              Channel
+              <select id="prompt-channel">
+                <option value="IN_CHARACTER">IN_CHARACTER</option>
+                <option value="OUT_OF_CHARACTER">OUT_OF_CHARACTER</option>
+              </select>
+            </label>
+            <label>
+              Actor / Player Name
+              <input id="prompt-actor" type="text" value="Mateo Vance" />
+            </label>
+          </div>
+          <div class="prompt-row">
+            <textarea id="prompt-text" rows="2" placeholder="Enter player action, OOC rules question, or scene prompt...">I sweep the rain-slicked relay corridor and scan the terminal for live uplinks.</textarea>
+            <button id="btn-send-prompt" class="btn btn-accent btn-send">Send Turn</button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Integration Scenarios -->
+        <div id="wb-scenarios" class="workbench-body hidden">
+          <div class="scenario-controls">
+            <select id="scenario-select"></select>
+            <select id="scenario-provider">
+              <option value="mock">Mock (Fast CI)</option>
+              <option value="">Config Default</option>
+              <option value="ollama">Ollama</option>
+              <option value="gemini">Gemini</option>
+            </select>
+            <button id="btn-run-scenario" class="btn btn-accent">Run Scenario</button>
+            <button id="btn-export-scenario" class="btn btn-sm" disabled>Export Report</button>
+          </div>
+          <div id="scenario-desc" class="hint"></div>
+          <div class="scenario-split">
+            <textarea id="scenario-json" rows="6" spellcheck="false"></textarea>
+            <div id="scenario-results" class="scenario-results">
+              <div class="empty-state">Select a preset and click Run Scenario.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Inspector Tabs -->
+    <aside class="panel inspector-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-inspector="delta">Node &amp; Delta</button>
+        <button class="tab-btn" data-inspector="messages">Messages</button>
+        <button class="tab-btn" data-inspector="tools">Tools</button>
+        <button class="tab-btn" data-inspector="state">Session State</button>
+        <button class="tab-btn" data-inspector="logs">Logs</button>
+      </div>
+
+      <div id="insp-delta" class="inspector-body">
+        <div class="empty-state">Select a run or click a node in the graph to inspect its state delta.</div>
+      </div>
+      <div id="insp-messages" class="inspector-body hidden">
+        <div class="empty-state">No messages captured yet.</div>
+      </div>
+      <div id="insp-tools" class="inspector-body hidden">
+        <div class="empty-state">No tool invocations captured yet.</div>
+      </div>
+      <div id="insp-state" class="inspector-body hidden">
+        <div class="state-toolbar">
+          <button id="btn-refresh-state" class="btn btn-xs">Refresh Snapshot</button>
+        </div>
+        <div id="session-state-view" class="json-block">Click Refresh Snapshot to view live session stores.</div>
+      </div>
+      <div id="insp-logs" class="inspector-body hidden">
+        <div class="state-toolbar">
+          <button id="btn-refresh-ollama" class="btn btn-xs">Load Ollama Logs</button>
+        </div>
+        <div id="logs-view"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/debug/static/app.js"></script>
+</body>
+</html>

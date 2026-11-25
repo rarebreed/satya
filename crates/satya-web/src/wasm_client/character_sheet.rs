@@ -20,7 +20,8 @@ pub use crate::wasm_client::character_sheet_vault::*;
 pub use crate::wasm_client::character_sheet_views::*;
 use crate::wasm_client::chat_and_ttrpg::append_system_notice;
 use crate::wasm_client::dom::{
-    get_element, input_value, roll_browser_die_i32, select_value, set_text, slugify_identifier,
+    get_element, input_value, roll_browser_die_i32, select_value, set_class, set_text,
+    slugify_identifier,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_engine::{
@@ -140,12 +141,74 @@ pub struct CharacterSheetState {
 
 impl Default for CharacterSheetState {
     fn default() -> Self {
-        Self::from_preset("sara_valkyrie")
+        Self::empty()
     }
 }
 
 impl CharacterSheetState {
-    /// Builds a canonical operator preset (`"sara_valkyrie"`, `"mateo_vance"`, `"priya_nair"`, or `"amara_okafor"`).
+    /// Returns an unselected empty dossier state before any character is chosen or loaded.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            character_id: String::new(),
+            preset_id: String::new(),
+            character_name: String::new(),
+            callsign_or_role: String::new(),
+            age_years: 0,
+            origin_label: String::new(),
+            campaign_sqm: 5,
+            institutional_status: 5,
+            street_cred: 0,
+            debt_tier: DebtTier::None,
+            operational_heat: 0,
+            granted_access_tags: vec![SkillAccessTier::Universal],
+            stage_history: Vec::new(),
+            faction_id: None,
+            faction_archetype: None,
+            lifepath_config_json: None,
+            section_filter: "ALL".to_string(),
+            skill_tree_filter: "ALL".to_string(),
+            skills_trained_only: true,
+            characteristics: CharacterCharacteristics::default(),
+            aptitudes: CharacterAptitudes::default(),
+            skills: initialize_universal_talents(),
+            equipped_ranged_ids: Vec::new(),
+            ballistic_range_m: 25.0,
+            equipped_melee: Vec::new(),
+            equipped_armor: Vec::new(),
+            field_gear: Vec::new(),
+            hit_zones: HitLocationId::ALL.map(AnatomicalZoneState::new_healthy),
+            selected_hit_zone: HitLocationId::ChestRibcageLungs as usize,
+            last_hit_location_roll_d20: None,
+            fatigue_level: 0,
+            exertion_marks: 0,
+            wound_shock_index: 0,
+            blood_units_lost: 0.0,
+            active_status_conditions: Vec::new(),
+            morale_state: MoraleState::Steady,
+            mental_trauma: None,
+            social_composure_lost: 0,
+            social_wound: None,
+            psyche_drift_marks: 0,
+            conviction_surge_active: false,
+            notes: String::new(),
+            verification_status: satya_schema::CharacterVerificationStatus::LegalCustom,
+            audit_violations: Vec::new(),
+            local_satya_file_path: None,
+            assets: Vec::new(),
+            saved_vault_list: Vec::new(),
+            vault_feedback: String::new(),
+        }
+    }
+
+    /// Returns `true` when no operator preset, saved character, or wizard character is selected.
+    #[must_use]
+    pub fn is_unselected(&self) -> bool {
+        self.preset_id.trim().is_empty() && self.character_name.trim().is_empty()
+    }
+
+    /// Builds a canonical operator preset (`"sara_valkyrie"`, `"mateo_vance"`, `"priya_nair"`,
+    /// `"amara_okafor"`, or `"linnea_cho"`), or returns [`Self::empty()`] for `""` / unknown keys.
     #[must_use]
     pub fn from_preset(preset_id: &str) -> Self {
         match preset_id {
@@ -212,7 +275,7 @@ impl CharacterSheetState {
                 sheet.faction_archetype = Some("SATYANG_MANJUSRI".to_string());
                 sheet
             }
-            _ => {
+            "sara_valkyrie" => {
                 let chars = CharacterCharacteristics {
                     spd: 14,
                     for_stat: 13,
@@ -347,6 +410,7 @@ impl CharacterSheetState {
                     vault_feedback: String::new(),
                 }
             }
+            _ => Self::empty(),
         }
     }
 
@@ -578,6 +642,9 @@ impl CharacterSheetState {
     /// Formats the status pill text for `#char-sheet-status-pill`.
     #[must_use]
     pub fn format_status_pill_text(&self) -> String {
+        if self.is_unselected() {
+            return "No Character Selected".to_string();
+        }
         let derived = self.characteristics.compute_derived(0);
         let env = self.compute_live_tactical_envelope();
         let (fat, shock) = (
@@ -788,14 +855,23 @@ pub fn render_character_sheet() {
             st.character_sheet.notes = notes_dom;
         }
     });
-    let (html, pill_text, preset_id) = with_state(|st| {
+    let (html, pill_text, preset_id, is_unselected) = with_state(|st| {
         (
             format_character_sheet_html(&st.character_sheet),
             st.character_sheet.format_status_pill_text(),
             st.character_sheet.preset_id.clone(),
+            st.character_sheet.is_unselected(),
         )
     });
     set_text("char-sheet-status-pill", &pill_text);
+    set_class(
+        "char-sheet-status-pill",
+        if is_unselected {
+            "pill pill-muted"
+        } else {
+            "pill pill-active"
+        },
+    );
     crate::wasm_client::dom::set_select_value("char-sheet-preset-select", &preset_id);
     if let Some(el) = get_element("char-sheet-stage-container") {
         el.set_inner_html(&html);

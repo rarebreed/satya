@@ -122,6 +122,13 @@ impl CharacterSheetState {
     /// Hydrates this [`CharacterSheetState`] from an imported or vault-loaded [`CharacterSheetRecord`].
     pub fn apply_character_sheet_record(&mut self, rec: &CharacterSheetRecord) {
         self.character_id = rec.character_id.clone();
+        self.preset_id = match rec.character_id.strip_prefix("char-") {
+            Some(
+                id @ ("sara_valkyrie" | "mateo_vance" | "priya_nair" | "amara_okafor"
+                | "linnea_cho"),
+            ) => id.to_string(),
+            _ => "custom_wizard".to_string(),
+        };
         self.character_name = rec.character_name.clone();
         self.callsign_or_role = rec.callsign_or_role.clone();
         self.age_years = rec.age_years.max(1) as u32;

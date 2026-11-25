@@ -143,6 +143,7 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleChatSettings" => satya_toggle_chat_settings(),
             "satyaToggleAiGmSettings" => satya_toggle_ai_gm_settings(),
             "satyaToggleAppearanceSettings" => satya_toggle_appearance_settings(),
+            "satyaToggleTabIcons" => satya_toggle_tab_icons(),
             "satyaToggleAdvancedSettings" => satya_toggle_advanced_settings(),
             "satyaToggleAdvancedRollerControls" => satya_toggle_advanced_roller_controls(),
             "satyaApplyAppearanceSettings" => satya_apply_appearance_settings(),
@@ -401,6 +402,7 @@ pub fn start_satya_wasm_client() {
     sync_chat_options_for_mode(mode);
     satya_visibility_changed();
     set_display("admin-inspector-card", "none");
+    crate::wasm_client::notebook::sync_iggy_tab_visibility(false);
     refresh_map_dom_and_wgpu();
     restore_saved_auth_and_session();
 }

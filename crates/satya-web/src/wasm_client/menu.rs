@@ -142,7 +142,17 @@ const STORAGE_KEY_DENSITY: &str = "satya.appearance.density";
 const STORAGE_KEY_CORNERS: &str = "satya.appearance.corners";
 const STORAGE_KEY_FONT: &str = "satya.appearance.font";
 const STORAGE_KEY_FONT_SIZE: &str = "satya.appearance.font_size";
+const STORAGE_KEY_TAB_ICONS: &str = "satya.appearance.tab_icons";
 const STORAGE_KEY_ADVANCED_ROLLER: &str = "satya.settings.advanced_roller";
+
+/// Toggles visibility of inline Notebook tab icons via `data-tab-icons` on `<html>` and persists to `localStorage`.
+#[wasm_bindgen]
+pub fn satya_toggle_tab_icons() {
+    let enabled = input_checked("menu-tab-icons-toggle");
+    let flag = if enabled { "true" } else { "false" };
+    local_storage_set(STORAGE_KEY_TAB_ICONS, flag);
+    set_root_data_attribute("data-tab-icons", flag);
+}
 
 /// Toggles visibility of advanced Task Roller controls (`Cascade Carry Mode`, `Botch Severity Rule`,
 /// and `Triad Allocation Preset`) via `data-advanced-roller` on `<html>` and persists to `localStorage`.
@@ -205,6 +215,10 @@ pub fn restore_saved_appearance_settings() {
     set_select_value("menu-font-size-select", font_size);
     apply_appearance_to_root(theme, style, density, corners, font, font_size);
 
+    let tab_icons = local_storage_get(STORAGE_KEY_TAB_ICONS).as_deref() != Some("false");
+    set_input_checked("menu-tab-icons-toggle", tab_icons);
+    set_root_data_attribute("data-tab-icons", if tab_icons { "true" } else { "false" });
+
     let adv_roller = local_storage_get(STORAGE_KEY_ADVANCED_ROLLER).as_deref() == Some("true");
     set_input_checked("menu-advanced-roller-controls", adv_roller);
     set_root_data_attribute(
@@ -252,6 +266,9 @@ pub fn satya_reset_appearance_settings() {
     set_select_value("menu-corners-select", "default");
     set_select_value("menu-font-select", "sans");
     set_select_value("menu-font-size-select", "default");
+    set_input_checked("menu-tab-icons-toggle", true);
+    local_storage_set(STORAGE_KEY_TAB_ICONS, "true");
+    set_root_data_attribute("data-tab-icons", "true");
     satya_apply_appearance_settings();
 }
 

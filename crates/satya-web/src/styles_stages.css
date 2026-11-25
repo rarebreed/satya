@@ -38,6 +38,9 @@
     gap: 5px;
 }
 .notebook-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: var(--bg-0);
     color: var(--text-muted);
     border: 1px solid var(--border);
@@ -47,6 +50,15 @@
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.notebook-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    line-height: 0;
+}
+html[data-tab-icons="false"] .notebook-tab-icon {
+    display: none;
 }
 .notebook-tab:hover {
     border-color: var(--accent);

@@ -28,6 +28,7 @@ from satya_ml.ai_gm.models import redact_api_key
 from satya_ml.ai_gm.telemetry import turn_telemetry_scope
 from satya_ml.ai_player.graph import build_ai_player_graph
 from satya_ml.campaign_config import get_pack_default_ai_player
+from satya_ml.debug_dashboard import debug_router, is_debug_ui_enabled, run_observed_graph
 from satya_ml.signaling_client import load_ai_gm_toml_config
 
 logger = logging.getLogger("satya_ml.ai_player.server")
@@ -41,6 +42,28 @@ _PLAYER_LOCK_POOL = SessionLockPool()
 
 def _get_player_lock(session_id: str, player_user_id: str) -> threading.Lock:
     return _PLAYER_LOCK_POOL.acquire_lock(f"{session_id}:{player_user_id}")
+
+
+def clear_player_checkpointer_session(session_id: str) -> None:
+    """Delete persisted LangGraph checkpoints for all player threads belonging to `session_id`."""
+    prefix = f"{session_id}:player:"
+    storage = getattr(_PLAYER_CHECKPOINTER, "storage", None)
+    matching_threads = (
+        [tid for tid in list(storage.keys()) if str(tid).startswith(prefix)]
+        if isinstance(storage, dict)
+        else []
+    )
+    if hasattr(_PLAYER_CHECKPOINTER, "delete_thread"):
+        for tid in matching_threads:
+            _PLAYER_CHECKPOINTER.delete_thread(tid)
+        return
+    if isinstance(storage, dict):
+        for tid in matching_threads:
+            storage.pop(tid, None)
+    writes = getattr(_PLAYER_CHECKPOINTER, "writes", None)
+    if isinstance(writes, dict):
+        for key in [k for k in writes if isinstance(k, tuple) and k and str(k[0]).startswith(prefix)]:
+            writes.pop(key, None)
 
 
 def set_player_chat_model_override(model: Any | None) -> None:
@@ -138,9 +161,20 @@ def handle_ai_player_event(
         }
 
         with _get_player_lock(payload.session_id, payload.player_user_id):
-            result = graph.invoke(
+            result, _run = run_observed_graph(
+                graph,
                 initial_state,
-                config={"configurable": {"thread_id": thread_id}},
+                {"configurable": {"thread_id": thread_id}},
+                agent_kind="ai_player",
+                session_id=payload.session_id,
+                player_user_id=payload.player_user_id,
+                trace_id=telemetry.trace_id,
+                provider=str(llm_cfg.provider),
+                model_id=str(llm_cfg.model_id),
+                operating_mode="autonomous",
+                trigger_summary=prompt_text,
+                source="signaling",
+                lock_getter=lambda sid=payload.session_id, uid=payload.player_user_id: _get_player_lock(sid, uid),
             )
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000.0)
@@ -181,6 +215,7 @@ app = FastAPI(
     description="Isolated AI Player LangGraph service for Satya multi-player and combat testing.",
 )
 app.include_router(router)
+app.include_router(debug_router)
 
 
 @app.get("/health")
@@ -197,7 +232,16 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Satya AI Player FastAPI + LangGraph server")
     parser.add_argument("--debug", action="store_true", help="Enable verbose DEBUG logging")
     parser.add_argument("--log-level", default=None, help="Explicit log level")
+    parser.add_argument(
+        "--standalone",
+        "--offline",
+        dest="standalone",
+        action="store_true",
+        help="Run standalone without satya-signaling (`SATYA_SIGNALING_URL=offline`)",
+    )
     args = parser.parse_args(argv)
+    if args.standalone:
+        os.environ["SATYA_SIGNALING_URL"] = "offline"
     level_override = "DEBUG" if args.debug else args.log_level
     uvicorn_log_level = configure_ai_gm_logging(level_override)
 
@@ -212,6 +256,8 @@ def main(argv: list[str] | None = None) -> None:
         file_cfg.get("default_provider", "ollama"),
         file_cfg.get("reasoning_model", "gemma4:12b"),
     )
+    if is_debug_ui_enabled():
+        logger.info("Debug Graph Dashboard available at http://%s:%d/debug", host, port)
     uvicorn.run(
         "satya_ml.ai_player.server:app",
         host=host,

@@ -156,6 +156,9 @@ pub fn NotebookColumn() -> impl IntoView {
                                 };
                                 let onclick_js = format!("window.satyaSelectNotebookTab('{key}')");
                                 let key_owned = (*key).to_string();
+                                let initial_style =
+                                    (*key == "iggy").then_some("display: none");
+                                let icon_svg = wasm_client::notebook_tab_icon_svg(key);
                                 view! {
                                     <button
                                         type="button"
@@ -165,12 +168,18 @@ pub fn NotebookColumn() -> impl IntoView {
                                         aria-controls=*pane_id
                                         data-notebook-tab=*key
                                         class=cls
+                                        style=initial_style
                                         onclick=onclick_js
                                         on:click=move |_| {
                                             wasm_client::satya_select_notebook_tab(key_owned.clone())
                                         }
                                     >
-                                        {*label}
+                                        <span
+                                            class="notebook-tab-icon"
+                                            aria-hidden="true"
+                                            inner_html=icon_svg
+                                        ></span>
+                                        <span class="notebook-tab-label">{*label}</span>
                                     </button>
                                 }
                             })
@@ -526,6 +535,7 @@ fn NotebookModelAndCharacterPanes() -> impl IntoView {
                                 wasm_client::satya_char_sheet_load_preset(val);
                             }
                         >
+                            <option value="" selected>"Choose Character"</option>
                             <option value="sara_valkyrie">"Sara \"Valkyrie\" Lin (Med-Assault Operator)"</option>
                             <option value="mateo_vance">"Mateo Vance (Syndicate Enforcer)"</option>
                             <option value="priya_nair">"Dr. Priya Nair (AI & Robotics Lead)"</option>
@@ -543,8 +553,8 @@ fn NotebookModelAndCharacterPanes() -> impl IntoView {
                         "Sync from Character Wizard"
                     </button>
                 </div>
-                <span id="char-sheet-status-pill" class="pill pill-active">
-                    "Sara \"Valkyrie\" Lin (Age 26) · Combat Ready · OODA 14 · D_cog 14 · Pool 26/27 · Fatigue 1 · Shock 0 · Δ_int +1"
+                <span id="char-sheet-status-pill" class="pill pill-muted">
+                    "No Character Selected"
                 </span>
             </div>
             <div

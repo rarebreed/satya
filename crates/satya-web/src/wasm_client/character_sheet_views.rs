@@ -500,6 +500,73 @@ pub fn format_talents_and_skills_tables_html(sheet: &CharacterSheetState) -> Str
 /// Renders the complete inner HTML of `#char-sheet-stage-container` based on [`CharacterSheetState`].
 #[must_use]
 pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
+    if sheet.is_unselected() {
+        let saved_opts: String = if sheet.saved_vault_list.is_empty() {
+            r#"<option value="">-- Click 'Refresh Vault' to list saved characters --</option>"#
+                .to_string()
+        } else {
+            sheet
+                .saved_vault_list
+                .iter()
+                .map(|c| {
+                    format!(
+                        r#"<option value="{id}">{name} ({role})</option>"#,
+                        id = escape_html(&c.character_id),
+                        name = escape_html(&c.character_name),
+                        role = escape_html(&c.callsign_or_role),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        };
+        let feedback_html = if sheet.vault_feedback.trim().is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<div id="char-sheet-vault-feedback" class="stat-note">{}</div>"#,
+                escape_html(&sheet.vault_feedback)
+            )
+        };
+        return format!(
+            r#"<div class="char-sheet-shell">
+                <div class="char-dossier-banner">
+                    <div>
+                        <div class="char-dossier-title">Choose Character</div>
+                        <div class="subtitle">Select an operator from the Operator Dossier dropdown above, build a new character in the Character Wizard, or load a saved character from your Vault or a <code>.satyachar</code> file below.</div>
+                    </div>
+                    <div class="btn-row-compact">
+                        <button type="button" class="btn btn-sm btn-accent" onclick="window.satyaSelectNotebookTab('wizard')">Open Character Wizard</button>
+                    </div>
+                </div>
+                <section id="char-sheet-vault-bar" class="char-sheet-section" aria-label="Load Character from Vault or .satyachar">
+                    <div class="char-section-header">
+                        <h3>Load Saved Character</h3>
+                    </div>
+                    <div class="model-controls-row">
+                        <label class="inline-label" for="char-sheet-vault-select">
+                            <span>Saved Vault Characters</span>
+                            <select id="char-sheet-vault-select">{saved_opts}</select>
+                        </label>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.satyaCharSheetLoadSaved('')">Load Selected</button>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.satyaCharSheetRefreshVault()">Refresh Vault</button>
+                    </div>
+                    <div class="model-controls-row">
+                        <label class="inline-label" for="char-sheet-import-file-input">
+                            <span>Import <code>.satyachar</code> Bundle</span>
+                            <input
+                                id="char-sheet-import-file-input"
+                                type="file"
+                                accept=".satyachar,.bin,application/octet-stream"
+                                onchange="window.satyaCharSheetImportFile()"
+                            />
+                        </label>
+                    </div>
+                    {feedback_html}
+                </section>
+            </div>"#
+        );
+    }
+
     let c = &sheet.characteristics;
     let derived = c.compute_derived(0);
     let control_dex_tac =

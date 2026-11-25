@@ -78,15 +78,75 @@ pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
+/// Returns a crisp `14×14` `currentColor` inline SVG icon for each Notebook tab slug.
+#[must_use]
+pub fn notebook_tab_icon_svg(slug: &str) -> &'static str {
+    match slug {
+        "maps" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>"#
+        }
+        "dice" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"/><polyline points="12 2 12 8 21 7"/><polyline points="12 8 3 7"/><polyline points="12 8 7 16 17 16 12 8"/><line x1="7" y1="16" x2="3" y2="17"/><line x1="17" y1="16" x2="21" y2="17"/><line x1="7" y1="16" x2="12" y2="22"/><line x1="17" y1="16" x2="12" y2="22"/></svg>"#
+        }
+        "model" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>"#
+        }
+        "character" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2.2"/><path d="M5.5 16.5a3.5 3.5 0 0 1 7 0"/><line x1="14.5" y1="9" x2="18.5" y2="9"/><line x1="14.5" y1="13" x2="18.5" y2="13"/></svg>"#
+        }
+        "wizard" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4-1 2 2 1-2 1 1 2-2-1-1 2-1-2-2 1 1-2-2-1 2-1-1-2 2 1 1-2 1 2z"/><path d="m3 21 9-9"/></svg>"#
+        }
+        "npcs" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a3.5 3.5 0 0 1 0 6.75"/></svg>"#
+        }
+        "combat" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/></svg>"#
+        }
+        "rules" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>"#
+        }
+        "docs" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>"#
+        }
+        "iggy" => {
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>"#
+        }
+        _ => "",
+    }
+}
+
+/// Returns `true` when the active session role holds human GM / Solo Co-GM / Host authority.
+#[must_use]
+pub const fn is_session_gm_role(role: Option<SessionRole>) -> bool {
+    matches!(role, Some(r) if r.is_human_gm_or_co_gm())
+}
+
+/// Shows or hides the `Apache Iggy, Topics & PyLance` tab (`#tab-btn-iggy`) based on session GM authority.
+pub(crate) fn sync_iggy_tab_visibility(is_gm: bool) {
+    set_display("tab-btn-iggy", if is_gm { "inline-flex" } else { "none" });
+    if !is_gm && with_state(|st| st.active_notebook_tab == "iggy") {
+        satya_select_notebook_tab("maps".to_string());
+    }
+}
+
 /// Switches the active view inside the 10-pane Left Tabbed Notebook (`#tabletop-canvas-card`) between
 /// `"maps"`, `"dice"`, `"model"`, `"character"`, `"wizard"`, `"npcs"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
 #[wasm_bindgen]
 pub fn satya_select_notebook_tab(tab_id: String) {
-    let target = if NOTEBOOK_TABS.iter().any(|(slug, _, _)| *slug == tab_id) {
+    let mut target = if NOTEBOOK_TABS.iter().any(|(slug, _, _)| *slug == tab_id) {
         tab_id
     } else {
         "maps".to_string()
     };
+    if target == "iggy"
+        && !with_state(|st| {
+            st.session_id.is_some()
+                && is_session_gm_role(st.self_participant.as_ref().map(|p| p.role))
+        })
+    {
+        target = "maps".to_string();
+    }
 
     with_state_mut(|st| {
         st.active_notebook_tab = target.clone();

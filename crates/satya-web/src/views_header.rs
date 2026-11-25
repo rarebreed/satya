@@ -114,6 +114,14 @@ pub fn HeaderBar() -> impl IntoView {
         <header class="top-bar">
             <div class="brand">
                 <span class="brand-badge">"Satya // Engine"</span>
+                <img
+                    src="/assets/icons/satsang-temple.svg"
+                    alt=""
+                    class="brand-satsang-icon"
+                    width="24"
+                    height="24"
+                    aria-hidden="true"
+                />
                 <h1>"Satsang"</h1>
             </div>
             <div class="top-bar-right">
@@ -300,6 +308,16 @@ pub fn HeaderBar() -> impl IntoView {
                                             }
                                         })
                                         .collect_view()}
+                                    <label class="recip-option" for="menu-tab-icons-toggle">
+                                        <input
+                                            id="menu-tab-icons-toggle"
+                                            type="checkbox"
+                                            checked
+                                            onchange="window.satyaToggleTabIcons()"
+                                            on:change=move |_| wasm_client::satya_toggle_tab_icons()
+                                        />
+                                        <span>"Show Notebook Tab Icons"</span>
+                                    </label>
                                     <button
                                         type="button"
                                         id="btn-reset-appearance-defaults"

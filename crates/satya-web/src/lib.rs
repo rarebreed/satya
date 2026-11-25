@@ -64,11 +64,23 @@ function satyaSyncAppearance(save) {
         btn.classList.toggle("active", isAct);
         btn.setAttribute("aria-pressed", isAct ? "true" : "false");
     }
+    const tabCb = document.getElementById("menu-tab-icons-toggle");
+    let showTabIcons = save && tabCb ? (tabCb.checked ? "true" : "false") : null;
+    if (!showTabIcons) {
+        try { showTabIcons = localStorage.getItem("satya.appearance.tab_icons"); } catch (_) {}
+    }
+    showTabIcons = showTabIcons === "false" ? "false" : "true";
+    r.setAttribute("data-tab-icons", showTabIcons);
+    if (tabCb) tabCb.checked = showTabIcons !== "false";
+    if (save) {
+        try { localStorage.setItem("satya.appearance.tab_icons", showTabIcons); } catch (_) {}
+    }
 }
 window.satyaToggleAppearanceSettings = () => {
     const p = document.getElementById("menu-appearance-settings-panel");
     if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
 };
+window.satyaToggleTabIcons = () => satyaSyncAppearance(true);
 window.satyaApplyAppearanceSettings = () => satyaSyncAppearance(true);
 window.satyaSelectThemePreset = (t) => {
     const el = document.getElementById("menu-theme-select");
@@ -80,6 +92,8 @@ window.satyaResetAppearanceSettings = () => {
         const el = document.getElementById(selId);
         if (el) el.value = defVal;
     }
+    const tabCb = document.getElementById("menu-tab-icons-toggle");
+    if (tabCb) tabCb.checked = true;
     satyaSyncAppearance(true);
 };
 satyaSyncAppearance(false);
@@ -115,11 +129,13 @@ pub fn SatyaApp() -> impl IntoView {
             data-corners="default"
             data-font="sans"
             data-font-size="default"
+            data-tab-icons="true"
         >
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>"SATYA // WebRTC, TTRPG & Meeting Event Streaming Platform"</title>
+                <link rel="icon" type="image/svg+xml" href="/assets/icons/satya-lotus.svg"/>
                 <link rel="preconnect" href="https://fonts.googleapis.com"/>
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
                 <link

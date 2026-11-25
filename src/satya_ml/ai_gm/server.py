@@ -112,6 +112,7 @@ configure_ai_gm_logging()
 
 
 from satya_ml.ai_player.server import router as ai_player_router
+from satya_ml.debug_dashboard import debug_router, is_debug_ui_enabled, run_observed_graph
 
 app = FastAPI(
     title="Satya AI GM LangGraph Service",
@@ -119,10 +120,25 @@ app = FastAPI(
     description="Internal loopback bridge between satya-signaling (Rust) and LangGraph AI GM / AI Player.",
 )
 app.include_router(ai_player_router)
+app.include_router(debug_router)
 
 _SHARED_CHECKPOINTER = MemorySaver()
 _CHAT_MODEL_OVERRIDE: Any | None = None
 _SESSION_LOCK_POOL = SessionLockPool()
+
+
+def clear_gm_checkpointer_session(session_id: str) -> None:
+    """Delete persisted LangGraph checkpoints for `session_id` in `_SHARED_CHECKPOINTER`."""
+    if hasattr(_SHARED_CHECKPOINTER, "delete_thread"):
+        _SHARED_CHECKPOINTER.delete_thread(session_id)
+        return
+    storage = getattr(_SHARED_CHECKPOINTER, "storage", None)
+    if isinstance(storage, dict):
+        storage.pop(session_id, None)
+    writes = getattr(_SHARED_CHECKPOINTER, "writes", None)
+    if isinstance(writes, dict):
+        for key in [k for k in writes if isinstance(k, tuple) and k and k[0] == session_id]:
+            writes.pop(key, None)
 
 
 def _get_session_lock(session_id: str) -> threading.Lock:
@@ -294,9 +310,19 @@ def handle_ai_gm_event(
         }
 
         with _get_session_lock(payload.session_id):
-            result = graph.invoke(
+            result, _run = run_observed_graph(
+                graph,
                 initial_state,
-                config={"configurable": {"thread_id": payload.session_id}},
+                {"configurable": {"thread_id": payload.session_id}},
+                agent_kind="ai_gm",
+                session_id=payload.session_id,
+                trace_id=telemetry.trace_id,
+                provider=str(llm_cfg.provider),
+                model_id=str(llm_cfg.model_id),
+                operating_mode=op_mode,
+                trigger_summary=str(effective_content or ""),
+                source="signaling",
+                lock_getter=lambda sid=payload.session_id: _get_session_lock(sid),
             )
         elapsed_ms = int((time.perf_counter() - turn_t0) * 1000.0)
         tool_count = len(result.get("tool_invocations") or [])
@@ -395,9 +421,19 @@ def handle_scenario_beat(
             "tool_invocations": [],
         }
         with _get_session_lock(payload.session_id):
-            result = graph.invoke(
+            result, _run = run_observed_graph(
+                graph,
                 initial_state,
-                config={"configurable": {"thread_id": payload.session_id}},
+                {"configurable": {"thread_id": payload.session_id}},
+                agent_kind="ai_gm",
+                session_id=payload.session_id,
+                trace_id=telemetry.trace_id,
+                provider=str(llm_cfg.provider),
+                model_id=str(llm_cfg.model_id),
+                operating_mode=op_mode,
+                trigger_summary=f"SCENARIO_BEAT ({payload.task_slug}): {payload.custom_context}"[:240],
+                source="signaling",
+                lock_getter=lambda sid=payload.session_id: _get_session_lock(sid),
             )
         return {
             "status": "ok",
@@ -436,7 +472,16 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Disable automatic `ollama serve` detection/startup and log collection",
     )
+    parser.add_argument(
+        "--standalone",
+        "--offline",
+        dest="standalone",
+        action="store_true",
+        help="Run standalone without satya-signaling (`SATYA_SIGNALING_URL=offline`)",
+    )
     args = parser.parse_args(argv)
+    if args.standalone:
+        os.environ["SATYA_SIGNALING_URL"] = "offline"
     level_override = "DEBUG" if args.debug else args.log_level
     uvicorn_log_level = configure_ai_gm_logging(level_override)
 
@@ -459,6 +504,8 @@ def main(argv: list[str] | None = None) -> None:
         default_provider,
         file_cfg.get("reasoning_model", "gemma4:12b"),
     )
+    if is_debug_ui_enabled():
+        logger.info("Debug Graph Dashboard available at http://%s:%d/debug", host, port)
     uvicorn.run(
         "satya_ml.ai_gm.server:app",
         host=host,

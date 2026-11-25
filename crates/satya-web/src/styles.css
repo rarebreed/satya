@@ -33,6 +33,10 @@ button, input, select, textarea { font-family: inherit; }
     background: var(--brand-grad); color: #fff; font-weight: 700; font-size: 0.75rem;
     letter-spacing: 0.08em; padding: 4px 10px; border-radius: var(--control-radius);
 }
+.brand-satsang-icon {
+    width: 24px; height: 24px; flex-shrink: 0; display: block;
+    object-fit: contain;
+}
 .top-bar h1 {
     font-size: 1.05rem; font-weight: 600; color: var(--text-heading);
 }

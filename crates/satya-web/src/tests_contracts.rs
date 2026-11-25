@@ -122,6 +122,9 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
         combined_html.push('\n');
         combined_html.push_str(&wasm_client::format_character_wizard_html(&wiz));
     }
+    let empty_sheet_html = wasm_client::default_character_sheet_html();
+    combined_html.push('\n');
+    combined_html.push_str(&empty_sheet_html);
     let sheet = wasm_client::CharacterSheetState::from_preset("sara_valkyrie");
     for section in ["all", "overview", "skills", "equipment", "anatomy", "notes"] {
         let mut s = sheet.clone();

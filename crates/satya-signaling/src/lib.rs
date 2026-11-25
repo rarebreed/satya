@@ -366,6 +366,7 @@ mod router_assets_tests {
         let app = build_router(state);
 
         let res = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/assets/textures/map2d/grass_meadow.webp")
@@ -377,6 +378,27 @@ mod router_assets_tests {
         assert_eq!(res.status(), StatusCode::OK);
         let bytes = to_bytes(res.into_body(), 2 * 1024 * 1024).await.unwrap();
         assert!(bytes.len() > 128 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP");
+
+        for icon_uri in [
+            "/assets/icons/satya-lotus.svg",
+            "/assets/icons/satsang-temple.svg",
+        ] {
+            let icon_res = app
+                .clone()
+                .oneshot(Request::builder().uri(icon_uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(icon_res.status(), StatusCode::OK, "icon {icon_uri}");
+            let icon_bytes = to_bytes(icon_res.into_body(), 2 * 1024 * 1024)
+                .await
+                .unwrap();
+            let icon_text = std::str::from_utf8(&icon_bytes).expect("valid UTF-8 SVG");
+            assert!(
+                icon_text.contains("<svg"),
+                "expected <svg> markup for {icon_uri}"
+            );
+        }
+
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

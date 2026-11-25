@@ -449,6 +449,7 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     set_text("btn-solo-spoiler-shield", "Spoiler Shield: OFF");
     set_class("btn-solo-spoiler-shield", "btn btn-sm btn-secondary");
     sync_gm_context_button_visibility(is_gm);
+    crate::wasm_client::notebook::sync_iggy_tab_visibility(is_gm);
     sync_chat_options_for_mode(session_mode);
     set_display("session-card", "none");
     set_display("hamburger-menu-dropdown", "none");
@@ -624,6 +625,7 @@ pub fn cleanup_client_session_state() {
     set_display("btn-solo-spoiler-shield", "none");
     set_display("gm-archivist-modal", "none");
     sync_gm_context_button_visibility(false);
+    crate::wasm_client::notebook::sync_iggy_tab_visibility(false);
     render_roster();
     set_session_buttons_enabled(false);
     set_text("session-status-pill", "No Active Session");

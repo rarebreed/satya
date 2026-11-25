@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Satsang Sanctuary Pavilion</title>
+  <defs>
+    <linearGradient id="temple-roof" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="45%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="temple-dais" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#94b8e2"/>
+      <stop offset="100%" stop-color="#47668f"/>
+    </linearGradient>
+    <radialGradient id="hearth-glow" cx="50%" cy="55%" r="55%">
+      <stop offset="0%" stop-color="#fef9c3"/>
+      <stop offset="55%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </radialGradient>
+    <style>
+      .satsang-hearth {
+        animation: satsang-pulse 2.4s ease-in-out infinite;
+        transform-origin: 32px 42px;
+      }
+      @keyframes satsang-pulse {
+        0%, 100% { opacity: 0.88; }
+        50% { opacity: 1; }
+      }
+    </style>
+  </defs>
+
+  <!-- Two-step stone dais -->
+  <rect x="6" y="53" width="52" height="5.5" rx="1.5" fill="#4f6f99" stroke="#0a1324" stroke-width="2.1"/>
+  <rect x="10" y="48.5" width="44" height="5" rx="1.2" fill="url(#temple-dais)" stroke="#0a1324" stroke-width="2.1"/>
+
+  <!-- Sanctuary hall interior -->
+  <rect x="14" y="29" width="36" height="19.5" fill="#122340" stroke="#0a1324" stroke-width="2.1"/>
+
+  <!-- Three structural pillars -->
+  <rect x="14" y="29" width="4.5" height="19.5" fill="#dbeafe" stroke="#0a1324" stroke-width="1.8"/>
+  <rect x="29.75" y="29" width="4.5" height="19.5" fill="#dbeafe" stroke="#0a1324" stroke-width="1.8"/>
+  <rect x="45.5" y="29" width="4.5" height="19.5" fill="#dbeafe" stroke="#0a1324" stroke-width="1.8"/>
+
+  <!-- Central arched doorway & glowing gathering hearth -->
+  <g class="satsang-hearth">
+    <path d="M 24 48.5 V 39.5 A 8 8 0 0 1 40 39.5 V 48.5 Z"
+          fill="url(#hearth-glow)" stroke="#0a1324" stroke-width="2"/>
+    <circle cx="32" cy="41.5" r="3" fill="#fffbeb"/>
+  </g>
+
+  <!-- Lower sweeping upturned eave roof -->
+  <path d="M 4 29 Q 12 25 15 21 H 49 Q 52 25 60 29 L 52 31 H 12 Z"
+        fill="url(#temple-roof)" stroke="#0a1324" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <!-- Upper sweeping pagoda roof -->
+  <path d="M 9 20.5 Q 19 16 23 11 H 41 Q 45 16 55 20.5 L 48 22.5 H 16 Z"
+        fill="url(#temple-roof)" stroke="#0a1324" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <!-- Finial spire -->
+  <polygon points="32,4.5 36,11.5 28,11.5" fill="#fde047" stroke="#0a1324" stroke-width="2" stroke-linejoin="round"/>
+</svg>

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 import os
 from pathlib import Path
 import tomllib
@@ -14,6 +17,19 @@ from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event
 OFFLINE_SIGNALING_VALUES: Final[frozenset[str]] = frozenset(
     {"", "0", "false", "none", "off", "offline", "disabled"}
 )
+_OFFLINE_OVERRIDE_VAR: ContextVar[bool | None] = ContextVar(
+    "satya_offline_signaling_override", default=None
+)
+
+
+@contextmanager
+def offline_signaling_scope(enabled: bool = True) -> Iterator[None]:
+    """Temporarily force `signaling_base_url()` offline (`""`) for the current execution context."""
+    tok = _OFFLINE_OVERRIDE_VAR.set(True if enabled else False)
+    try:
+        yield
+    finally:
+        _OFFLINE_OVERRIDE_VAR.reset(tok)
 
 
 def repo_root() -> Path:
@@ -36,6 +52,8 @@ def load_ai_gm_toml_config(root: Path | None = None) -> dict[str, Any]:
 
 def signaling_base_url() -> str:
     """Resolve `SATYA_SIGNALING_URL` (`""` when explicitly disabled/offline)."""
+    if _OFFLINE_OVERRIDE_VAR.get() is True:
+        return ""
     raw = os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").strip()
     if raw.lower() in OFFLINE_SIGNALING_VALUES:
         return ""
@@ -206,6 +224,7 @@ __all__ = [
     "httpx_timeout",
     "is_loopback_url",
     "load_ai_gm_toml_config",
+    "offline_signaling_scope",
     "repo_root",
     "service_auth_headers",
     "signaling_base_url",

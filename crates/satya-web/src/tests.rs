@@ -289,9 +289,45 @@ fn test_ssr_shell_workspace_columns_and_combat_techniques() {
     assert!(html.contains("/pkg/satya_web.js"));
     assert!(html.contains("Satya // Engine"));
     assert!(html.contains("<h1>Satsang</h1>"));
+    assert!(html.contains(r#"href="/assets/icons/satya-lotus.svg""#));
+    assert!(html.contains(r#"src="/assets/icons/satsang-temple.svg""#));
+    assert!(html.contains(r#"data-tab-icons="true""#));
+    assert!(html.contains(r#"id="menu-tab-icons-toggle""#));
+    assert!(html.contains(r#"class="notebook-tab-icon""#));
+    let iggy_btn_idx = html.find(r#"id="tab-btn-iggy""#).unwrap();
+    let iggy_tag_start = html[..iggy_btn_idx].rfind('<').unwrap();
+    let iggy_btn_end = iggy_btn_idx + html[iggy_btn_idx..].find("</button>").unwrap();
+    let iggy_btn_html = &html[iggy_tag_start..iggy_btn_end];
+    assert!(
+        iggy_btn_html.contains(r#"style="display: none;""#),
+        "unexpected iggy button HTML: {iggy_btn_html}"
+    );
     assert!(!html.contains("SATYA // ENGINE (RUST + WASM)"));
     assert!(!html.contains("Apache Iggy + Avro v1/v2 Ready"));
     assert!(!html.contains("WebRTC + Durable Avro Event Stream"));
+
+    for (slug, _, _, _) in wasm_client::NOTEBOOK_TAB_SPECS {
+        assert!(
+            wasm_client::notebook_tab_icon_svg(slug).contains("<svg "),
+            "missing SVG icon for notebook tab {slug}"
+        );
+    }
+    assert!(wasm_client::is_session_gm_role(Some(
+        satya_schema::SessionRole::Gm
+    )));
+    assert!(wasm_client::is_session_gm_role(Some(
+        satya_schema::SessionRole::SoloGm
+    )));
+    assert!(wasm_client::is_session_gm_role(Some(
+        satya_schema::SessionRole::Host
+    )));
+    assert!(!wasm_client::is_session_gm_role(None));
+    assert!(!wasm_client::is_session_gm_role(Some(
+        satya_schema::SessionRole::Player
+    )));
+    assert!(!wasm_client::is_session_gm_role(Some(
+        satya_schema::SessionRole::Observer
+    )));
     for snippet in [
         "TTRPG Mode (GM + Players)",
         "TTRPG Mode (GM + AI + Players)",
@@ -665,6 +701,24 @@ fn test_character_wizard_and_sheet_roundtrip() {
         "wizard-stage-container",
         "char-sheet-preset-select",
         "char-sheet-stage-container",
+        "char-sheet-status-pill",
+        "char-sheet-vault-bar",
+        "char-sheet-vault-select",
+        "char-sheet-import-file-input",
+    ] {
+        assert!(html.contains(&format!(r#"id="{id}""#)));
+    }
+    assert!(html.contains(r#"<option value="" selected>Choose Character</option>"#));
+    assert!(html.contains("No Character Selected"));
+    assert!(!html.contains("Orbital Med-Assault Operator (Valkyrie Exo-Rig)"));
+
+    let empty_default = wasm_client::CharacterSheetState::default();
+    assert!(empty_default.is_unselected());
+    assert!(wasm_client::CharacterSheetState::from_preset("").is_unselected());
+    let sara_html = wasm_client::format_character_sheet_html(
+        &wasm_client::CharacterSheetState::from_preset("sara_valkyrie"),
+    );
+    for id in [
         "char-human-hit-svg",
         "char-sheet-skills-table",
         "char-sheet-talents-table",
@@ -674,7 +728,7 @@ fn test_character_wizard_and_sheet_roundtrip() {
         "char-sheet-gear-table",
         "char-sheet-notes-textarea",
     ] {
-        assert!(html.contains(&format!(r#"id="{id}""#)));
+        assert!(sara_html.contains(&format!(r#"id="{id}""#)));
     }
     assert!(html.contains("Method 1: Roll 2d4 + 3d5 (Drop Lowest d5)"));
     assert!(html.contains("Method 2: Roll 2d4 + 2d5 Pool (Keep Highest)"));
@@ -739,6 +793,8 @@ fn test_character_wizard_and_sheet_roundtrip() {
     let record = sheet.to_character_sheet_record("usr-sara");
     let mut restored = wasm_client::CharacterSheetState::default();
     restored.apply_character_sheet_record(&record);
+    assert!(!restored.is_unselected());
+    assert_eq!(restored.preset_id, "mateo_vance");
     assert_eq!(restored.character_name, "Mateo Vance");
     assert_eq!(restored.hit_zones[zone_idx].wound_tier, 3);
     assert_eq!(
