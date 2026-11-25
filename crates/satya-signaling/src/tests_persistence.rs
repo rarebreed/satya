@@ -299,7 +299,7 @@ async fn test_character_vault_export_import_anticheat_and_assets_emit_iggy_event
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     state
@@ -2017,7 +2017,7 @@ async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
     let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     let marcus_user = state
@@ -2476,7 +2476,7 @@ async fn test_ai_gm_service_generated_npc_visible_to_player_in_session_npcs_and_
         .unwrap();
     let player_user = state
         .auth
-        .verify_auth_token(&player_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
 
@@ -2592,14 +2592,14 @@ async fn test_solo_gm_session_rules_and_resume_upgrade() {
         .await
         .unwrap();
 
-    let sara_auth = state
+    let _sara_auth = state
         .auth
         .authenticate_user("sara_valkyrie", "satya-truth-2026")
         .await
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     let marcus_auth = state
@@ -2725,7 +2725,7 @@ async fn test_solo_gm_spoiler_shield_and_table_mutations() {
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     state
@@ -2939,7 +2939,7 @@ async fn test_load_all_awakened_starter_npcs_verified_official_and_lookup() {
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     state
@@ -3140,7 +3140,7 @@ async fn test_campaign_lore_catalog_visibility_and_traversal_guard() {
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
 
@@ -3286,7 +3286,7 @@ async fn test_delete_non_default_gm_docs_and_memories_protects_defaults() {
         .unwrap();
     let sara_user = state
         .auth
-        .verify_auth_token(&sara_auth.auth_token)
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     state

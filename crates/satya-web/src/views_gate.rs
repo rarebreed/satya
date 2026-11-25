@@ -88,6 +88,10 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                         <span>"Display / Character Name"</span>
                         <input id="auth-display-name" type="text" placeholder="e.g. Sean (GM)" value="Sean (GM)"/>
                     </label>
+                    <label>
+                        <span>"Email (Optional, Private — for GM Search & Offline Alerts)"</span>
+                        <input id="auth-email" type="email" placeholder="e.g. gm@example.com"/>
+                    </label>
                 </div>
                 <div class="btn-row">
                     <button
@@ -133,8 +137,78 @@ pub fn AuthAndSessionGate() -> impl IntoView {
 
             <div id="session-card" class="card session-card" style="display: none;">
                 <div class="card-header">
-                    <h2>"2. Create, Join, or Resume Password-Protected Session"</h2>
-                    <span class="subtitle">"TTRPG (GM / AI-GM / Players) or Meeting (Host / Participants) · Auto-saves Chat, Rolls, Map & Combat State"</span>
+                    <h2>"2. Find GM Campaigns, Join, or Host a Session"</h2>
+                    <span class="subtitle">"Search by GM email or @handle · Request to Join · GM Campaign & Session Vault"</span>
+                </div>
+                <div class="directory-section">
+                    <div class="directory-section-header">
+                        <strong>"Find a GM's Campaigns & Sessions"</strong>
+                        <span class="subtitle">"Search by GM email address or @username handle"</span>
+                    </div>
+                    <div class="btn-row" style="margin-top: 0.35rem; flex-wrap: wrap;">
+                        <input
+                            id="directory-gm-query"
+                            type="text"
+                            style="flex: 1 1 240px;"
+                            placeholder="e.g. gm_sean@satya.local or @gm_sean"
+                        />
+                        <button
+                            type="button"
+                            id="btn-search-gm-directory"
+                            class="btn btn-primary"
+                            onclick="window.satyaSearchGmDirectory()"
+                            on:click=move |_| wasm_client::satya_search_gm_directory()
+                        >
+                            "Search GM"
+                        </button>
+                    </div>
+                    <div id="directory-results-list" class="directory-results-list"></div>
+                    <div id="my-join-requests-list" class="join-requests-list"></div>
+                </div>
+                <div id="non-gm-host-notice" class="feedback-box" style="display: none; margin-bottom: 0.65rem;">
+                    "Player account: you can search GM campaigns above, request to join, or join/resume sessions with an invite password."
+                </div>
+                <div id="gm-campaigns-section" class="directory-section" style="display: none;">
+                    <div class="directory-section-header">
+                        <strong>"GM Campaigns & Incoming Join Requests"</strong>
+                        <span id="account-quota-pill" class="pill pill-muted">"Quota: —"</span>
+                    </div>
+                    <div class="form-grid" style="margin-top: 0.4rem;">
+                        <label>
+                            <span>"New Campaign Title"</span>
+                            <input id="campaign-title-input" type="text" placeholder="e.g. Satyang or DAISE"/>
+                        </label>
+                        <label>
+                            <span>"Campaign Description"</span>
+                            <input id="campaign-desc-input" type="text" placeholder="Short pitch for players"/>
+                        </label>
+                        <label class="recip-option" for="campaign-discoverable-checkbox">
+                            <input id="campaign-discoverable-checkbox" type="checkbox" checked/>
+                            <span>"Discoverable in GM Search"</span>
+                        </label>
+                    </div>
+                    <div class="btn-row" style="margin-top: 0.35rem;">
+                        <button
+                            type="button"
+                            id="btn-create-campaign"
+                            class="btn btn-accent"
+                            onclick="window.satyaCreateCampaign()"
+                            on:click=move |_| wasm_client::satya_create_campaign()
+                        >
+                            "Create Campaign"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-refresh-join-requests"
+                            class="btn btn-secondary"
+                            onclick="window.satyaRefreshJoinRequests()"
+                            on:click=move |_| wasm_client::satya_refresh_join_requests()
+                        >
+                            "Refresh Requests"
+                        </button>
+                    </div>
+                    <div id="gm-campaigns-list" class="gm-campaigns-list"></div>
+                    <div id="gm-join-requests-list" class="join-requests-list"></div>
                 </div>
                 <div class="form-grid" style="margin-bottom: 0.65rem;">
                     <label style="grid-column: 1 / -1;">
@@ -204,10 +278,30 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                             >
                                 "Import .satyasession"
                             </button>
+                            <button
+                                type="button"
+                                id="btn-delete-saved-session"
+                                class="btn btn-danger"
+                                title="Delete the selected saved session to reclaim GM quota"
+                                onclick="window.satyaDeleteSavedSession()"
+                                on:click=move |_| wasm_client::satya_delete_saved_session()
+                            >
+                                "Delete Saved"
+                            </button>
                         </div>
                     </label>
                 </div>
                 <div class="form-grid">
+                    <label>
+                        <span>"Campaign (GM Host)"</span>
+                        <select id="session-campaign-select">
+                            <option value="">"Standalone Session (No Campaign)"</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>"Session Title (Optional)"</span>
+                        <input id="session-title-input" type="text" placeholder="e.g. Ep. 1: Orbital Breach"/>
+                    </label>
                     <label>
                         <span>"Session ID"</span>
                         <input id="session-id-input" type="text" placeholder="e.g. harsh-reality-ep1" value="harsh-reality-ep1"/>
@@ -244,6 +338,14 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                             <option value="PLAYER">"Player"</option>
                             <option value="OBSERVER">"Observer"</option>
                         </select>
+                    </label>
+                    <label class="recip-option" for="session-discoverable-checkbox">
+                        <input id="session-discoverable-checkbox" type="checkbox" checked/>
+                        <span>"Discoverable in GM Search"</span>
+                    </label>
+                    <label class="recip-option" for="session-allow-requests-checkbox">
+                        <input id="session-allow-requests-checkbox" type="checkbox" checked/>
+                        <span>"Allow Request to Join"</span>
                     </label>
                     <input id="enable-ai-gm" type="checkbox" style="display: none"/>
                 </div>

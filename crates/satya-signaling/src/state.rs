@@ -2,10 +2,13 @@
 //! and session disconnect lifecycle processing for the Satya signaling server.
 
 use crate::auth::{AuthAndSessionManager, SessionDisconnectSummary};
+use crate::email_notifier::{EmailNotifier, build_email_notifier};
 use crate::player_ai_api::SessionAiPlayerEntry;
+use crate::rate_limit::RateLimiter;
 use satya_schema::{
-    LifecycleEventType, MessageVisibility, Participant, ServerWsPacket, SessionLifecycleEvent,
-    SessionMode, SessionRole, WebRtcEventKind, WebRtcTelemetryEvent, subjects,
+    AccountWsPacket, LifecycleEventType, MessageVisibility, Participant, ServerWsPacket,
+    SessionLifecycleEvent, SessionMode, SessionRole, WebRtcEventKind, WebRtcTelemetryEvent,
+    subjects,
 };
 use satya_storage::{EventLogRouter, StorageConfig};
 use std::collections::HashMap;
@@ -60,6 +63,12 @@ pub struct SignalingAppState {
     pub next_conn_id: AtomicU64,
     /// Active WebSocket connections per `session_id -> (user_id -> (conn_id, tx))`.
     pub active_sockets: RwLock<SessionSocketMap>,
+    /// Account-level notification WebSocket connections keyed by `user_id -> (conn_id -> tx)`.
+    pub account_sockets: RwLock<HashMap<String, HashMap<u64, mpsc::UnboundedSender<String>>>>,
+    /// Sliding-window anti-bot rate limiter.
+    pub rate_limiter: RateLimiter,
+    /// Outbound email notifier for offline GM join-request alerts.
+    pub email_notifier: Arc<dyn EmailNotifier>,
     /// Configured AI Player agents per `session_id -> (player_user_id -> SessionAiPlayerEntry)`.
     pub ai_players: RwLock<HashMap<String, HashMap<String, SessionAiPlayerEntry>>>,
     /// Per-session autonomous AI rally scheduler state (`session_id -> SessionRallyState`).
@@ -74,8 +83,11 @@ impl SignalingAppState {
     ) -> anyhow::Result<Arc<Self>> {
         let base_dir = base_dir.into();
         let campaign_pack = config.ai_gm.campaign_pack.clone();
-        let auth = AuthAndSessionManager::new(&base_dir, &config.auth).await?;
+        let auth =
+            AuthAndSessionManager::new_with_quotas(&base_dir, &config.auth, config.quotas.clone())
+                .await?;
         let start_seq = auth.max_persisted_sequence_num().await.saturating_add(1);
+        let email_notifier = build_email_notifier(&config.email, auth.db_pool().clone());
         let storage = Arc::new(EventLogRouter::new(config, &base_dir).await?);
 
         Ok(Arc::new(Self {
@@ -85,9 +97,53 @@ impl SignalingAppState {
             sequence_counter: AtomicI64::new(start_seq),
             next_conn_id: AtomicU64::new(1),
             active_sockets: RwLock::new(HashMap::new()),
+            account_sockets: RwLock::new(HashMap::new()),
+            rate_limiter: RateLimiter::new(),
+            email_notifier,
             ai_players: RwLock::new(HashMap::new()),
             ai_rally_counters: RwLock::new(HashMap::new()),
         }))
+    }
+
+    /// Returns `true` if `user_id` currently has an open `/ws/notifications` or `/ws/session` socket.
+    pub async fn is_user_online(&self, user_id: &str) -> bool {
+        let has_acct_ws = self
+            .account_sockets
+            .read()
+            .await
+            .get(user_id)
+            .is_some_and(|m| !m.is_empty());
+        if has_acct_ws {
+            return true;
+        }
+        let guard = self.active_sockets.read().await;
+        guard.values().any(|room| room.contains_key(user_id))
+    }
+
+    /// Pushes an [`AccountWsPacket`] to every active `/ws/notifications` socket belonging to `user_id`.
+    pub async fn send_account_notification(&self, user_id: &str, pkt: &AccountWsPacket) {
+        let Ok(payload) = serde_json::to_string(pkt) else {
+            return;
+        };
+        let guard = self.account_sockets.read().await;
+        if let Some(conns) = guard.get(user_id) {
+            for tx in conns.values() {
+                let _ = tx.send(payload.clone());
+            }
+        }
+    }
+
+    /// Pushes a [`ServerWsPacket`] to `owner_user_id` across any active `/ws/session` room they are in.
+    pub async fn send_user_live_session_packet(&self, user_id: &str, pkt: &ServerWsPacket) {
+        let Ok(payload) = serde_json::to_string(pkt) else {
+            return;
+        };
+        let guard = self.active_sockets.read().await;
+        for room_map in guard.values() {
+            if let Some((_, tx)) = room_map.get(user_id) {
+                let _ = tx.send(payload.clone());
+            }
+        }
     }
 
     /// Returns the next monotonically increasing sequence number for event metadata.

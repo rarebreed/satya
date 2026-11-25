@@ -15,8 +15,9 @@
 
 use crate::wasm_client::workspace_drawers::FloatingPaneKind;
 use satya_schema::{
-    AuthSuccessResponse, CampaignLoreChapterSummary, ChannelContext, GmDocumentRecord, GmLookupHit,
-    GmMemoryNoteRecord, Participant, SessionMode, SessionNpcEntry,
+    AccountQuotaUsage, AuthSuccessResponse, CampaignLoreChapterSummary, CampaignSummary,
+    ChannelContext, DirectorySearchResponse, GmDocumentRecord, GmLookupHit, GmMemoryNoteRecord,
+    JoinRequestRecord, Participant, SessionMode, SessionNpcEntry,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -208,6 +209,20 @@ pub struct SatyaWasmState {
     pub last_omnisearch_hits: Vec<GmLookupHit>,
     /// Item ID currently displayed inside `#gm-archivist-modal`, if open.
     pub archivist_modal_item_id: Option<String>,
+    /// Campaigns owned by the authenticated GM (`GET /api/campaigns`).
+    pub my_campaigns: Vec<CampaignSummary>,
+    /// Most recent GM directory search response (`GET /api/directory/search`).
+    pub directory_results: Option<DirectorySearchResponse>,
+    /// Incoming join requests awaiting this GM's decision (`GET /api/join-requests/incoming`).
+    pub incoming_join_requests: Vec<JoinRequestRecord>,
+    /// Outbound join requests submitted by this user (`GET /api/join-requests/mine`).
+    pub my_join_requests: Vec<JoinRequestRecord>,
+    /// Per-user quota usage and limits (`GET /api/auth/quotas`).
+    pub quota_usage: Option<AccountQuotaUsage>,
+    /// Account-level notification WebSocket (`/ws/notifications`).
+    pub notifications_ws: Option<WebSocket>,
+    /// Whether the header notifications popover is currently expanded.
+    pub notifications_popover_open: bool,
 }
 
 impl Default for SatyaWasmState {
@@ -281,6 +296,13 @@ impl Default for SatyaWasmState {
             reader_source_mode: "RULES".to_string(),
             last_omnisearch_hits: Vec::new(),
             archivist_modal_item_id: None,
+            my_campaigns: Vec::new(),
+            directory_results: None,
+            incoming_join_requests: Vec::new(),
+            my_join_requests: Vec::new(),
+            quota_usage: None,
+            notifications_ws: None,
+            notifications_popover_open: false,
         }
     }
 }

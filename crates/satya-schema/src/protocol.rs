@@ -1,5 +1,6 @@
 //! Shared client-to-server and server-to-client HTTP REST & WebSocket protocol DTOs.
 
+pub use crate::campaigns_dto::*;
 use crate::events::{
     AiGmOperatingMode, ChannelContext, ChatMessageEvent, CombatStance, InteractionTurnType,
     MessageVisibility, TtrpgMechanicsEvent, WebRtcEventKind, WgpuDiceSpec,
@@ -20,6 +21,9 @@ pub struct RegisterRequest {
     pub password: String,
     /// Initial display or character name.
     pub display_name: String,
+    /// Optional unique email address for offline GM notifications and directory lookup.
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 /// HTTP request body for `POST /api/auth/login`.
@@ -40,32 +44,42 @@ pub struct LogoutRequest {
     pub reason: Option<String>,
 }
 
-/// Platform-wide account role controlling access to administrative UI panes and storage APIs.
+/// Platform-wide account role controlling campaign/session hosting and administrative APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AccountRole {
-    /// Standard platform user with access to sessions, WebRTC, chat, and TTRPG mechanics.
+    /// Standard platform user who can search directories, request to join, and play in sessions.
     #[default]
     User,
-    /// Platform administrator with access to the Apache Iggy / Avro Inspector UI and storage flush/metrics APIs.
+    /// Game Master / Host account authorized to create campaigns and sessions.
+    Gm,
+    /// Platform administrator with full GM privileges plus Apache Iggy Inspector and RBAC administration.
     Admin,
 }
 
 impl AccountRole {
-    /// Returns the uppercase database string representation (`"USER"` or `"ADMIN"`).
+    /// Returns the uppercase database string representation (`"USER"`, `"GM"`, or `"ADMIN"`).
     pub fn as_db_str(self) -> &'static str {
         match self {
             Self::User => "USER",
+            Self::Gm => "GM",
             Self::Admin => "ADMIN",
         }
     }
 
-    /// Parses a database role string (`"ADMIN"` or `"USER"`) into an [`AccountRole`].
+    /// Parses a database role string (`"ADMIN"`, `"GM"`, or `"USER"`) into an [`AccountRole`].
     pub fn from_db_str(raw: &str) -> Self {
         match raw.trim().to_uppercase().as_str() {
             "ADMIN" => Self::Admin,
+            "GM" => Self::Gm,
             _ => Self::User,
         }
+    }
+
+    /// Returns `true` when this account role is authorized to create campaigns and host sessions.
+    #[must_use]
+    pub const fn can_host_sessions(self) -> bool {
+        matches!(self, Self::Gm | Self::Admin)
     }
 }
 
@@ -80,9 +94,12 @@ pub struct AuthSuccessResponse {
     pub username: String,
     /// Default display name associated with the user account.
     pub display_name: String,
-    /// Platform-level account role (`USER` or `ADMIN`).
+    /// Platform-level account role (`USER`, `GM`, or `ADMIN`).
     #[serde(default)]
     pub account_role: AccountRole,
+    /// Optional email address associated with the caller's own account (never exposed to other users).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 /// Per-session AI Game Master model provider and ephemeral BYOK credential configuration.
@@ -138,6 +155,18 @@ pub struct CreateSessionRequest {
     /// Optional initial AI GM provider, model, and ephemeral BYOK credential configuration.
     #[serde(default)]
     pub ai_gm_config: Option<AiGmProviderConfig>,
+    /// Optional parent campaign ID (`camp_<uuid>`) owned by the creator.
+    #[serde(default)]
+    pub campaign_id: Option<String>,
+    /// Optional human-friendly session title displayed in the directory.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Whether this session is discoverable via GM directory search (defaults to `true`).
+    #[serde(default = "default_true_flag")]
+    pub is_discoverable: bool,
+    /// Whether players may submit join requests for this session (defaults to `true`).
+    #[serde(default = "default_true_flag")]
+    pub allow_join_requests: bool,
 }
 
 /// HTTP request body for `POST /api/sessions/join`.
@@ -145,8 +174,12 @@ pub struct CreateSessionRequest {
 pub struct JoinSessionRequest {
     /// Identifier of the existing session room to join.
     pub session_id: String,
-    /// Password for the target session room.
+    /// Password for the target session room (optional when `approval_token` is supplied).
+    #[serde(default)]
     pub session_password: String,
+    /// Optional single-use, user-bound approval token issued when a GM approves a join request.
+    #[serde(default)]
+    pub approval_token: Option<String>,
     /// Role claimed by the joining participant.
     pub role: SessionRole,
     /// Optional display or character name override for this session.
@@ -359,6 +392,11 @@ pub enum ServerWsPacket {
     NpcRosterUpdated {
         /// Session ID whose NPC roster changed.
         session_id: String,
+    },
+    /// Notifies a live session's owning GM/Host that a player submitted a Request-to-Join.
+    JoinRequestNotification {
+        /// Newly created join request record.
+        request: Box<crate::campaigns_dto::JoinRequestRecord>,
     },
 }
 

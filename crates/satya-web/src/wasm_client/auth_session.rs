@@ -137,10 +137,18 @@ pub fn satya_register() {
             raw_display
         };
 
+        let email_raw = input_value("auth-email").trim().to_string();
+        let email = if email_raw.is_empty() {
+            None
+        } else {
+            Some(email_raw)
+        };
+
         let req = RegisterRequest {
             username,
             password,
             display_name,
+            email,
         };
         match fetch_json::<_, AuthSuccessResponse>("POST", "/api/auth/register", None, Some(&req))
             .await
@@ -193,6 +201,7 @@ pub(crate) async fn perform_login() -> bool {
 pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     let short_id: String = data.user_id.chars().take(8).collect();
     let is_admin = data.account_role == AccountRole::Admin;
+    let can_host = data.account_role.can_host_sessions();
     let role_badge = data.account_role.as_db_str();
     set_text(
         "auth-status-pill",
@@ -201,6 +210,9 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     set_class("auth-status-pill", "pill pill-active");
     set_button_disabled("btn-logout", false);
     set_button_disabled("btn-menu-logout", false);
+    set_display("notifications-bell-wrap", "inline-flex");
+    set_display("gm-campaigns-section", if can_host { "block" } else { "none" });
+    set_display("non-gm-host-notice", if can_host { "none" } else { "block" });
 
     // Hide the Authentication pane once logged in and reveal the Session & Workspace panes
     set_display("auth-card", "none");
@@ -228,6 +240,10 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     });
     sync_google_auth_status_from_server();
     satya_refresh_saved_sessions();
+    crate::wasm_client::campaigns_directory::satya_refresh_my_campaigns();
+    crate::wasm_client::campaigns_directory::satya_refresh_join_requests();
+    crate::wasm_client::campaigns_directory::refresh_account_quotas();
+    crate::wasm_client::campaigns_directory::connect_notifications_websocket();
     crate::wasm_client::map_vault::satya_refresh_saved_maps();
 
     if is_admin {
@@ -308,6 +324,21 @@ pub fn satya_create_session() {
             None
         };
 
+        let campaign_raw = select_value("session-campaign-select").trim().to_string();
+        let campaign_id = if campaign_raw.is_empty() {
+            None
+        } else {
+            Some(campaign_raw)
+        };
+        let title_raw = input_value("session-title-input").trim().to_string();
+        let title = if title_raw.is_empty() {
+            None
+        } else {
+            Some(title_raw)
+        };
+        let is_discoverable = input_checked("session-discoverable-checkbox");
+        let allow_join_requests = input_checked("session-allow-requests-checkbox");
+
         let req = CreateSessionRequest {
             session_id,
             session_password,
@@ -316,6 +347,10 @@ pub fn satya_create_session() {
             display_name,
             enable_ai_gm,
             ai_gm_config,
+            campaign_id,
+            title,
+            is_discoverable,
+            allow_join_requests,
         };
 
         match fetch_json::<_, SessionEnterResponse>(
@@ -367,6 +402,7 @@ pub fn satya_join_session() {
         let req = JoinSessionRequest {
             session_id,
             session_password,
+            approval_token: None,
             role,
             display_name,
         };
@@ -746,11 +782,18 @@ pub fn satya_logout() {
         local_storage_remove(AUTH_TOKEN_STORAGE_KEY);
         local_storage_remove(ACTIVE_SESSION_STORAGE_KEY);
         cleanup_client_session_state();
+        crate::wasm_client::campaigns_directory::disconnect_notifications_websocket();
         with_state_mut(|st| {
             st.auth_token = None;
             st.user = None;
             st.google_access_token = None;
             st.google_linked = false;
+            st.my_campaigns.clear();
+            st.directory_results = None;
+            st.incoming_join_requests.clear();
+            st.my_join_requests.clear();
+            st.quota_usage = None;
+            st.notifications_popover_open = false;
         });
         if let Some(win) = window() {
             let _ = js_sys::Reflect::set(
@@ -774,6 +817,15 @@ pub fn satya_logout() {
         set_display("session-card", "none");
         set_display("workspace-panel", "none");
         set_display("hamburger-menu-dropdown", "none");
+        set_display("notifications-bell-wrap", "none");
+        set_display("notifications-popover", "none");
+        set_display("live-notification-toast", "none");
+        set_display("gm-campaigns-section", "none");
+        set_display("non-gm-host-notice", "none");
+        set_html("directory-results-list", "");
+        set_html("gm-campaigns-list", "");
+        set_html("gm-join-requests-list", "");
+        set_html("my-join-requests-list", "");
         set_text("btn-menu-toggle-auth-pane", "Hide Auth Pane");
         set_text("btn-menu-toggle-session-pane", "Show Session Pane");
         set_text("menu-user-details", "Not Logged In");

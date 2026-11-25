@@ -13,11 +13,12 @@ use argon2::{
 use chrono::Utc;
 pub use satya_schema::{AccountRole, AuthSuccessResponse};
 use satya_schema::{
-    AiGmOperatingMode, AiGmProviderConfig, CharacterSheetRecord, CombatTrackerState,
-    GmContextResponse, GmDocumentRecord, GmMapUpdateRequest, GmMemoryNoteRecord,
-    GoogleAuthStatusResponse, Participant, ParticipantKind, SessionMode, SessionRole,
+    AccountQuotaUsage, AiGmOperatingMode, AiGmProviderConfig, CharacterSheetRecord,
+    CombatTrackerState, GmContextResponse, GmDocumentRecord, GmMapUpdateRequest,
+    GmMemoryNoteRecord, GoogleAuthStatusResponse, Participant, ParticipantKind, SessionMode,
+    SessionRole,
 };
-use satya_storage::AuthConfig;
+use satya_storage::{AuthConfig, QuotaConfig};
 use serde::{Deserialize, Serialize};
 use sqlx::{
     Row, SqlitePool,
@@ -39,9 +40,12 @@ pub struct UserAccount {
     pub username: String,
     /// Default display or character name for this user.
     pub display_name: String,
+    /// Optional unique email address (kept private; used for directory lookup & offline GM alerts).
+    #[serde(default)]
+    pub email: Option<String>,
     /// Argon2id encoded password hash string.
     pub password_hash: String,
-    /// Platform-level account role (`USER` or `ADMIN`).
+    /// Platform-level account role (`USER`, `GM`, or `ADMIN`).
     #[serde(default)]
     pub account_role: AccountRole,
     /// Account creation timestamp in UTC microseconds since Unix epoch.
@@ -84,6 +88,16 @@ pub struct ProtectedSession {
     pub session_mode: SessionMode,
     /// Persistent `user_id` of the user who created/hosted the session.
     pub host_user_id: String,
+    /// Persistent `user_id` of the owning GM (matches `host_user_id` for GM-owned sessions).
+    pub owner_user_id: String,
+    /// Optional parent campaign ID (`camp_<uuid>`).
+    pub campaign_id: Option<String>,
+    /// Optional human-friendly session title.
+    pub title: Option<String>,
+    /// Whether this session is discoverable via GM directory search.
+    pub is_discoverable: bool,
+    /// Whether players may submit join requests for this session.
+    pub allow_join_requests: bool,
     /// Map of active participants in the session keyed by `user_id`.
     pub roster: HashMap<String, Participant>,
     /// Optional in-memory AI GM provider & ephemeral BYOK credential vault.
@@ -137,6 +151,8 @@ pub struct SessionDisconnectSummary {
 pub struct AuthAndSessionManager {
     pub(crate) db_pool: SqlitePool,
     bootstrap_admins: HashSet<String>,
+    bootstrap_gms: HashSet<String>,
+    pub(crate) quotas: QuotaConfig,
     google_oauth_client_id: Option<String>,
     google_picker_api_key: Option<String>,
     pub(crate) users_by_username: RwLock<HashMap<String, UserAccount>>,
@@ -146,11 +162,45 @@ pub struct AuthAndSessionManager {
     pub(crate) join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
 }
 
+/// Typed parameters for [`AuthAndSessionManager::create_session_with_params`].
+#[derive(Debug, Clone)]
+pub struct CreateSessionParams<'a> {
+    /// Unique identifier for the session room to create or reopen.
+    pub session_id: &'a str,
+    /// Plaintext session password (hashed with Argon2id on creation).
+    pub session_password: &'a str,
+    /// Business operating mode (`TTRPG` or `MEETING`).
+    pub session_mode: SessionMode,
+    /// Role claimed by the session creator.
+    pub role: SessionRole,
+    /// Optional display name override for this session.
+    pub display_name_override: Option<String>,
+    /// Whether an autonomous AI Game Master is enabled.
+    pub enable_ai_gm: bool,
+    /// Optional parent campaign ID (`camp_<uuid>`).
+    pub campaign_id: Option<&'a str>,
+    /// Optional human-friendly session title.
+    pub title: Option<String>,
+    /// Whether this session is discoverable via GM directory search.
+    pub is_discoverable: bool,
+    /// Whether players may submit join requests for this session.
+    pub allow_join_requests: bool,
+}
+
 impl AuthAndSessionManager {
+    /// Initializes the SQLx SQLite authentication and session manager with default [`QuotaConfig`].
+    pub async fn new(base_dir: impl AsRef<Path>, auth_config: &AuthConfig) -> anyhow::Result<Self> {
+        Self::new_with_quotas(base_dir, auth_config, QuotaConfig::default()).await
+    }
+
     /// Initializes the SQLx SQLite authentication and session manager rooted at `base_dir`,
     /// running schema migrations, seeding default demo accounts if the `users` table is empty,
-    /// and promoting any configured `bootstrap_admins` to [`AccountRole::Admin`].
-    pub async fn new(base_dir: impl AsRef<Path>, auth_config: &AuthConfig) -> anyhow::Result<Self> {
+    /// and promoting configured `bootstrap_admins` and `bootstrap_gms`.
+    pub async fn new_with_quotas(
+        base_dir: impl AsRef<Path>,
+        auth_config: &AuthConfig,
+        quotas: QuotaConfig,
+    ) -> anyhow::Result<Self> {
         let connect_opts =
             Self::resolve_sqlite_options(base_dir.as_ref(), &auth_config.database_url)?;
         let db_pool = SqlitePoolOptions::new()
@@ -165,6 +215,7 @@ impl AuthAndSessionManager {
                 user_id       TEXT PRIMARY KEY NOT NULL,
                 username      TEXT UNIQUE NOT NULL,
                 display_name  TEXT NOT NULL,
+                email         TEXT,
                 password_hash TEXT NOT NULL,
                 account_role  TEXT NOT NULL DEFAULT 'USER',
                 created_at_us INTEGER NOT NULL
@@ -234,17 +285,69 @@ impl AuthAndSessionManager {
                 user_id       TEXT NOT NULL,
                 created_at_us INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS campaigns (
+                campaign_id     TEXT PRIMARY KEY NOT NULL,
+                owner_user_id   TEXT NOT NULL,
+                slug            TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                description     TEXT NOT NULL DEFAULT '',
+                setting_pack    TEXT NOT NULL DEFAULT 'awakened',
+                is_discoverable INTEGER NOT NULL DEFAULT 1,
+                is_archived     INTEGER NOT NULL DEFAULT 0,
+                created_at_us   INTEGER NOT NULL,
+                updated_at_us   INTEGER NOT NULL,
+                UNIQUE(owner_user_id, slug COLLATE NOCASE)
+            );
+            CREATE INDEX IF NOT EXISTS idx_campaigns_owner ON campaigns(owner_user_id, updated_at_us DESC);
             CREATE TABLE IF NOT EXISTS saved_sessions (
-                session_id       TEXT PRIMARY KEY NOT NULL,
-                password_hash    TEXT NOT NULL,
-                session_mode     TEXT NOT NULL,
-                host_user_id     TEXT NOT NULL,
-                campaign_tag     TEXT NOT NULL,
-                enable_ai_gm     INTEGER NOT NULL DEFAULT 0,
-                ai_provider_json TEXT,
-                active_map_json  TEXT,
-                created_at_us    INTEGER NOT NULL,
-                updated_at_us    INTEGER NOT NULL
+                session_id          TEXT PRIMARY KEY NOT NULL,
+                password_hash       TEXT NOT NULL,
+                session_mode        TEXT NOT NULL,
+                host_user_id        TEXT NOT NULL,
+                owner_user_id       TEXT,
+                campaign_id         TEXT,
+                title               TEXT,
+                is_discoverable     INTEGER NOT NULL DEFAULT 1,
+                allow_join_requests INTEGER NOT NULL DEFAULT 1,
+                campaign_tag        TEXT NOT NULL,
+                enable_ai_gm        INTEGER NOT NULL DEFAULT 0,
+                ai_provider_json    TEXT,
+                active_map_json     TEXT,
+                created_at_us       INTEGER NOT NULL,
+                updated_at_us       INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS session_join_requests (
+                request_id             TEXT PRIMARY KEY NOT NULL,
+                session_id             TEXT NOT NULL,
+                campaign_id            TEXT,
+                owner_user_id          TEXT NOT NULL,
+                requester_user_id      TEXT NOT NULL,
+                requester_username     TEXT NOT NULL,
+                requester_display_name TEXT NOT NULL,
+                requested_role         TEXT NOT NULL,
+                message                TEXT,
+                status                 TEXT NOT NULL,
+                approval_token         TEXT,
+                decision_note          TEXT,
+                emailed_offline        INTEGER NOT NULL DEFAULT 0,
+                created_at_us          INTEGER NOT NULL,
+                updated_at_us          INTEGER NOT NULL,
+                expires_at_us          INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_join_req_owner
+                ON session_join_requests(owner_user_id, status, updated_at_us DESC);
+            CREATE INDEX IF NOT EXISTS idx_join_req_requester
+                ON session_join_requests(requester_user_id, status, updated_at_us DESC);
+            CREATE INDEX IF NOT EXISTS idx_join_req_session
+                ON session_join_requests(session_id, requester_user_id);
+            CREATE TABLE IF NOT EXISTS email_outbox (
+                outbox_id     TEXT PRIMARY KEY NOT NULL,
+                to_email      TEXT NOT NULL,
+                subject       TEXT NOT NULL,
+                body_text     TEXT NOT NULL,
+                request_id    TEXT NOT NULL,
+                status        TEXT NOT NULL,
+                created_at_us INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS session_participants (
                 session_id    TEXT NOT NULL,
@@ -312,8 +415,39 @@ impl AuthAndSessionManager {
         .execute(&db_pool)
         .await?;
 
+        // Idempotent column migrations for pre-existing SQLite databases
+        for alter_sql in [
+            "ALTER TABLE users ADD COLUMN email TEXT",
+            "ALTER TABLE saved_sessions ADD COLUMN owner_user_id TEXT",
+            "ALTER TABLE saved_sessions ADD COLUMN campaign_id TEXT",
+            "ALTER TABLE saved_sessions ADD COLUMN title TEXT",
+            "ALTER TABLE saved_sessions ADD COLUMN is_discoverable INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE saved_sessions ADD COLUMN allow_join_requests INTEGER NOT NULL DEFAULT 1",
+        ] {
+            let _ = sqlx::query(alter_sql).execute(&db_pool).await;
+        }
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase
+                ON users(email COLLATE NOCASE) WHERE email IS NOT NULL AND email != '';
+            UPDATE saved_sessions
+                SET owner_user_id = host_user_id
+                WHERE owner_user_id IS NULL OR owner_user_id = '';
+            CREATE INDEX IF NOT EXISTS idx_saved_sessions_owner
+                ON saved_sessions(owner_user_id, campaign_id, updated_at_us DESC);
+            "#,
+        )
+        .execute(&db_pool)
+        .await?;
+
         let bootstrap_admins: HashSet<String> = auth_config
             .bootstrap_admins
+            .iter()
+            .map(|u| u.trim().to_lowercase())
+            .filter(|u| !u.is_empty())
+            .collect();
+        let bootstrap_gms: HashSet<String> = auth_config
+            .bootstrap_gms
             .iter()
             .map(|u| u.trim().to_lowercase())
             .filter(|u| !u.is_empty())
@@ -325,28 +459,36 @@ impl AuthAndSessionManager {
 
         if existing_count == 0 {
             let defaults = [
-                ("u-demo-gm-sean", "gm_sean", "Sean (GM)"),
-                ("u-demo-sara", "sara_valkyrie", "Sara (Valkyrie)"),
-                ("u-demo-marcus", "marcus_recon", "Marcus (Recon)"),
-                ("u-demo-host-elena", "host_elena", "Elena (Meeting Host)"),
+                ("u-demo-gm-sean", "gm_sean", "Sean (GM)", "gm_sean@satya.local"),
+                ("u-demo-sara", "sara_valkyrie", "Sara (Valkyrie)", "sara@satya.local"),
+                ("u-demo-marcus", "marcus_recon", "Marcus (Recon)", "marcus@satya.local"),
+                (
+                    "u-demo-host-elena",
+                    "host_elena",
+                    "Elena (Meeting Host)",
+                    "elena@satya.local",
+                ),
             ];
-            for (uid, uname, dname) in defaults {
+            for (uid, uname, dname, email) in defaults {
                 let hash = Self::hash_secret("satya-truth-2026")?;
                 let role = if bootstrap_admins.contains(uname) {
                     AccountRole::Admin
+                } else if bootstrap_gms.contains(uname) {
+                    AccountRole::Gm
                 } else {
                     AccountRole::User
                 };
                 let now_us = Utc::now().timestamp_micros();
                 sqlx::query(
                     r#"
-                    INSERT INTO users (user_id, username, display_name, password_hash, account_role, created_at_us)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    INSERT INTO users (user_id, username, display_name, email, password_hash, account_role, created_at_us)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                     "#,
                 )
                 .bind(uid)
                 .bind(uname)
                 .bind(dname)
+                .bind(email)
                 .bind(&hash)
                 .bind(role.as_db_str())
                 .bind(now_us)
@@ -360,10 +502,18 @@ impl AuthAndSessionManager {
                     .execute(&db_pool)
                     .await?;
             }
+            for gm_uname in &bootstrap_gms {
+                sqlx::query(
+                    "UPDATE users SET account_role = 'GM' WHERE username = ?1 AND account_role = 'USER'",
+                )
+                .bind(gm_uname)
+                .execute(&db_pool)
+                .await?;
+            }
         }
 
         let rows = sqlx::query(
-            "SELECT user_id, username, display_name, password_hash, account_role, created_at_us FROM users",
+            "SELECT user_id, username, display_name, email, password_hash, account_role, created_at_us FROM users",
         )
         .fetch_all(&db_pool)
         .await?;
@@ -373,10 +523,17 @@ impl AuthAndSessionManager {
         for row in rows {
             let uname: String = row.try_get("username")?;
             let role_str: String = row.try_get("account_role")?;
+            let email: Option<String> = row
+                .try_get::<Option<String>, _>("email")
+                .ok()
+                .flatten()
+                .map(|s| s.trim().to_lowercase())
+                .filter(|s| !s.is_empty());
             let acct = UserAccount {
                 user_id: row.try_get("user_id")?,
                 username: uname.clone(),
                 display_name: row.try_get("display_name")?,
+                email,
                 password_hash: row.try_get("password_hash")?,
                 account_role: AccountRole::from_db_str(&role_str),
                 created_at_us: row.try_get("created_at_us")?,
@@ -414,6 +571,8 @@ impl AuthAndSessionManager {
         Ok(Self {
             db_pool,
             bootstrap_admins,
+            bootstrap_gms,
+            quotas,
             google_oauth_client_id,
             google_picker_api_key,
             users_by_username: RwLock::new(initial_users),
@@ -481,27 +640,78 @@ impl AuthAndSessionManager {
             .is_ok()
     }
 
+    /// Validates and normalizes an optional email address (`None` when blank).
+    pub fn normalize_and_validate_email(raw: Option<&str>) -> anyhow::Result<Option<String>> {
+        let Some(trimmed) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+            return Ok(None);
+        };
+        let lower = trimmed.to_lowercase();
+        if lower.len() > 254 || lower.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            anyhow::bail!("Invalid email address format");
+        }
+        let Some((local, domain)) = lower.split_once('@') else {
+            anyhow::bail!("Email address must contain '@'");
+        };
+        if local.is_empty()
+            || domain.is_empty()
+            || domain.contains('@')
+            || !domain.contains('.')
+            || domain.starts_with('.')
+            || domain.ends_with('.')
+        {
+            anyhow::bail!("Invalid email address domain");
+        }
+        Ok(Some(lower))
+    }
+
     /// Registers a new user account, persists it to the SQLx SQLite `users` table, and returns a bearer token response.
-    /// Self-registered users receive [`AccountRole::User`] unless their username is listed in `bootstrap_admins`.
+    /// Self-registered users receive [`AccountRole::User`] unless listed in `bootstrap_admins` or `bootstrap_gms`.
     pub async fn register_user(
         &self,
         username: &str,
         password: &str,
         display_name: &str,
     ) -> anyhow::Result<AuthSuccessResponse> {
+        self.register_user_with_email(username, password, display_name, None)
+            .await
+    }
+
+    /// Registers a new user account with an optional unique `email` address.
+    pub async fn register_user_with_email(
+        &self,
+        username: &str,
+        password: &str,
+        display_name: &str,
+        email: Option<&str>,
+    ) -> anyhow::Result<AuthSuccessResponse> {
         let uname = username.trim().to_lowercase();
         if uname.is_empty() || password.len() < 4 {
             anyhow::bail!("Username cannot be empty and password must be at least 4 characters");
         }
+        let clean_email = Self::normalize_and_validate_email(email)?;
 
         let account = {
             let mut guard = self.users_by_username.write().await;
             if guard.contains_key(&uname) {
                 anyhow::bail!("Username '{uname}' is already registered");
             }
+            if let Some(ref em) = clean_email {
+                let exists: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM users WHERE email = ?1 COLLATE NOCASE",
+                )
+                .bind(em)
+                .fetch_one(&self.db_pool)
+                .await
+                .unwrap_or(0);
+                if exists > 0 {
+                    anyhow::bail!("Email '{em}' is already registered");
+                }
+            }
             let password_hash = Self::hash_secret(password)?;
             let account_role = if self.bootstrap_admins.contains(&uname) {
                 AccountRole::Admin
+            } else if self.bootstrap_gms.contains(&uname) {
+                AccountRole::Gm
             } else {
                 AccountRole::User
             };
@@ -513,6 +723,7 @@ impl AuthAndSessionManager {
                 } else {
                     display_name.trim().to_string()
                 },
+                email: clean_email.clone(),
                 password_hash,
                 account_role,
                 created_at_us: Utc::now().timestamp_micros(),
@@ -520,13 +731,14 @@ impl AuthAndSessionManager {
 
             sqlx::query(
                 r#"
-                INSERT INTO users (user_id, username, display_name, password_hash, account_role, created_at_us)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                INSERT INTO users (user_id, username, display_name, email, password_hash, account_role, created_at_us)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                 "#,
             )
             .bind(&acct.user_id)
             .bind(&acct.username)
             .bind(&acct.display_name)
+            .bind(&acct.email)
             .bind(&acct.password_hash)
             .bind(acct.account_role.as_db_str())
             .bind(acct.created_at_us)
@@ -538,6 +750,63 @@ impl AuthAndSessionManager {
         };
 
         self.issue_auth_token(account).await
+    }
+
+    /// Updates the authenticated user's `display_name` and/or private `email` address.
+    pub async fn update_user_profile(
+        &self,
+        user_id: &str,
+        display_name: Option<&str>,
+        email: Option<&str>,
+    ) -> anyhow::Result<UserAccount> {
+        let next_email_opt = match email {
+            Some(raw) => Some(Self::normalize_and_validate_email(Some(raw))?),
+            None => None,
+        };
+        if let Some(Some(ref em)) = next_email_opt {
+            let conflict: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM users WHERE email = ?1 COLLATE NOCASE AND user_id != ?2",
+            )
+            .bind(em)
+            .bind(user_id)
+            .fetch_one(&self.db_pool)
+            .await
+            .unwrap_or(0);
+            if conflict > 0 {
+                anyhow::bail!("Email '{em}' is already linked to another account");
+            }
+        }
+
+        let updated = {
+            let mut guard = self.users_by_username.write().await;
+            let acct = guard
+                .values_mut()
+                .find(|u| u.user_id == user_id)
+                .ok_or_else(|| anyhow::anyhow!("Unknown user_id '{user_id}'"))?;
+            if let Some(dname) = display_name.map(str::trim).filter(|s| !s.is_empty()) {
+                acct.display_name = dname.to_string();
+            }
+            if let Some(em_val) = next_email_opt {
+                acct.email = em_val;
+            }
+            sqlx::query("UPDATE users SET display_name = ?1, email = ?2 WHERE user_id = ?3")
+                .bind(&acct.display_name)
+                .bind(&acct.email)
+                .bind(&acct.user_id)
+                .execute(&self.db_pool)
+                .await?;
+            acct.clone()
+        };
+
+        let mut tokens = self.auth_tokens.write().await;
+        for acct in tokens.values_mut() {
+            if acct.user_id == user_id {
+                acct.display_name = updated.display_name.clone();
+                acct.email = updated.email.clone();
+            }
+        }
+
+        Ok(updated)
     }
 
     /// Updates a user's [`AccountRole`] in both the SQLite `users` table and in-memory token/account caches.
@@ -619,6 +888,7 @@ impl AuthAndSessionManager {
             username: account.username,
             display_name: account.display_name,
             account_role: account.account_role,
+            email: account.email,
         })
     }
 
@@ -628,7 +898,58 @@ impl AuthAndSessionManager {
         self.auth_tokens.read().await.get(clean).cloned()
     }
 
-    /// Creates a password-protected session with `session_id` and `session_password`.
+    /// Computes live quota usage and effective limits for `user`.
+    pub async fn compute_account_quota_usage(&self, user: &UserAccount) -> AccountQuotaUsage {
+        let mult = if user.account_role == AccountRole::Admin {
+            10
+        } else {
+            1
+        };
+        let campaigns_limit = if user.account_role.can_host_sessions() {
+            self.quotas.max_campaigns_per_gm.saturating_mul(mult)
+        } else {
+            0
+        };
+        let sessions_limit = if user.account_role.can_host_sessions() {
+            self.quotas.max_total_sessions_per_gm.saturating_mul(mult)
+        } else {
+            0
+        };
+        let campaigns_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM campaigns WHERE owner_user_id = ?1 AND is_archived = 0",
+        )
+        .bind(&user.user_id)
+        .fetch_one(&self.db_pool)
+        .await
+        .unwrap_or(0);
+        let sessions_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM saved_sessions WHERE COALESCE(NULLIF(owner_user_id, ''), host_user_id) = ?1",
+        )
+        .bind(&user.user_id)
+        .fetch_one(&self.db_pool)
+        .await
+        .unwrap_or(0);
+        let now_us = Utc::now().timestamp_micros();
+        let pending_requests_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM session_join_requests WHERE requester_user_id = ?1 AND status = 'PENDING' AND expires_at_us > ?2",
+        )
+        .bind(&user.user_id)
+        .bind(now_us)
+        .fetch_one(&self.db_pool)
+        .await
+        .unwrap_or(0);
+
+        AccountQuotaUsage {
+            campaigns_used: campaigns_used.max(0) as usize,
+            campaigns_limit,
+            sessions_used: sessions_used.max(0) as usize,
+            sessions_limit,
+            pending_requests_used: pending_requests_used.max(0) as usize,
+            pending_requests_limit: self.quotas.max_pending_join_requests_per_user,
+        }
+    }
+
+    /// Creates a password-protected session with `session_id` and `session_password` using default metadata.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_session(
         &self,
@@ -640,19 +961,51 @@ impl AuthAndSessionManager {
         display_name_override: Option<String>,
         enable_ai_gm: bool,
     ) -> anyhow::Result<(String, Participant, Vec<Participant>)> {
-        let sid = session_id.trim();
+        self.create_session_with_params(
+            user,
+            CreateSessionParams {
+                session_id,
+                session_password,
+                session_mode,
+                role,
+                display_name_override,
+                enable_ai_gm,
+                campaign_id: None,
+                title: None,
+                is_discoverable: true,
+                allow_join_requests: true,
+            },
+        )
+        .await
+    }
+
+    /// Creates or reopens a password-protected, GM-owned session with optional parent campaign binding
+    /// and anti-bot quota enforcement.
+    pub async fn create_session_with_params(
+        &self,
+        user: &UserAccount,
+        params: CreateSessionParams<'_>,
+    ) -> anyhow::Result<(String, Participant, Vec<Participant>)> {
+        if !user.account_role.can_host_sessions() {
+            anyhow::bail!(
+                "Account role '{}' cannot host campaigns or sessions; GM or Admin privilege is required",
+                user.account_role.as_db_str()
+            );
+        }
+
+        let sid = params.session_id.trim();
         if sid.is_empty() {
             anyhow::bail!("session_id cannot be empty");
         }
-        if session_password.is_empty() {
+        if params.session_password.is_empty() {
             anyhow::bail!("session_password cannot be empty");
         }
 
         // Validate role for session creation
-        match session_mode {
+        match params.session_mode {
             SessionMode::Ttrpg => {
                 if !matches!(
-                    role,
+                    params.role,
                     SessionRole::Gm
                         | SessionRole::SoloGm
                         | SessionRole::Player
@@ -662,20 +1015,21 @@ impl AuthAndSessionManager {
                         "TTRPG session creator must be GM, SOLO_GM, or PLAYER/OBSERVER with AI GM enabled"
                     );
                 }
-                if matches!(role, SessionRole::SoloGm | SessionRole::Observer) && !enable_ai_gm {
+                if matches!(params.role, SessionRole::SoloGm | SessionRole::Observer)
+                    && !params.enable_ai_gm
+                {
                     anyhow::bail!(
                         "SOLO_GM and OBSERVER TTRPG session creators require AI GM enabled"
                     );
                 }
             }
             SessionMode::Meeting => {
-                if role != SessionRole::Host {
+                if params.role != SessionRole::Host {
                     anyhow::bail!("Meeting creator must have the HOST role");
                 }
             }
         }
 
-        let sid = session_id.trim();
         let live_meta = {
             let guard = self.sessions.read().await;
             guard.get(sid).map(|s| {
@@ -700,17 +1054,82 @@ impl AuthAndSessionManager {
         }
 
         let db_meta = self.load_saved_session_meta_from_db(sid).await;
-        let existing_meta = db_meta.or_else(|| {
-            live_meta.map(|(h, pw, am, cr, _)| (h, pw, am, cr))
-        });
+        let existing_meta = db_meta.or_else(|| live_meta.map(|(h, pw, am, cr, _)| (h, pw, am, cr)));
+
+        let clean_campaign_id = params
+            .campaign_id
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned);
+
+        let campaign_slug = if let Some(ref cid) = clean_campaign_id {
+            let row = sqlx::query(
+                "SELECT owner_user_id, slug, is_archived FROM campaigns WHERE campaign_id = ?1",
+            )
+            .bind(cid)
+            .fetch_optional(&self.db_pool)
+            .await?;
+            let Some(row) = row else {
+                anyhow::bail!("Campaign '{cid}' does not exist");
+            };
+            let camp_owner: String = row.try_get("owner_user_id")?;
+            let slug: String = row.try_get("slug")?;
+            let is_archived: i64 = row.try_get("is_archived").unwrap_or(0);
+            if camp_owner != user.user_id && user.account_role != AccountRole::Admin {
+                anyhow::bail!("Campaign '{cid}' is owned by another GM");
+            }
+            if is_archived != 0 {
+                anyhow::bail!("Cannot create a new session in archived campaign '{cid}'");
+            }
+            Some(slug)
+        } else {
+            None
+        };
+
+        let is_new_session = existing_meta.is_none();
+        if is_new_session {
+            let mult = if user.account_role == AccountRole::Admin {
+                10
+            } else {
+                1
+            };
+            let total_limit = self.quotas.max_total_sessions_per_gm.saturating_mul(mult);
+            let total_used: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM saved_sessions WHERE COALESCE(NULLIF(owner_user_id, ''), host_user_id) = ?1",
+            )
+            .bind(&user.user_id)
+            .fetch_one(&self.db_pool)
+            .await
+            .unwrap_or(0);
+            if (total_used.max(0) as usize) >= total_limit {
+                anyhow::bail!(
+                    "Quota exceeded: maximum {total_limit} sessions per GM reached (delete old sessions to reclaim quota)"
+                );
+            }
+            if let Some(ref cid) = clean_campaign_id {
+                let per_camp_limit = self.quotas.max_sessions_per_campaign.saturating_mul(mult);
+                let camp_used: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM saved_sessions WHERE campaign_id = ?1",
+                )
+                .bind(cid)
+                .fetch_one(&self.db_pool)
+                .await
+                .unwrap_or(0);
+                if (camp_used.max(0) as usize) >= per_camp_limit {
+                    anyhow::bail!(
+                        "Quota exceeded: campaign '{cid}' reached the limit of {per_camp_limit} sessions"
+                    );
+                }
+            }
+        }
 
         let (password_hash, saved_active_map, created_at_us) =
             if let Some((saved_host, saved_pw_hash, saved_map, saved_created_at)) = existing_meta {
-                let password_ok = Self::verify_secret(session_password, &saved_pw_hash);
+                let password_ok = Self::verify_secret(params.session_password, &saved_pw_hash);
                 let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
-                let role_ok = !role.is_human_gm_or_co_gm()
+                let role_ok = !params.role.is_human_gm_or_co_gm()
                     || saved_role.is_some_and(SessionRole::is_human_gm_or_co_gm)
-                    || (role == SessionRole::SoloGm && enable_ai_gm);
+                    || (params.role == SessionRole::SoloGm && params.enable_ai_gm);
                 if saved_host != user.user_id || !password_ok || !role_ok {
                     anyhow::bail!(
                         "Session '{sid}' already exists; use /api/sessions/join or /api/sessions/resume"
@@ -719,7 +1138,7 @@ impl AuthAndSessionManager {
                 (saved_pw_hash, saved_map, saved_created_at)
             } else {
                 (
-                    Self::hash_secret(session_password)?,
+                    Self::hash_secret(params.session_password)?,
                     None,
                     Utc::now().timestamp_micros(),
                 )
@@ -728,8 +1147,10 @@ impl AuthAndSessionManager {
         let mut self_participant = Participant::human(
             &user.user_id,
             &user.username,
-            display_name_override.unwrap_or_else(|| user.display_name.clone()),
-            role,
+            params
+                .display_name_override
+                .unwrap_or_else(|| user.display_name.clone()),
+            params.role,
         );
         if let Some(bound_cid) = self
             .load_saved_participant_character_id(sid, &user.user_id)
@@ -741,36 +1162,71 @@ impl AuthAndSessionManager {
         let mut roster = HashMap::new();
         roster.insert(self_participant.user_id.clone(), self_participant.clone());
 
-        if session_mode == SessionMode::Ttrpg && enable_ai_gm {
+        if params.session_mode == SessionMode::Ttrpg && params.enable_ai_gm {
             let ai_gm = Participant::ai_gm(sid, "satya-gm-v1", "harsh-reality-arbiter");
             roster.insert(ai_gm.user_id.clone(), ai_gm);
         }
 
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
-        let persisted_docs = self
+        let effective_campaign_tag = campaign_slug.unwrap_or_else(|| sid.to_string());
+        let mut persisted_docs = self
             .load_persistent_gm_docs_from_db(sid, Some(&user.user_id))
             .await;
-        let persisted_memories = self
+        if !effective_campaign_tag.eq_ignore_ascii_case(sid) {
+            for doc in self
+                .load_persistent_gm_docs_from_db(&effective_campaign_tag, Some(&user.user_id))
+                .await
+            {
+                if !persisted_docs.iter().any(|d| d.doc_id == doc.doc_id) {
+                    persisted_docs.push(doc);
+                }
+            }
+        }
+        let mut persisted_memories = self
             .load_persistent_gm_memories_from_db(sid, Some(&user.user_id))
             .await;
+        if !effective_campaign_tag.eq_ignore_ascii_case(sid) {
+            for mem in self
+                .load_persistent_gm_memories_from_db(&effective_campaign_tag, Some(&user.user_id))
+                .await
+            {
+                if !persisted_memories
+                    .iter()
+                    .any(|m| m.memory_id == mem.memory_id)
+                {
+                    persisted_memories.push(mem);
+                }
+            }
+        }
         let combat_tracker = self.load_or_init_combat_tracker(sid, &roster_vec).await;
+        let clean_title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToOwned::to_owned);
 
         let session_obj = ProtectedSession {
             session_id: sid.to_string(),
             password_hash,
-            session_mode,
+            session_mode: params.session_mode,
             host_user_id: user.user_id.clone(),
+            owner_user_id: user.user_id.clone(),
+            campaign_id: clean_campaign_id,
+            title: clean_title,
+            is_discoverable: params.is_discoverable,
+            allow_join_requests: params.allow_join_requests,
             roster,
             ai_gm_vault: None,
             active_map: saved_active_map,
             gm_documents: persisted_docs,
-            campaign_tag: sid.to_string(),
+            campaign_tag: effective_campaign_tag,
             gm_memories: persisted_memories,
             combat_tracker,
             created_at_us,
         };
 
-        self.persist_session_metadata_to_db(&session_obj, enable_ai_gm)
+        self.persist_session_metadata_to_db(&session_obj, params.enable_ai_gm)
             .await;
         self.persist_session_participant_to_db(sid, &self_participant)
             .await;
@@ -785,7 +1241,7 @@ impl AuthAndSessionManager {
             join_token.clone(),
             JoinTokenClaims {
                 session_id: sid.to_string(),
-                session_mode,
+                session_mode: params.session_mode,
                 participant: self_participant.clone(),
             },
         );
@@ -793,7 +1249,7 @@ impl AuthAndSessionManager {
         Ok((join_token, self_participant, roster_vec))
     }
 
-    /// Verifies `session_id` and `session_password` and adds the authenticated user as a `Participant`.
+    /// Verifies `session_id` + `session_password` and adds the authenticated user as a `Participant`.
     pub async fn join_session(
         &self,
         user: &UserAccount,
@@ -802,6 +1258,36 @@ impl AuthAndSessionManager {
         role: SessionRole,
         display_name_override: Option<String>,
     ) -> anyhow::Result<(String, SessionMode, Participant, Vec<Participant>)> {
+        let (join_token, mode, part, roster, _) = self
+            .join_session_with_approval(
+                user,
+                session_id,
+                session_password,
+                None,
+                role,
+                display_name_override,
+            )
+            .await?;
+        Ok((join_token, mode, part, roster))
+    }
+
+    /// Verifies `session_id` via either a user-bound `approval_token` OR `session_password`,
+    /// returning `(join_token, session_mode, self_participant, roster, consumed_request_id)`.
+    pub async fn join_session_with_approval(
+        &self,
+        user: &UserAccount,
+        session_id: &str,
+        session_password: &str,
+        approval_token: Option<&str>,
+        role: SessionRole,
+        display_name_override: Option<String>,
+    ) -> anyhow::Result<(
+        String,
+        SessionMode,
+        Participant,
+        Vec<Participant>,
+        Option<String>,
+    )> {
         if role == SessionRole::AiGm {
             anyhow::bail!("Human participants cannot join with the AI_GM role");
         }
@@ -814,13 +1300,86 @@ impl AuthAndSessionManager {
             .await;
         let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
 
+        let clean_approval = approval_token.map(str::trim).filter(|s| !s.is_empty());
+        let mut consumed_request_id: Option<String> = None;
+
+        if let Some(tok) = clean_approval {
+            if matches!(
+                role,
+                SessionRole::Gm | SessionRole::Host | SessionRole::SoloGm | SessionRole::AiGm
+            ) {
+                anyhow::bail!("Approval tokens cannot grant privileged GM/HOST/SOLO_GM roles");
+            }
+            let now_us = Utc::now().timestamp_micros();
+            let row = sqlx::query(
+                r#"
+                SELECT request_id, requested_role, status, expires_at_us
+                FROM session_join_requests
+                WHERE approval_token = ?1 AND session_id = ?2 AND requester_user_id = ?3
+                "#,
+            )
+            .bind(tok)
+            .bind(sid)
+            .bind(&user.user_id)
+            .fetch_optional(&self.db_pool)
+            .await?;
+
+            let Some(row) = row else {
+                anyhow::bail!("Invalid or unauthorized approval token for session '{sid}'");
+            };
+            let req_id: String = row.try_get("request_id")?;
+            let status: String = row.try_get("status")?;
+            let expires_at_us: i64 = row.try_get("expires_at_us")?;
+            let approved_role_str: String = row.try_get("requested_role")?;
+            let approved_role = crate::session_persistence::session_role_from_db(&approved_role_str);
+
+            if status != "APPROVED" {
+                anyhow::bail!("Approval token has already been {status}");
+            }
+            if expires_at_us <= now_us {
+                let _ = sqlx::query(
+                    "UPDATE session_join_requests SET status = 'EXPIRED', updated_at_us = ?1 WHERE request_id = ?2",
+                )
+                .bind(now_us)
+                .bind(&req_id)
+                .execute(&self.db_pool)
+                .await;
+                anyhow::bail!("Approval token has expired; please submit a new join request");
+            }
+            if role != approved_role && role != SessionRole::Observer {
+                anyhow::bail!(
+                    "Approval token is scoped to role {:?}, not {:?}",
+                    approved_role,
+                    role
+                );
+            }
+
+            let update_res = sqlx::query(
+                r#"
+                UPDATE session_join_requests
+                SET status = 'CONSUMED', updated_at_us = ?1
+                WHERE request_id = ?2 AND status = 'APPROVED'
+                "#,
+            )
+            .bind(now_us)
+            .bind(&req_id)
+            .execute(&self.db_pool)
+            .await?;
+            if update_res.rows_affected() != 1 {
+                anyhow::bail!("Approval token was already consumed");
+            }
+            consumed_request_id = Some(req_id);
+        }
+
         let (mode, self_participant, roster_vec) = {
             let mut sessions = self.sessions.write().await;
             let session = sessions
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
 
-            if !Self::verify_secret(session_password, &session.password_hash) {
+            if consumed_request_id.is_none()
+                && !Self::verify_secret(session_password, &session.password_hash)
+            {
                 anyhow::bail!("Invalid session password for session '{sid}'");
             }
 
@@ -899,7 +1458,13 @@ impl AuthAndSessionManager {
             },
         );
 
-        Ok((join_token, mode, self_participant, roster_vec))
+        Ok((
+            join_token,
+            mode,
+            self_participant,
+            roster_vec,
+            consumed_request_id,
+        ))
     }
 
     /// Verifies a WebSocket `join_token` and returns its [`JoinTokenClaims`] if valid.

@@ -12,6 +12,10 @@ use crate::protocol_map_ai::AiPlayerConfig;
 use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
 
+fn default_true_summary() -> bool {
+    true
+}
+
 /// Metadata summary of a saved session that an authenticated user has created or joined.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedSessionSummary {
@@ -25,6 +29,21 @@ pub struct SavedSessionSummary {
     pub display_name: String,
     /// Persistent `user_id` of the session creator/host.
     pub host_user_id: String,
+    /// Persistent `user_id` of the owning GM (matches `host_user_id` for GM-owned sessions).
+    #[serde(default)]
+    pub owner_user_id: String,
+    /// Optional parent campaign identifier (`camp_<uuid>`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub campaign_id: Option<String>,
+    /// Optional parent campaign title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub campaign_title: Option<String>,
+    /// Optional human-friendly session title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Whether this session is discoverable in the GM directory.
+    #[serde(default = "default_true_summary")]
+    pub is_discoverable: bool,
     /// Campaign tag grouping persistent GM documents, memories, and NPCs.
     pub campaign_tag: String,
     /// Whether an autonomous or co-pilot AI Game Master is enabled in this session.

@@ -8,10 +8,10 @@ use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, PutPayload};
 use satya_schema::{
-    AiGmTrajectoryEvent, CharacterSheetEvent, ChatMessageEvent, InteractionDynamicsEvent,
-    SavedMapEvent, SchemaRegistry, SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent,
-    TabletopCanvasEvent, TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent,
-    WireFrameHeader, subjects, topics,
+    AiGmTrajectoryEvent, CampaignDirectoryEvent, CharacterSheetEvent, ChatMessageEvent,
+    InteractionDynamicsEvent, SavedMapEvent, SchemaRegistry, SchemaRegistryEvent,
+    SessionAccessEvent, SessionLifecycleEvent, SessionLogEvent, TabletopCanvasEvent,
+    TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent, WireFrameHeader, subjects, topics,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -116,7 +116,7 @@ pub struct TopicStorageConfig {
     pub s3_prefix: Option<String>,
 }
 
-/// User authentication database and bootstrap administrator configuration (`[auth]` in `config/storage.toml`).
+/// User authentication database and bootstrap administrator/GM configuration (`[auth]` in `config/storage.toml`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// SQLx database URL or SQLite path for storing persistent user accounts.
@@ -124,6 +124,9 @@ pub struct AuthConfig {
     /// List of usernames automatically assigned [`satya_schema::AccountRole::Admin`].
     #[serde(default)]
     pub bootstrap_admins: Vec<String>,
+    /// List of usernames automatically assigned [`satya_schema::AccountRole::Gm`] (authorized to host campaigns & sessions).
+    #[serde(default = "default_bootstrap_gms")]
+    pub bootstrap_gms: Vec<String>,
     /// Optional Google Cloud OAuth 2.0 Web Client ID for browser-side `drive.file` authentication.
     #[serde(default)]
     pub google_oauth_client_id: Option<String>,
@@ -132,13 +135,112 @@ pub struct AuthConfig {
     pub google_picker_api_key: Option<String>,
 }
 
+fn default_bootstrap_gms() -> Vec<String> {
+    vec!["host_elena".to_string()]
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             database_url: "sqlite://data/auth/users.db?mode=rwc".to_string(),
             bootstrap_admins: vec!["gm_sean".to_string()],
+            bootstrap_gms: default_bootstrap_gms(),
             google_oauth_client_id: None,
             google_picker_api_key: None,
+        }
+    }
+}
+
+/// Per-user anti-bot resource quotas and sliding-window rate limits (`[quotas]` in `config/storage.toml`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuotaConfig {
+    /// Maximum active (non-archived) campaigns owned by a single GM (`Admin` receives `10x`).
+    pub max_campaigns_per_gm: usize,
+    /// Maximum sessions inside a single campaign.
+    pub max_sessions_per_campaign: usize,
+    /// Maximum total saved sessions owned by a single GM (`Admin` receives `10x`).
+    pub max_total_sessions_per_gm: usize,
+    /// Maximum concurrent `PENDING` outbound join requests per user.
+    pub max_pending_join_requests_per_user: usize,
+    /// Sliding-window registration limit per client IP per hour.
+    pub max_registrations_per_ip_per_hour: usize,
+    /// Sliding-window campaign/session creation limit per user per hour.
+    pub max_creates_per_user_per_hour: usize,
+    /// Sliding-window directory search limit per user per minute.
+    pub max_directory_searches_per_user_per_min: usize,
+    /// Sliding-window join-request submission limit per user per hour.
+    pub max_join_requests_per_user_per_hour: usize,
+    /// Time-to-live (hours) before an unanswered `PENDING` join request expires.
+    pub join_request_ttl_hours: u64,
+    /// Time-to-live (hours) before an unused `APPROVED` join grant expires.
+    pub approval_grant_ttl_hours: u64,
+}
+
+impl Default for QuotaConfig {
+    fn default() -> Self {
+        Self {
+            max_campaigns_per_gm: 10,
+            max_sessions_per_campaign: 25,
+            max_total_sessions_per_gm: 50,
+            max_pending_join_requests_per_user: 10,
+            max_registrations_per_ip_per_hour: 10,
+            max_creates_per_user_per_hour: 20,
+            max_directory_searches_per_user_per_min: 30,
+            max_join_requests_per_user_per_hour: 20,
+            join_request_ttl_hours: 72,
+            approval_grant_ttl_hours: 24,
+        }
+    }
+}
+
+/// Outbound email transport provider for offline GM join-request notifications (`[email]` in `config/storage.toml`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailProviderKind {
+    /// Zero-network SQLite `email_outbox` + structured log transport for local development and tests.
+    #[default]
+    LocalOutbox,
+    /// Resend HTTP API (`POST https://api.resend.com/emails`).
+    Resend,
+    /// Twilio SendGrid HTTP API (`POST https://api.sendgrid.com/v3/mail/send`).
+    SendGrid,
+    /// Mailgun HTTP API (`POST {api_base_url}/messages`).
+    Mailgun,
+    /// Generic authenticated JSON webhook (`POST {api_base_url}`).
+    Webhook,
+}
+
+/// Offline GM email notification configuration (`[email]` in `config/storage.toml`).
+///
+/// Secrets are never stored in TOML; `api_key_env` names the environment variable
+/// (injected via GCP Secret Manager / Cloud Run) containing the provider API key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EmailConfig {
+    /// Whether external HTTP email delivery is enabled (`false` routes to `local_outbox`).
+    pub enabled: bool,
+    /// Configured outbound email provider (`local_outbox`, `resend`, `sendgrid`, `mailgun`, or `webhook`).
+    pub provider: EmailProviderKind,
+    /// Sender address shown on outbound emails.
+    pub from_address: String,
+    /// Optional custom API endpoint URL (required for `mailgun` and `webhook`).
+    pub api_base_url: Option<String>,
+    /// Environment variable holding the provider API key (defaults to `"SATYA_EMAIL_API_KEY"`).
+    pub api_key_env: String,
+    /// Public base URL of the Satya web app included in offline GM notification links.
+    pub public_app_url: String,
+}
+
+impl Default for EmailConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: EmailProviderKind::LocalOutbox,
+            from_address: "noreply@satya.local".to_string(),
+            api_base_url: None,
+            api_key_env: "SATYA_EMAIL_API_KEY".to_string(),
+            public_app_url: "http://127.0.0.1:3000".to_string(),
         }
     }
 }
@@ -255,6 +357,12 @@ pub struct StorageConfig {
     /// Persistent SQLx user authentication and bootstrap administrator configuration (`[auth]`).
     #[serde(default)]
     pub auth: AuthConfig,
+    /// Per-user anti-bot resource quotas and sliding-window rate limits (`[quotas]`).
+    #[serde(default)]
+    pub quotas: QuotaConfig,
+    /// Outbound email configuration for offline GM join-request alerts (`[email]`).
+    #[serde(default)]
+    pub email: EmailConfig,
     /// Python LangGraph AI Game Master service configuration (loaded from `config/ai.toml` or `[ai_gm]`).
     #[serde(default)]
     pub ai_gm: AiGmConfig,
@@ -283,6 +391,8 @@ impl Default for StorageConfig {
             (topics::SYSTEM_LOGS, 9, 4),
             (topics::CHARACTER_SHEETS, 10, 2),
             (topics::SAVED_MAPS, 11, 2),
+            (topics::CAMPAIGN_DIRECTORY, 12, 2),
+            (topics::SESSION_ACCESS, 13, 2),
         ];
         for (name, id, parts) in defaults {
             topic_map.insert(
@@ -301,6 +411,8 @@ impl Default for StorageConfig {
         }
         Self {
             auth: AuthConfig::default(),
+            quotas: QuotaConfig::default(),
+            email: EmailConfig::default(),
             ai_gm: AiGmConfig::default(),
             iggy: IggyConfig::default(),
             batching: BatchingConfig::default(),
@@ -846,6 +958,32 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Publishes a [`CampaignDirectoryEvent`] to the `campaign-directory` topic (`v1`) and immediately flushes it.
+    pub async fn log_campaign_directory(
+        &self,
+        event: &CampaignDirectoryEvent,
+    ) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(
+                topics::CAMPAIGN_DIRECTORY,
+                subjects::CAMPAIGN_DIRECTORY,
+                1,
+                event,
+            )
+            .await?;
+        self.flush_topic(topics::CAMPAIGN_DIRECTORY).await?;
+        Ok(offset)
+    }
+
+    /// Publishes a [`SessionAccessEvent`] to the `session-access` topic (`v1`) and immediately flushes it.
+    pub async fn log_session_access(&self, event: &SessionAccessEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(topics::SESSION_ACCESS, subjects::SESSION_ACCESS, 1, event)
+            .await?;
+        self.flush_topic(topics::SESSION_ACCESS).await?;
+        Ok(offset)
+    }
+
     /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
@@ -867,6 +1005,8 @@ impl EventLogRouter {
                 topics::SYSTEM_LOGS => subjects::SESSION_LOG,
                 topics::CHARACTER_SHEETS => subjects::CHARACTER_SHEET,
                 topics::SAVED_MAPS => subjects::SAVED_MAP,
+                topics::CAMPAIGN_DIRECTORY => subjects::CAMPAIGN_DIRECTORY,
+                topics::SESSION_ACCESS => subjects::SESSION_ACCESS,
                 _ => subjects::CHAT_MESSAGE,
             };
             let target_version = if subject == subjects::CHARACTER_SHEET {
@@ -1048,10 +1188,86 @@ mod tests {
         assert!(ai_cfg.fail_fast_when_offline);
 
         let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
-        assert_eq!(storage_cfg.topics.len(), 11);
+        assert_eq!(storage_cfg.topics.len(), 13);
         assert!(storage_cfg.topics.contains_key(topics::SAVED_MAPS));
+        assert!(storage_cfg.topics.contains_key(topics::CAMPAIGN_DIRECTORY));
+        assert!(storage_cfg.topics.contains_key(topics::SESSION_ACCESS));
+        assert_eq!(storage_cfg.quotas.max_campaigns_per_gm, 10);
+        assert!(!storage_cfg.email.enabled);
         assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
         assert_eq!(storage_cfg.ai_gm.request_timeout_secs, 180);
         assert!(storage_cfg.ai_gm.fail_fast_when_offline);
+    }
+
+    #[tokio::test]
+    async fn test_campaign_directory_and_session_access_topics_flush_avro() {
+        let temp_dir = std::env::temp_dir().join(format!("satya_storage_topics_{}", Uuid::new_v4()));
+        let router = EventLogRouter::new(StorageConfig::default(), &temp_dir)
+            .await
+            .unwrap();
+        let gm = Participant::human("u-gm", "gm_sean", "Sean (GM)", SessionRole::Gm);
+        let dir_meta = router
+            .registry()
+            .build_metadata(
+                100,
+                subjects::CAMPAIGN_DIRECTORY,
+                1,
+                "directory",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let dir_ev = satya_schema::CampaignDirectoryEvent {
+            metadata: dir_meta,
+            event_type: satya_schema::CampaignDirectoryEventType::CampaignCreated,
+            actor: gm.clone(),
+            owner_user_id: Some("u-gm".to_string()),
+            campaign_id: Some("camp_1".to_string()),
+            campaign_title: Some("Satyang".to_string()),
+            campaign_slug: Some("satyang".to_string()),
+            search_query_sha256: None,
+            result_count: 1,
+            discoverable: true,
+        };
+        router.log_campaign_directory(&dir_ev).await.unwrap();
+
+        let acc_meta = router
+            .registry()
+            .build_metadata(
+                101,
+                subjects::SESSION_ACCESS,
+                1,
+                "satyang-ep1",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let acc_ev = satya_schema::SessionAccessEvent {
+            metadata: acc_meta,
+            event_type: satya_schema::SessionAccessEventType::JoinRequestCreated,
+            actor: gm,
+            target_participant: None,
+            request_id: Some("jreq_1".to_string()),
+            campaign_id: Some("camp_1".to_string()),
+            requested_role: Some(SessionRole::Player),
+            delivery_channel: Some("INBOX_ONLY".to_string()),
+            reason: None,
+        };
+        router.log_session_access(&acc_ev).await.unwrap();
+
+        let metrics = router.metrics_snapshot().await;
+        assert_eq!(metrics.len(), 13);
+        let dir_m = metrics
+            .iter()
+            .find(|m| m.topic == topics::CAMPAIGN_DIRECTORY)
+            .unwrap();
+        assert_eq!(dir_m.total_messages_ingested, 1);
+        assert_eq!(dir_m.flushed_batches_count, 1);
+        let acc_m = metrics
+            .iter()
+            .find(|m| m.topic == topics::SESSION_ACCESS)
+            .unwrap();
+        assert_eq!(acc_m.total_messages_ingested, 1);
+        assert_eq!(acc_m.flushed_batches_count, 1);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

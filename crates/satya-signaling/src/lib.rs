@@ -12,6 +12,8 @@
 
 pub mod auth;
 pub mod campaign_lore;
+pub mod campaigns;
+pub mod email_notifier;
 pub mod world_clocks;
 pub use world_clocks::*;
 pub mod characters;
@@ -26,13 +28,16 @@ pub mod npcs;
 pub mod npcs_store;
 pub mod player_ai_api;
 pub mod player_ai_spatial;
+pub mod rate_limit;
 pub mod session_export;
 pub mod session_persistence;
 pub mod state;
 pub mod tls;
 pub mod ws;
 
+pub use campaigns::*;
 pub use characters::*;
+pub use email_notifier::*;
 pub use gm_api::*;
 pub use gm_docs::*;
 pub use gm_persistence::*;
@@ -41,6 +46,7 @@ pub use map_handlers::*;
 pub use map_vault::*;
 pub use npcs::*;
 pub use player_ai_api::*;
+pub use rate_limit::*;
 pub use session_export::*;
 pub use session_persistence::*;
 pub use state::*;
@@ -92,8 +98,42 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/logout", post(logout_handler))
         .route("/api/auth/me", get(auth_me_handler))
+        .route("/api/auth/profile", patch(update_profile_handler))
+        .route("/api/auth/quotas", get(get_account_quotas_handler))
+        .route("/api/admin/users/role", post(admin_set_user_role_handler))
         .route("/api/auth/google", post(google_auth_link_handler))
         .route("/api/auth/google/status", get(google_auth_status_handler))
+        .route(
+            "/api/campaigns",
+            get(list_my_campaigns_handler).post(create_campaign_handler),
+        )
+        .route(
+            "/api/campaigns/:campaign_id",
+            patch(update_campaign_handler).delete(delete_campaign_handler),
+        )
+        .route("/api/directory/search", get(search_gm_directory_handler))
+        .route(
+            "/api/sessions/:session_id",
+            delete(delete_session_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/join-requests",
+            post(create_join_request_handler),
+        )
+        .route("/api/join-requests/mine", get(list_my_join_requests_handler))
+        .route(
+            "/api/join-requests/incoming",
+            get(list_incoming_join_requests_handler),
+        )
+        .route(
+            "/api/join-requests/:request_id/decide",
+            post(decide_join_request_handler),
+        )
+        .route(
+            "/api/join-requests/:request_id",
+            delete(cancel_join_request_handler),
+        )
+        .route("/ws/notifications", get(ws_notifications_handler))
         .route("/api/sessions/create", post(create_session_handler))
         .route("/api/sessions/join", post(join_session_handler))
         .route("/api/sessions/leave", post(leave_session_handler))
@@ -330,6 +370,8 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .with_state(state)
 }
 
+#[cfg(test)]
+mod tests_campaigns;
 #[cfg(test)]
 mod tests_core;
 #[cfg(test)]

@@ -21,6 +21,7 @@
 //! - [`telemetry`]: Apache Iggy Topic & Avro Schema Inspector (`#admin-inspector-card`).
 
 pub mod auth_session;
+pub mod campaigns_directory;
 pub mod character_sheet;
 pub mod character_sheet_equip_views;
 pub mod character_sheet_record;
@@ -84,6 +85,7 @@ pub mod wizard_views_stats;
 pub mod workspace_drawers;
 
 pub use auth_session::*;
+pub use campaigns_directory::*;
 pub use character_sheet::*;
 pub use chat_and_ttrpg::*;
 pub use dice_3d::*;
@@ -132,6 +134,18 @@ macro_rules! for_all_window_callbacks {
             "satyaSelectSavedSession" => satya_select_saved_session(),
             "satyaResumeSavedSession" => satya_resume_saved_session(),
             "satyaResumeAsSoloGm" => satya_resume_as_solo_gm(),
+            "satyaDeleteSavedSession" => satya_delete_saved_session(),
+            "satyaSearchGmDirectory" => satya_search_gm_directory(),
+            "satyaRequestJoinSession" => satya_request_join_session(String),
+            "satyaJoinApprovedSession" => satya_join_approved_session(String, String),
+            "satyaCancelJoinRequest" => satya_cancel_join_request(String),
+            "satyaRefreshMyCampaigns" => satya_refresh_my_campaigns(),
+            "satyaCreateCampaign" => satya_create_campaign(),
+            "satyaDeleteCampaign" => satya_delete_campaign(String),
+            "satyaRefreshJoinRequests" => satya_refresh_join_requests(),
+            "satyaDecideJoinRequest" => satya_decide_join_request(String, bool),
+            "satyaToggleNotificationsPopover" => satya_toggle_notifications_popover(),
+            "satyaDismissNotificationToast" => satya_dismiss_notification_toast(),
             "satyaExportSessionSnapshot" => satya_export_session_snapshot(),
             "satyaImportSessionSnapshot" => satya_import_session_snapshot(),
             "satyaExportChatTranscript" => satya_export_chat_transcript(String),

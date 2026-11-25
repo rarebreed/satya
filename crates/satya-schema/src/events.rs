@@ -1,6 +1,6 @@
 //! Domain event structs (`com.satya.events`) and canonical Apache Iggy subject/topic constants.
 
-use crate::types::{EventMetadata, Participant};
+use crate::types::{EventMetadata, Participant, SessionRole};
 use serde::{Deserialize, Serialize};
 
 /// Canonical Avro schema subject names (`com.satya.events.*`).
@@ -27,6 +27,10 @@ pub mod subjects {
     pub const CHARACTER_SHEET: &str = "com.satya.events.CharacterSheetEvent";
     /// Subject name for [`super::SavedMapEvent`].
     pub const SAVED_MAP: &str = "com.satya.events.SavedMapEvent";
+    /// Subject name for [`super::CampaignDirectoryEvent`].
+    pub const CAMPAIGN_DIRECTORY: &str = "com.satya.events.CampaignDirectoryEvent";
+    /// Subject name for [`super::SessionAccessEvent`].
+    pub const SESSION_ACCESS: &str = "com.satya.events.SessionAccessEvent";
 }
 
 /// Canonical Apache Iggy topic names corresponding to each Satya event stream.
@@ -53,6 +57,10 @@ pub mod topics {
     pub const CHARACTER_SHEETS: &str = "character-sheets";
     /// Topic storing [`super::SavedMapEvent`] records.
     pub const SAVED_MAPS: &str = "saved-maps";
+    /// Topic storing [`super::CampaignDirectoryEvent`] records.
+    pub const CAMPAIGN_DIRECTORY: &str = "campaign-directory";
+    /// Topic storing [`super::SessionAccessEvent`] records.
+    pub const SESSION_ACCESS: &str = "session-access";
 }
 
 /// Schema evolution compatibility policy enforced for a registered subject.
@@ -793,4 +801,102 @@ pub struct SavedMapEvent {
     pub content_sha256: String,
     /// Complete serialized [`crate::protocol_map_ai::GmMapUpdateRequest`] JSON snapshot (`None` on `MAP_DELETED` or GDPR erasure).
     pub map_json: Option<String>,
+}
+
+/// Lifecycle or discovery operation recorded by a [`CampaignDirectoryEvent`] on `campaign-directory` (`Topic 12`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CampaignDirectoryEventType {
+    /// A GM or Admin created a new campaign.
+    CampaignCreated,
+    /// A campaign's title, description, or visibility was updated.
+    CampaignUpdated,
+    /// A campaign was archived by its owner.
+    CampaignArchived,
+    /// A campaign was deleted to reclaim quota.
+    CampaignDeleted,
+    /// A session was created under or assigned to a campaign.
+    SessionAssignedToCampaign,
+    /// A session was deleted by its owner or Admin.
+    SessionDeleted,
+    /// A user searched the GM directory by exact email or `@username`.
+    DirectorySearched,
+    /// A GM listed their own campaigns.
+    CampaignsListed,
+    /// A user listed discoverable sessions within a campaign.
+    SessionsListed,
+}
+
+/// Avro event (`v1`, `schema_id = 15`) emitted to `campaign-directory` on campaign CRUD,
+/// session assignment/deletion, and privacy-preserving GM directory queries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CampaignDirectoryEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Specific campaign or directory lifecycle event type.
+    pub event_type: CampaignDirectoryEventType,
+    /// Authenticated user performing the action.
+    pub actor: Participant,
+    /// Owning GM's `user_id` (`None` if scrubbed or not applicable).
+    pub owner_user_id: Option<String>,
+    /// Target campaign identifier (`camp_<uuid>`), if applicable.
+    pub campaign_id: Option<String>,
+    /// Human-readable campaign title, if applicable.
+    pub campaign_title: Option<String>,
+    /// Campaign slug (`campaign_tag`), if applicable.
+    pub campaign_slug: Option<String>,
+    /// Hex-encoded SHA-256 hash of a directory search query (never raw email PII).
+    pub search_query_sha256: Option<String>,
+    /// Number of campaigns or sessions returned or affected.
+    pub result_count: i32,
+    /// Whether the target campaign/session is discoverable.
+    pub discoverable: bool,
+}
+
+/// Access-control or join-request lifecycle event recorded by [`SessionAccessEvent`] on `session-access` (`Topic 13`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SessionAccessEventType {
+    /// A player submitted a Request-to-Join for a discoverable session.
+    JoinRequestCreated,
+    /// Offline email notification dispatched to the owning GM.
+    JoinRequestEmailed,
+    /// The owning GM approved a join request and issued a user-bound grant.
+    JoinRequestApproved,
+    /// The owning GM denied a join request.
+    JoinRequestDenied,
+    /// The requesting player cancelled a pending join request.
+    JoinRequestCancelled,
+    /// A join request or approval grant expired past its TTL.
+    JoinRequestExpired,
+    /// An approved player consumed their one-time grant to enter the session.
+    JoinRequestConsumed,
+    /// An operation was rejected by per-user or per-campaign quota enforcement.
+    QuotaRejected,
+    /// An operation was rejected by sliding-window anti-bot rate limiting.
+    RateLimitRejected,
+}
+
+/// Avro event (`v1`, `schema_id = 16`) emitted to `session-access` tracking join requests,
+/// offline email dispatches, approvals/denials, token consumption, and quota/rate-limit rejections.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionAccessEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Specific access-control lifecycle event type.
+    pub event_type: SessionAccessEventType,
+    /// Authenticated actor initiating the access event.
+    pub actor: Participant,
+    /// Optional secondary participant (e.g., requester when GM approves/denies, or GM when player requests).
+    pub target_participant: Option<Participant>,
+    /// Unique join request identifier (`jreq_<uuid>`), if applicable.
+    pub request_id: Option<String>,
+    /// Parent campaign identifier (`camp_<uuid>`), if applicable.
+    pub campaign_id: Option<String>,
+    /// Session role requested by the player, if applicable.
+    pub requested_role: Option<SessionRole>,
+    /// Notification delivery channel (`"LIVE_WS"`, `"EMAIL"`, `"INBOX_ONLY"`).
+    pub delivery_channel: Option<String>,
+    /// Optional diagnostic reason or decision summary.
+    pub reason: Option<String>,
 }

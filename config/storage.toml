@@ -3,10 +3,36 @@
 database_url = "sqlite://data/auth/users.db?mode=rwc"
 # Usernames automatically granted the platform-wide `ADMIN` role on startup or registration.
 bootstrap_admins = ["gm_sean"]
+# Usernames automatically granted the `GM` role (authorized to create campaigns and sessions).
+bootstrap_gms = ["host_elena"]
 # Optional Google Cloud OAuth 2.0 Web Client ID & Google Picker API Key for live `drive.file` single-file selection.
 # Leave empty (`""`) for offline development (uses built-in `gdoc-demo-sara` / `gsheet-demo-gear` presets & local file picker).
 google_oauth_client_id = ""
 google_picker_api_key = ""
+
+[quotas]
+# Per-user anti-bot resource caps & sliding-window rate limits for public GCP hosting.
+max_campaigns_per_gm = 10
+max_sessions_per_campaign = 25
+max_total_sessions_per_gm = 50
+max_pending_join_requests_per_user = 10
+max_registrations_per_ip_per_hour = 10
+max_creates_per_user_per_hour = 20
+max_directory_searches_per_user_per_min = 30
+max_join_requests_per_user_per_hour = 20
+join_request_ttl_hours = 72
+approval_grant_ttl_hours = 24
+
+[email]
+# Outbound email notifications for offline GMs receiving a Request-to-Join.
+# Keep `enabled = false` / `provider = "local_outbox"` for offline dev & tests.
+# On GCP, set `enabled = true`, `provider = "resend"` (or "sendgrid", "mailgun", "webhook"),
+# and inject the API key via Secret Manager into `SATYA_EMAIL_API_KEY`.
+enabled = false
+provider = "local_outbox"
+from_address = "noreply@satya.local"
+api_key_env = "SATYA_EMAIL_API_KEY"
+public_app_url = "http://127.0.0.1:3000"
 
 # Note: AI Game Master & LLM model settings live in `config/ai.toml`.
 
@@ -123,3 +149,21 @@ local_path = "data/topics/saved-maps"
 s3_bucket = "satya-analytics-lake"
 s3_region = "us-east-1"
 s3_prefix = "raw/saved-maps"
+
+[topics.campaign-directory]
+topic_id = 12
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/campaign-directory"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/campaign-directory"
+
+[topics.session-access]
+topic_id = 13
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/session-access"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/session-access"

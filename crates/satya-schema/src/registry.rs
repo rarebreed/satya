@@ -54,6 +54,12 @@ pub const CHARACTER_SHEET_V3_AVSC: &str =
     include_str!("../../../schemas/v3/character_sheet_event.avsc");
 /// Raw JSON schema definition (`v1`) for [`crate::events::SavedMapEvent`].
 pub const SAVED_MAP_V1_AVSC: &str = include_str!("../../../schemas/v1/saved_map_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::CampaignDirectoryEvent`].
+pub const CAMPAIGN_DIRECTORY_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/campaign_directory_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::SessionAccessEvent`].
+pub const SESSION_ACCESS_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/session_access_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -300,6 +306,20 @@ pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
         topics::SAVED_MAPS,
         1,
         SAVED_MAP_V1_AVSC,
+    ),
+    (
+        15,
+        subjects::CAMPAIGN_DIRECTORY,
+        topics::CAMPAIGN_DIRECTORY,
+        1,
+        CAMPAIGN_DIRECTORY_V1_AVSC,
+    ),
+    (
+        16,
+        subjects::SESSION_ACCESS,
+        topics::SESSION_ACCESS,
+        1,
+        SESSION_ACCESS_V1_AVSC,
     ),
 ];
 

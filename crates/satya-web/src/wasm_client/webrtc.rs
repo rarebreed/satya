@@ -273,6 +273,13 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             crate::wasm_client::npcs::satya_refresh_npcs_tab();
             crate::wasm_client::gm_omnisearch::refresh_gm_omnisearch_if_active();
         }
+        ServerWsPacket::JoinRequestNotification { request } => {
+            crate::wasm_client::campaigns_directory::show_live_notification_toast(&format!(
+                "Join request: @{} wants to join '{}'",
+                request.requester_username, request.session_id
+            ));
+            crate::wasm_client::campaigns_directory::satya_refresh_join_requests();
+        }
         ServerWsPacket::WebrtcSignal {
             from_participant,
             signal_kind,

@@ -140,6 +140,46 @@ pub fn HeaderBar() -> impl IntoView {
                         "Spoiler Shield: OFF"
                     </button>
                 </div>
+                <div id="notifications-bell-wrap" class="notifications-bell-wrap" style="display: none;">
+                    <button
+                        type="button"
+                        id="btn-notifications-bell"
+                        class="btn btn-sm btn-secondary"
+                        title="Join requests & notifications"
+                        onclick="window.satyaToggleNotificationsPopover()"
+                        on:click=move |_| wasm_client::satya_toggle_notifications_popover()
+                    >
+                        <span>"Alerts "</span>
+                        <span id="notifications-badge" class="pill pill-muted">"0"</span>
+                    </button>
+                    <div
+                        id="notifications-popover"
+                        class="notifications-popover"
+                        style="display: none;"
+                    >
+                        <div class="menu-section-title">"Join Requests & Alerts"</div>
+                        <div id="notifications-popover-list" class="notifications-popover-list">
+                            <span class="subtitle">"No pending alerts."</span>
+                        </div>
+                    </div>
+                </div>
+                <div
+                    id="live-notification-toast"
+                    class="live-notification-toast"
+                    style="display: none;"
+                    role="status"
+                >
+                    <span id="live-notification-toast-text"></span>
+                    <button
+                        type="button"
+                        id="btn-dismiss-toast"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaDismissNotificationToast()"
+                        on:click=move |_| wasm_client::satya_dismiss_notification_toast()
+                    >
+                        "Dismiss"
+                    </button>
+                </div>
                 <div class="hamburger-menu-wrap">
                     <button
                         type="button"

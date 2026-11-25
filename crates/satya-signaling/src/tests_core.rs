@@ -46,7 +46,7 @@ async fn test_user_auth_session_password_and_private_message_isolation() {
 
     let gm_user = state
         .auth
-        .verify_auth_token(&gm_auth.auth_token)
+        .set_user_account_role("gm_test", AccountRole::Gm)
         .await
         .unwrap();
     let p1_user = state
@@ -230,12 +230,12 @@ async fn test_axum_http_endpoints_and_leptos_render() {
     assert_eq!(res_tasks_ch.status(), StatusCode::OK);
 
     let metrics = state.storage.metrics_snapshot().await;
-    assert_eq!(metrics.len(), 10);
+    assert_eq!(metrics.len(), 13);
     let schema_reg_topic = metrics
         .iter()
         .find(|m| m.topic == "schema-registry")
         .unwrap();
-    assert_eq!(schema_reg_topic.total_messages_ingested, 13);
+    assert_eq!(schema_reg_topic.total_messages_ingested, 16);
     assert_eq!(schema_reg_topic.flushed_batches_count, 1);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -647,7 +647,7 @@ async fn test_session_leave_and_user_logout_emit_disconnect_events() {
 
     let gm_user = state
         .auth
-        .verify_auth_token(&gm_auth.auth_token)
+        .set_user_account_role("gm_disc", AccountRole::Gm)
         .await
         .unwrap();
     let p1_user = state

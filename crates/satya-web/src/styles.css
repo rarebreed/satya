@@ -808,3 +808,117 @@ table.metrics-table th { color: var(--text-muted); font-weight: 600; }
         writing-mode: horizontal-tb;
     }
 }
+
+/* Directory, Campaigns & Notifications */
+.notifications-bell-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.notifications-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 120;
+    width: min(360px, 90vw);
+    max-height: 360px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.65rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--panel-radius);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.notifications-popover-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.notif-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--control-radius);
+    background: var(--bg-elevated, var(--bg-card));
+}
+
+.live-notification-toast {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 140;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: min(420px, 92vw);
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--panel-radius);
+    border: 1px solid var(--accent);
+    background: var(--bg-panel);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.directory-section {
+    margin-bottom: 0.75rem;
+    padding: 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--control-radius);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.directory-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.directory-results-list,
+.gm-campaigns-list,
+.join-requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+}
+
+.dir-gm-card,
+.dir-campaign-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--control-radius);
+}
+
+.dir-gm-header,
+.dir-campaign-head,
+.dir-session-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.dir-session-row {
+    padding: 0.35rem 0.45rem;
+    border-top: 1px solid var(--border);
+}
+
+.dir-session-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}

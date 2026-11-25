@@ -236,13 +236,19 @@ impl AuthAndSessionManager {
         let _ = sqlx::query(
             r#"
             INSERT INTO saved_sessions (
-                session_id, password_hash, session_mode, host_user_id, campaign_tag,
+                session_id, password_hash, session_mode, host_user_id, owner_user_id,
+                campaign_id, title, is_discoverable, allow_join_requests, campaign_tag,
                 enable_ai_gm, ai_provider_json, active_map_json, created_at_us, updated_at_us
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
             ON CONFLICT(session_id) DO UPDATE SET
                 password_hash = excluded.password_hash,
                 session_mode = excluded.session_mode,
+                owner_user_id = COALESCE(NULLIF(excluded.owner_user_id, ''), saved_sessions.owner_user_id, saved_sessions.host_user_id),
+                campaign_id = COALESCE(excluded.campaign_id, saved_sessions.campaign_id),
+                title = COALESCE(excluded.title, saved_sessions.title),
+                is_discoverable = excluded.is_discoverable,
+                allow_join_requests = excluded.allow_join_requests,
                 campaign_tag = excluded.campaign_tag,
                 enable_ai_gm = excluded.enable_ai_gm,
                 ai_provider_json = COALESCE(excluded.ai_provider_json, saved_sessions.ai_provider_json),
@@ -254,6 +260,11 @@ impl AuthAndSessionManager {
         .bind(&session.password_hash)
         .bind(mode_str)
         .bind(&session.host_user_id)
+        .bind(&session.owner_user_id)
+        .bind(&session.campaign_id)
+        .bind(&session.title)
+        .bind(if session.is_discoverable { 1_i64 } else { 0_i64 })
+        .bind(if session.allow_join_requests { 1_i64 } else { 0_i64 })
         .bind(&session.campaign_tag)
         .bind(if has_ai_gm { 1_i64 } else { 0_i64 })
         .bind(ai_meta_json)
@@ -360,7 +371,8 @@ impl AuthAndSessionManager {
 
         let row = sqlx::query(
             r#"
-            SELECT session_id, password_hash, session_mode, host_user_id, campaign_tag,
+            SELECT session_id, password_hash, session_mode, host_user_id, owner_user_id,
+                   campaign_id, title, is_discoverable, allow_join_requests, campaign_tag,
                    enable_ai_gm, ai_provider_json, active_map_json, created_at_us
             FROM saved_sessions
             WHERE session_id = ?1
@@ -375,6 +387,25 @@ impl AuthAndSessionManager {
         let mode_str: String = row.try_get("session_mode").ok()?;
         let session_mode = session_mode_from_db(&mode_str);
         let host_user_id: String = row.try_get("host_user_id").ok()?;
+        let owner_user_id: String = row
+            .try_get::<Option<String>, _>("owner_user_id")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| host_user_id.clone());
+        let campaign_id: Option<String> = row
+            .try_get::<Option<String>, _>("campaign_id")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        let title: Option<String> = row
+            .try_get::<Option<String>, _>("title")
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        let is_discoverable: bool = row.try_get::<i64, _>("is_discoverable").unwrap_or(1) != 0;
+        let allow_join_requests: bool =
+            row.try_get::<i64, _>("allow_join_requests").unwrap_or(1) != 0;
         let campaign_tag: String = row.try_get("campaign_tag").ok()?;
         let enable_ai_gm: i64 = row.try_get("enable_ai_gm").unwrap_or(0);
         let ai_provider_json: Option<String> = row.try_get("ai_provider_json").ok().flatten();
@@ -487,6 +518,11 @@ impl AuthAndSessionManager {
             password_hash,
             session_mode,
             host_user_id,
+            owner_user_id,
+            campaign_id,
+            title,
+            is_discoverable,
+            allow_join_requests,
             roster,
             ai_gm_vault,
             active_map,
@@ -726,6 +762,11 @@ impl AuthAndSessionManager {
             SELECT s.session_id,
                    s.session_mode,
                    s.host_user_id,
+                   COALESCE(NULLIF(s.owner_user_id, ''), s.host_user_id) AS owner_user_id,
+                   s.campaign_id,
+                   c.title AS campaign_title,
+                   s.title AS session_title,
+                   s.is_discoverable,
                    s.campaign_tag,
                    s.enable_ai_gm,
                    s.created_at_us,
@@ -736,9 +777,11 @@ impl AuthAndSessionManager {
                    (SELECT COUNT(*) FROM session_event_history h WHERE h.session_id = s.session_id AND h.event_kind = 'CHAT') AS chat_count,
                    (SELECT COUNT(*) FROM session_event_history h WHERE h.session_id = s.session_id AND h.event_kind = 'MECHANICS') AS mech_count
             FROM saved_sessions s
+            LEFT JOIN campaigns c
+                ON c.campaign_id = s.campaign_id
             LEFT JOIN session_participants sp
                 ON sp.session_id = s.session_id AND sp.user_id = ?1
-            WHERE s.host_user_id = ?1 OR sp.user_id IS NOT NULL
+            WHERE s.host_user_id = ?1 OR s.owner_user_id = ?1 OR sp.user_id IS NOT NULL
             ORDER BY s.updated_at_us DESC
             "#,
         )
@@ -771,6 +814,23 @@ impl AuthAndSessionManager {
                 role: session_role_from_db(&role_str),
                 display_name: row.try_get("user_display_name").unwrap_or_default(),
                 host_user_id: row.try_get("host_user_id").unwrap_or_default(),
+                owner_user_id: row.try_get("owner_user_id").unwrap_or_default(),
+                campaign_id: row
+                    .try_get::<Option<String>, _>("campaign_id")
+                    .ok()
+                    .flatten()
+                    .filter(|s| !s.trim().is_empty()),
+                campaign_title: row
+                    .try_get::<Option<String>, _>("campaign_title")
+                    .ok()
+                    .flatten()
+                    .filter(|s| !s.trim().is_empty()),
+                title: row
+                    .try_get::<Option<String>, _>("session_title")
+                    .ok()
+                    .flatten()
+                    .filter(|s| !s.trim().is_empty()),
+                is_discoverable: row.try_get::<i64, _>("is_discoverable").unwrap_or(1) != 0,
                 campaign_tag: row.try_get("campaign_tag").unwrap_or_default(),
                 has_ai_gm: row.try_get::<i64, _>("enable_ai_gm").unwrap_or(0) != 0,
                 character_id: row.try_get("user_character_id").ok().flatten(),
@@ -987,6 +1047,7 @@ pub async fn auth_me_handler(
             username: user.username,
             display_name: user.display_name,
             account_role: user.account_role,
+            email: user.email,
         })),
     )
         .into_response()

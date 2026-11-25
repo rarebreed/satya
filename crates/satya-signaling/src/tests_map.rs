@@ -80,7 +80,11 @@ async fn test_ai_player_spawn_step_context_isolation_and_rally_budget() {
         .authenticate_user("sara_valkyrie", "satya-truth-2026")
         .await
         .unwrap();
-    let p1_user = state.auth.verify_auth_token(&p1.auth_token).await.unwrap();
+    let p1_user = state
+        .auth
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
+        .await
+        .unwrap();
     let _enter = state
         .auth
         .create_session(
@@ -856,7 +860,7 @@ async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_
         .unwrap();
     let obs_user = state
         .auth
-        .verify_auth_token(&obs_auth.auth_token)
+        .set_user_account_role("obs_wave1", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     let p2_auth = state
@@ -1436,7 +1440,7 @@ async fn test_wave5_gm_only_surveillance_filter_and_passive_movement_whisper() {
         .unwrap();
     let gm_user = state
         .auth
-        .verify_auth_token(&gm_auth.auth_token)
+        .set_user_account_role("gm_w5", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     let p1_auth = state
@@ -1683,14 +1687,14 @@ async fn test_combat_tracker_player_self_condition_sync_and_rbac() {
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let app = build_router(state.clone());
 
-    let gm_auth = state
+    let _gm_auth = state
         .auth
         .register_user("gm_combat", "satya-truth-2026", "GM Combat")
         .await
         .unwrap();
     let gm_user = state
         .auth
-        .verify_auth_token(&gm_auth.auth_token)
+        .set_user_account_role("gm_combat", satya_schema::AccountRole::Gm)
         .await
         .unwrap();
     let p1_auth = state

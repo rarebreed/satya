@@ -403,6 +403,115 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
     )
     .drawer_warning_html
     .unwrap_or_default();
+    let sample_camp = satya_schema::CampaignSummary {
+        campaign_id: "camp_1".to_string(),
+        owner_user_id: "u-gm".to_string(),
+        slug: "satyang".to_string(),
+        title: "Satyang".to_string(),
+        description: "Ops".to_string(),
+        setting_pack: "awakened".to_string(),
+        is_discoverable: true,
+        is_archived: false,
+        session_count: 1,
+        created_at_us: 1,
+        updated_at_us: 1,
+    };
+    let sample_jr = satya_schema::JoinRequestRecord {
+        request_id: "jreq_1".to_string(),
+        session_id: "satyang-ep1".to_string(),
+        session_title: Some("Ep 1".to_string()),
+        campaign_id: Some("camp_1".to_string()),
+        campaign_title: Some("Satyang".to_string()),
+        owner_user_id: "u-gm".to_string(),
+        owner_username: "gm_sean".to_string(),
+        owner_display_name: "Sean".to_string(),
+        requester_user_id: "u-sara".to_string(),
+        requester_username: "sara_valkyrie".to_string(),
+        requester_display_name: "Sara".to_string(),
+        requested_role: satya_schema::SessionRole::Player,
+        message: None,
+        status: satya_schema::JoinRequestStatus::Pending,
+        approval_token: None,
+        decision_note: None,
+        emailed_offline: false,
+        created_at_us: 1,
+        updated_at_us: 1,
+        expires_at_us: 2,
+    };
+    let mut sample_jr_approved = sample_jr.clone();
+    sample_jr_approved.status = satya_schema::JoinRequestStatus::Approved;
+    sample_jr_approved.approval_token = Some("aprv_1".to_string());
+    let dir_html = crate::wasm_client::campaigns_directory::format_directory_results_html(
+        &satya_schema::DirectorySearchResponse {
+            query: "@gm_sean".to_string(),
+            gms: vec![satya_schema::DirectoryGmEntry {
+                user_id: "u-gm".to_string(),
+                username: "gm_sean".to_string(),
+                display_name: "Sean".to_string(),
+                is_online: true,
+                campaigns: vec![satya_schema::DirectoryCampaignEntry {
+                    campaign_id: Some("camp_1".to_string()),
+                    slug: "satyang".to_string(),
+                    title: "Satyang".to_string(),
+                    description: "Ops".to_string(),
+                    setting_pack: "awakened".to_string(),
+                    sessions: vec![
+                        satya_schema::DirectorySessionEntry {
+                            session_id: "satyang-ep1".to_string(),
+                            title: Some("Ep 1".to_string()),
+                            session_mode: satya_schema::SessionMode::Ttrpg,
+                            has_ai_gm: false,
+                            is_live: true,
+                            active_human_count: 1,
+                            allow_join_requests: true,
+                            caller_membership_status: satya_schema::DirectoryMembershipStatus::None,
+                            caller_request_id: None,
+                            approval_token: None,
+                            updated_at_us: 1,
+                        },
+                        satya_schema::DirectorySessionEntry {
+                            session_id: "satyang-ep2".to_string(),
+                            title: Some("Ep 2".to_string()),
+                            session_mode: satya_schema::SessionMode::Ttrpg,
+                            has_ai_gm: false,
+                            is_live: false,
+                            active_human_count: 0,
+                            allow_join_requests: true,
+                            caller_membership_status:
+                                satya_schema::DirectoryMembershipStatus::ApprovedReady,
+                            caller_request_id: Some("jreq_1".to_string()),
+                            approval_token: Some("aprv_1".to_string()),
+                            updated_at_us: 1,
+                        },
+                        satya_schema::DirectorySessionEntry {
+                            session_id: "satyang-ep3".to_string(),
+                            title: None,
+                            session_mode: satya_schema::SessionMode::Ttrpg,
+                            has_ai_gm: false,
+                            is_live: false,
+                            active_human_count: 0,
+                            allow_join_requests: true,
+                            caller_membership_status:
+                                satya_schema::DirectoryMembershipStatus::PendingRequest,
+                            caller_request_id: Some("jreq_2".to_string()),
+                            approval_token: None,
+                            updated_at_us: 1,
+                        },
+                    ],
+                }],
+            }],
+        },
+    );
+    combined_html.push('\n');
+    combined_html.push_str(&dir_html);
+    combined_html.push('\n');
+    combined_html.push_str(&crate::wasm_client::campaigns_directory::format_gm_campaigns_html(&[sample_camp]));
+    combined_html.push('\n');
+    combined_html.push_str(&crate::wasm_client::campaigns_directory::format_gm_join_requests_html(std::slice::from_ref(&sample_jr)));
+    combined_html.push('\n');
+    combined_html.push_str(&crate::wasm_client::campaigns_directory::format_my_join_requests_html(&[sample_jr.clone(), sample_jr_approved.clone()]));
+    combined_html.push('\n');
+    combined_html.push_str(&crate::wasm_client::campaigns_directory::format_notifications_popover_html(&[sample_jr], &[sample_jr_approved]));
     combined_html.push('\n');
     combined_html.push_str(&gm_docs_html);
     combined_html.push('\n');

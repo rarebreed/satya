@@ -1,6 +1,7 @@
 //! HTTP REST handlers for Leptos SSR shell rendering, user authentication (`/api/auth/*`),
 //! session creation/joining/leaving (`/api/sessions/*`), and admin storage metrics (`/api/storage/*`).
 
+use crate::rate_limit::extract_client_ip;
 use crate::state::SignalingAppState;
 use axum::{
     Json,
@@ -10,15 +11,18 @@ use axum::{
 };
 use satya_rules_book::{build_rules_catalog_response, get_rules_chapter};
 use satya_schema::{
-    AccountRole, AiGmProviderConfig, CreateSessionRequest, JoinSessionRequest, LeaveSessionRequest,
-    LifecycleEventType, LoginRequest, LogoutRequest, Participant, RegisterRequest,
-    SessionEnterResponse, SessionLifecycleEvent, SessionMode, SessionRole, subjects,
+    AccountRole, AdminSetUserRoleRequest, AiGmProviderConfig, AuthSuccessResponse,
+    CampaignDirectoryEvent, CampaignDirectoryEventType, CreateSessionRequest, JoinSessionRequest,
+    LeaveSessionRequest, LifecycleEventType, LoginRequest, LogoutRequest, Participant,
+    RegisterRequest, SessionAccessEvent, SessionAccessEventType, SessionEnterResponse,
+    SessionLifecycleEvent, SessionMode, SessionRole, UpdateProfileRequest, subjects,
 };
 use satya_storage::TopicMetricsSnapshot;
 use satya_web::render_satya_app_html;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Renders the Leptos SSR HTML application shell at `GET /`.
 pub async fn index_handler() -> Html<String> {
@@ -28,11 +32,34 @@ pub async fn index_handler() -> Html<String> {
 /// Registers a new user account at `POST /api/auth/register`.
 pub async fn register_handler(
     State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
     Json(req): Json<RegisterRequest>,
 ) -> impl IntoResponse {
+    let ip = extract_client_ip(&headers);
+    let reg_limit = state.storage.config().quotas.max_registrations_per_ip_per_hour;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record("register_ip", &ip, reg_limit, Duration::from_secs(3600))
+        .await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": format!("Registration rate limit exceeded; retry in {retry_secs}s"),
+                "retry_after_secs": retry_secs
+            })),
+        )
+            .into_response();
+    }
+
     match state
         .auth
-        .register_user(&req.username, &req.password, &req.display_name)
+        .register_user_with_email(
+            &req.username,
+            &req.password,
+            &req.display_name,
+            req.email.as_deref(),
+        )
         .await
     {
         Ok(resp) => (StatusCode::OK, Json(json!(resp))).into_response(),
@@ -163,19 +190,95 @@ pub async fn create_session_handler(
             .into_response();
     };
 
-    match state
-        .auth
-        .create_session(
-            &user,
+    if !user.account_role.can_host_sessions() {
+        let actor = Participant::human(&user.user_id, &user.username, &user.display_name, req.role);
+        if let Ok(meta) = state.storage.registry().build_metadata(
+            state.next_seq(),
+            subjects::SESSION_ACCESS,
+            1,
             &req.session_id,
-            &req.session_password,
             req.session_mode,
-            req.role,
-            req.display_name,
-            req.enable_ai_gm,
+        ) {
+            let ev = SessionAccessEvent {
+                metadata: meta,
+                event_type: SessionAccessEventType::QuotaRejected,
+                actor,
+                target_participant: None,
+                request_id: None,
+                campaign_id: req.campaign_id.clone(),
+                requested_role: Some(req.role),
+                delivery_channel: None,
+                reason: Some("USER account role is not authorized to host sessions".to_string()),
+            };
+            let _ = state.storage.log_session_access(&ev).await;
+        }
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": "GM or Admin account role required to create sessions"
+            })),
+        )
+            .into_response();
+    }
+
+    let create_limit = state.storage.config().quotas.max_creates_per_user_per_hour;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "session_create",
+            &user.user_id,
+            create_limit,
+            Duration::from_secs(3600),
         )
         .await
     {
+        let actor = Participant::human(&user.user_id, &user.username, &user.display_name, req.role);
+        if let Ok(meta) = state.storage.registry().build_metadata(
+            state.next_seq(),
+            subjects::SESSION_ACCESS,
+            1,
+            &req.session_id,
+            req.session_mode,
+        ) {
+            let ev = SessionAccessEvent {
+                metadata: meta,
+                event_type: SessionAccessEventType::RateLimitRejected,
+                actor,
+                target_participant: None,
+                request_id: None,
+                campaign_id: req.campaign_id.clone(),
+                requested_role: Some(req.role),
+                delivery_channel: None,
+                reason: Some(format!(
+                    "Session creation rate limit exceeded (retry_after_secs={retry_secs})"
+                )),
+            };
+            let _ = state.storage.log_session_access(&ev).await;
+        }
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": format!("Session creation rate limit exceeded; retry in {retry_secs}s"),
+                "retry_after_secs": retry_secs
+            })),
+        )
+            .into_response();
+    }
+
+    let params = crate::auth::CreateSessionParams {
+        session_id: &req.session_id,
+        session_password: &req.session_password,
+        session_mode: req.session_mode,
+        role: req.role,
+        display_name_override: req.display_name,
+        enable_ai_gm: req.enable_ai_gm,
+        campaign_id: req.campaign_id.as_deref(),
+        title: req.title.clone(),
+        is_discoverable: req.is_discoverable,
+        allow_join_requests: req.allow_join_requests,
+    };
+
+    match state.auth.create_session_with_params(&user, params).await {
         Ok((join_token, self_participant, mut roster)) => {
             if req.session_mode == SessionMode::Ttrpg && req.enable_ai_gm {
                 let ai_cfg = req.ai_gm_config.unwrap_or_else(|| {
@@ -219,6 +322,30 @@ pub async fn create_session_handler(
                 let _ = state.storage.log_session_lifecycle(&ev).await;
             }
 
+            if req.campaign_id.is_some()
+                && let Ok(meta) = state.storage.registry().build_metadata(
+                    state.next_seq(),
+                    subjects::CAMPAIGN_DIRECTORY,
+                    1,
+                    &req.session_id,
+                    req.session_mode,
+                )
+            {
+                let ev = CampaignDirectoryEvent {
+                    metadata: meta,
+                    event_type: CampaignDirectoryEventType::SessionAssignedToCampaign,
+                    actor: self_participant.clone(),
+                    owner_user_id: Some(user.user_id.clone()),
+                    campaign_id: req.campaign_id.clone(),
+                    campaign_title: req.title.clone(),
+                    campaign_slug: None,
+                    search_query_sha256: None,
+                    result_count: 1,
+                    discoverable: req.is_discoverable,
+                };
+                let _ = state.storage.log_campaign_directory(&ev).await;
+            }
+
             let history = state
                 .auth
                 .build_session_history_snapshot(&req.session_id, &self_participant)
@@ -237,15 +364,41 @@ pub async fn create_session_handler(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": e.to_string() })),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = e.to_string();
+            let status = if msg.starts_with("Quota exceeded:") {
+                let actor =
+                    Participant::human(&user.user_id, &user.username, &user.display_name, req.role);
+                if let Ok(meta) = state.storage.registry().build_metadata(
+                    state.next_seq(),
+                    subjects::SESSION_ACCESS,
+                    1,
+                    &req.session_id,
+                    req.session_mode,
+                ) {
+                    let ev = SessionAccessEvent {
+                        metadata: meta,
+                        event_type: SessionAccessEventType::QuotaRejected,
+                        actor,
+                        target_participant: None,
+                        request_id: None,
+                        campaign_id: req.campaign_id.clone(),
+                        requested_role: Some(req.role),
+                        delivery_channel: None,
+                        reason: Some(msg.clone()),
+                    };
+                    let _ = state.storage.log_session_access(&ev).await;
+                }
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            (status, Json(json!({ "error": msg }))).into_response()
+        }
     }
 }
 
-/// Joins an existing password-protected session at `POST /api/sessions/join`.
+/// Joins an existing session at `POST /api/sessions/join` via password OR user-bound `approval_token`.
 pub async fn join_session_handler(
     State(state): State<Arc<SignalingAppState>>,
     headers: HeaderMap,
@@ -268,16 +421,40 @@ pub async fn join_session_handler(
 
     match state
         .auth
-        .join_session(
+        .join_session_with_approval(
             &user,
             &req.session_id,
             &req.session_password,
+            req.approval_token.as_deref(),
             req.role,
             req.display_name,
         )
         .await
     {
-        Ok((join_token, session_mode, self_participant, roster)) => {
+        Ok((join_token, session_mode, self_participant, roster, consumed_req_id)) => {
+            if let Some(req_id) = consumed_req_id
+                && let Ok(meta) = state.storage.registry().build_metadata(
+                    state.next_seq(),
+                    subjects::SESSION_ACCESS,
+                    1,
+                    &req.session_id,
+                    session_mode,
+                )
+            {
+                let acc_ev = SessionAccessEvent {
+                    metadata: meta,
+                    event_type: SessionAccessEventType::JoinRequestConsumed,
+                    actor: self_participant.clone(),
+                    target_participant: None,
+                    request_id: Some(req_id),
+                    campaign_id: None,
+                    requested_role: Some(req.role),
+                    delivery_channel: Some("APPROVAL_TOKEN".to_string()),
+                    reason: Some("Approved join token consumed".to_string()),
+                };
+                let _ = state.storage.log_session_access(&acc_ev).await;
+            }
+
             if let Ok(meta) = state.storage.registry().build_metadata(
                 state.next_seq(),
                 subjects::SESSION_LIFECYCLE,
@@ -292,9 +469,11 @@ pub async fn join_session_handler(
                     target_participant: None,
                     password_protected: true,
                     roster_snapshot: roster.clone(),
-                    reason: Some(
-                        "Authenticated user joined with valid session password".to_string(),
-                    ),
+                    reason: Some(if req.approval_token.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+                        "Authenticated user joined with GM approval grant".to_string()
+                    } else {
+                        "Authenticated user joined with valid session password".to_string()
+                    }),
                 };
                 let _ = state.storage.log_session_lifecycle(&ev).await;
             }
@@ -466,6 +645,86 @@ pub async fn get_rules_chapter_handler(Path(chapter_id): Path<String>) -> impl I
             Json(json!({
                 "error": format!("Rules chapter '{}' not found", chapter_id)
             })),
+        )
+            .into_response(),
+    }
+}
+
+/// Updates the caller's display name and/or private email at `PATCH /api/auth/profile`.
+pub async fn update_profile_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+    Json(req): Json<UpdateProfileRequest>,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let clean = auth_hdr.strip_prefix("Bearer ").unwrap_or(auth_hdr).trim();
+    let Some(user) = state.auth.verify_auth_token(clean).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+
+    match state
+        .auth
+        .update_user_profile(&user.user_id, req.display_name.as_deref(), req.email.as_deref())
+        .await
+    {
+        Ok(updated) => (
+            StatusCode::OK,
+            Json(json!(AuthSuccessResponse {
+                auth_token: clean.to_string(),
+                user_id: updated.user_id,
+                username: updated.username,
+                display_name: updated.display_name,
+                account_role: updated.account_role,
+                email: updated.email,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+/// Promotes or demotes a user's [`AccountRole`] (`USER` / `GM` / `ADMIN`) at `POST /api/admin/users/role`
+/// (requires [`AccountRole::Admin`]).
+pub async fn admin_set_user_role_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+    Json(req): Json<AdminSetUserRoleRequest>,
+) -> impl IntoResponse {
+    if let Err(err_resp) = verify_admin_header(&state, &headers).await {
+        return err_resp.into_response();
+    }
+    match state
+        .auth
+        .set_user_account_role(&req.username, req.account_role)
+        .await
+    {
+        Ok(updated) => (
+            StatusCode::OK,
+            Json(json!({
+                "status": "updated",
+                "user_id": updated.user_id,
+                "username": updated.username,
+                "account_role": updated.account_role,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": e.to_string() })),
         )
             .into_response(),
     }

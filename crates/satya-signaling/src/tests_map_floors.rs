@@ -164,10 +164,15 @@ async fn test_map_continuation_permissions_and_stitched_coordinates() {
     assert!(east_map.wall_edges.iter().any(|e| e.x >= 20));
 
     // 4. Solo player in an AI-GM session (`!has_human_gm`) CAN continue North -> 20x28 with +1400cm Y shift
+    let p1_gm_user = state
+        .auth
+        .set_user_account_role("sara_valkyrie", satya_schema::AccountRole::Gm)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .create_session(
-            &p1_user,
+            &p1_gm_user,
             "ep-map-cont-solo",
             "room-pass",
             SessionMode::Ttrpg,

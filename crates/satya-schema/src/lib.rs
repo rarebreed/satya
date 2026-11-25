@@ -14,6 +14,7 @@
 //! - [`registry`]: 15-byte binary wire framing (`WireFrameHeader`), `CRC-64-AVRO` fingerprinting, and `SchemaRegistry` encode/decode with schema evolution.
 //! - [`gdpr`]: Schema-driven GDPR Art. 17 right-to-erasure anonymization and Art. 15/20 DSAR subject export powered by custom `satya.*` `.avsc` field attributes.
 
+pub mod campaigns_dto;
 pub mod character;
 pub mod events;
 pub mod gdpr;
@@ -188,11 +189,19 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 14);
+        assert_eq!(all.len(), 16);
         let saved_map_v1 = registry
             .get_by_subject_version(subjects::SAVED_MAP, 1)
             .unwrap();
         assert_eq!(saved_map_v1.schema_id, 14);
+        let camp_dir_v1 = registry
+            .get_by_subject_version(subjects::CAMPAIGN_DIRECTORY, 1)
+            .unwrap();
+        assert_eq!(camp_dir_v1.schema_id, 15);
+        let sess_acc_v1 = registry
+            .get_by_subject_version(subjects::SESSION_ACCESS, 1)
+            .unwrap();
+        assert_eq!(sess_acc_v1.schema_id, 16);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -816,5 +825,98 @@ mod tests {
         let (_, decoded_tel): (_, WebRtcTelemetryEvent) =
             registry.decode_framed(&framed_tel, None).unwrap();
         assert_eq!(decoded_tel.event_kind, WebRtcEventKind::PeerDisconnected);
+    }
+
+    #[test]
+    fn test_campaign_directory_and_session_access_avro_and_gdpr() {
+        let registry = SchemaRegistry::default();
+        let gm = Participant::human("u-gm-1", "gm_sean", "Sean (GM)", SessionRole::Gm);
+        let player = Participant::human("u-sara", "sara_v", "Sara (Valkyrie)", SessionRole::Player);
+
+        let mut dir_meta = registry
+            .build_metadata(
+                60,
+                subjects::CAMPAIGN_DIRECTORY,
+                1,
+                "directory",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        dir_meta.timezone_offset_min = -300;
+        let dir_ev = CampaignDirectoryEvent {
+            metadata: dir_meta,
+            event_type: CampaignDirectoryEventType::DirectorySearched,
+            actor: player.clone(),
+            owner_user_id: Some(gm.user_id.clone()),
+            campaign_id: Some("camp_001".to_string()),
+            campaign_title: Some("Satyang".to_string()),
+            campaign_slug: Some("satyang".to_string()),
+            search_query_sha256: Some("deadbeef".repeat(8)),
+            result_count: 2,
+            discoverable: true,
+        };
+        let framed_dir = registry
+            .encode_framed(subjects::CAMPAIGN_DIRECTORY, 1, &dir_ev)
+            .unwrap();
+        let (hdr_dir, decoded_dir): (_, CampaignDirectoryEvent) =
+            registry.decode_framed(&framed_dir, None).unwrap();
+        assert_eq!(hdr_dir.schema_id, 15);
+        assert_eq!(
+            decoded_dir.event_type,
+            CampaignDirectoryEventType::DirectorySearched
+        );
+        assert_eq!(decoded_dir.result_count, 2);
+
+        let (dir_match, anon_dir_bytes) = registry
+            .anonymize_framed_for_subject(&framed_dir, "u-sara", "anon-sara")
+            .unwrap();
+        assert_eq!(dir_match, GdprSubjectMatchKind::PrimaryActor);
+        let (_, anon_dir): (_, CampaignDirectoryEvent) =
+            registry.decode_framed(&anon_dir_bytes, None).unwrap();
+        assert_eq!(anon_dir.actor.user_id, "anon-sara");
+        assert_eq!(anon_dir.metadata.timezone_offset_min, 0);
+        assert_eq!(anon_dir.search_query_sha256, None);
+        assert_eq!(anon_dir.owner_user_id, None);
+
+        let acc_meta = registry
+            .build_metadata(
+                61,
+                subjects::SESSION_ACCESS,
+                1,
+                "satyang-ep1",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let acc_ev = SessionAccessEvent {
+            metadata: acc_meta,
+            event_type: SessionAccessEventType::JoinRequestApproved,
+            actor: gm,
+            target_participant: Some(player),
+            request_id: Some("jreq_001".to_string()),
+            campaign_id: Some("camp_001".to_string()),
+            requested_role: Some(SessionRole::Player),
+            delivery_channel: Some("LIVE_WS".to_string()),
+            reason: Some("Welcome to Satyang!".to_string()),
+        };
+        let framed_acc = registry
+            .encode_framed(subjects::SESSION_ACCESS, 1, &acc_ev)
+            .unwrap();
+        let (hdr_acc, decoded_acc): (_, SessionAccessEvent) =
+            registry.decode_framed(&framed_acc, None).unwrap();
+        assert_eq!(hdr_acc.schema_id, 16);
+        assert_eq!(
+            decoded_acc.event_type,
+            SessionAccessEventType::JoinRequestApproved
+        );
+
+        let (dsar_kind, dsar_acc): (_, SessionAccessEvent) = registry
+            .export_dsar_framed_for_subject(&framed_acc, "u-gm-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(dsar_kind, GdprSubjectMatchKind::PrimaryActor);
+        assert_eq!(dsar_acc.actor.user_id, "u-gm-1");
+        let target = dsar_acc.target_participant.unwrap();
+        assert_eq!(target.user_id, "redacted-peer");
+        assert_eq!(target.username, "redacted_user");
     }
 }
