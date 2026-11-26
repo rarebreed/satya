@@ -1276,6 +1276,41 @@ pub fn push_dressing_geometry(
                     cutaway,
                 );
             }
+            PropKind::EspressoCounter
+            | PropKind::CommercialPrepTable
+            | PropKind::CommercialGrillHood
+            | PropKind::PatioUmbrellaTable
+            | PropKind::BuffetCounter
+            | PropKind::RefrigeratedDisplayCase
+            | PropKind::ClothingRack
+            | PropKind::PharmacyCounter
+            | PropKind::VendingMachine
+            | PropKind::AtmKiosk
+            | PropKind::RoboticAssemblyArm
+            | PropKind::ToolChestWorkbench
+            | PropKind::CargoPallet
+            | PropKind::ElectricalSwitchgear
+            | PropKind::Tractor
+            | PropKind::HayBaleStack
+            | PropKind::LivestockTrough
+            | PropKind::ConservatorySpecimenIsland
+            | PropKind::CommandConsole
+            | PropKind::EvaSuitLocker
+            | PropKind::SciFiCargoPod
+            | PropKind::HullDebris
+            | PropKind::ConferenceTable
+            | PropKind::CopyMachine
+            | PropKind::StreetLamp
+            | PropKind::BusShelter => {
+                let _ = crate::wasm_client::map_3d_props_packs::push_pack_prop_3d(
+                    verts,
+                    p,
+                    [cx, cz],
+                    [hx, hz],
+                    top,
+                    cutaway,
+                );
+            }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);

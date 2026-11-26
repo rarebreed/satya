@@ -779,16 +779,31 @@ mod tests {
         let painted_key = battlemap_art_cache_key(&ui);
         let painted_art = format_battlemap_art_layer(&ui);
         assert!(painted_art.contains("/assets/textures/map2d/grass_meadow.webp"));
-        assert!(painted_art.contains("url(#bm-wood-veneer)"));
+        assert!(painted_art.contains("/assets/sprites/props/sofa"));
+        assert!(painted_art.contains("/assets/sprites/props/dining_table"));
+        assert!(painted_art.contains("/assets/sprites/props/boulder"));
+        assert!(painted_art.contains("/assets/sprites/props/structural_pillar"));
         assert!(painted_art.contains("url(#bm-oak)"));
-        assert!(painted_art.contains("url(#bm-fabric)"));
-        assert!(painted_art.contains("url(#bm-rock)"));
-        assert!(painted_art.contains("url(#bm-steel)"));
         assert!(painted_art.contains("url(#bm-spill)"));
         assert_eq!(
             painted_art.matches("<g").count(),
             painted_art.matches("</g>").count()
         );
+
+        // Custom-tinted props preserve SVG material pattern overlays.
+        for p in &mut ui.map.props {
+            if matches!(
+                p.kind,
+                PropKind::Sofa | PropKind::DiningTable | PropKind::Boulder | PropKind::StructuralPillar
+            ) {
+                p.tint_rgb = Some([160, 150, 140]);
+            }
+        }
+        let tinted_art = format_battlemap_art_layer(&ui);
+        assert!(tinted_art.contains("url(#bm-wood-veneer)"));
+        assert!(tinted_art.contains("url(#bm-fabric)"));
+        assert!(tinted_art.contains("url(#bm-rock)"));
+        assert!(tinted_art.contains("url(#bm-steel)"));
 
         ui.texture_mode = BattlemapTextureMode::ProceduralVector;
         let vec_key = battlemap_art_cache_key(&ui);

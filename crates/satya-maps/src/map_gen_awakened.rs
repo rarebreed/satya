@@ -940,6 +940,214 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
     }
 }
 
+fn furnish_bunker_west_secops(
+    b: &mut OutdoorBuilder,
+    lot: LotBox,
+    split_x: i32,
+    sec_y: Option<i32>,
+    s: u32,
+) {
+    let mid_y = lot.y0 + lot.h() / 2;
+    let north_end = sec_y.unwrap_or(mid_y);
+    let south_start = sec_y.map_or(mid_y + 1, |sy| sy + 1);
+    let w_inner = split_x - lot.x0;
+    let mut cands = Vec::new();
+
+    // North SecOps / Biometric Control Wing
+    cands.extend([
+        make_prop(PropKind::BiometricTurnstile, lot.x0, mid_y + 1, 0, None, s + 10),
+        make_prop(PropKind::TelemetryMonitor, lot.x0 + 1, lot.y0, 0, None, s + 11),
+        make_prop(PropKind::DeskL, lot.x0 + 1, lot.y0 + 1, 0, None, s + 12),
+        make_prop(PropKind::FilingCabinet, lot.x0, lot.y0, 0, None, s + 13),
+        make_prop(PropKind::FireExtinguisher, split_x - 1, lot.y0, 0, None, s + 14),
+        make_prop(PropKind::FilingCabinet, split_x - 2, lot.y0, 0, None, s + 15),
+        make_prop(PropKind::TrashCan, lot.x0, lot.y0 + 2, 0, None, s + 16),
+    ]);
+    if w_inner >= 6 && north_end - lot.y0 >= 4 {
+        cands.extend([
+            make_prop(PropKind::ServerRack, split_x - 1, lot.y0 + 1, 0, None, s + 17),
+            make_prop(PropKind::Desk, lot.x0 + 4, lot.y0 + 1, 0, None, s + 18),
+            make_prop(PropKind::SteelShelving, lot.x0 + 1, north_end - 2, 0, None, s + 19),
+            make_prop(PropKind::WaterCooler, split_x - 2, north_end - 2, 0, None, s + 20),
+        ]);
+    }
+    if w_inner >= 9 && north_end - lot.y0 >= 5 {
+        cands.extend([
+            make_prop(PropKind::DeskT, lot.x0 + 4, lot.y0 + 3, 0, None, s + 21),
+            make_prop(PropKind::FilingCabinet, lot.x0 + 6, lot.y0, 0, None, s + 22),
+            make_prop(PropKind::LinenCloset, lot.x0, lot.y0 + 3, 0, None, s + 23),
+            make_prop(PropKind::Sofa, lot.x0 + 1, lot.y0 + 4, 0, None, s + 24),
+            make_prop(PropKind::DeskClutter, lot.x0 + 2, lot.y0 + 1, 0, None, s + 24),
+        ]);
+    }
+
+    // South Hardware Diagnostics & Quarantine Lab
+    cands.extend([
+        make_prop(PropKind::FilingCabinet, split_x - 1, lot.y1 - 1, 0, None, s + 25),
+        make_prop(PropKind::SteelShelving, lot.x0 + 1, lot.y1 - 1, 0, None, s + 26),
+        make_prop(PropKind::SolderingStation, lot.x0, lot.y1 - 2, 0, None, s + 27),
+        make_prop(PropKind::TestBench, lot.x0 + 2, south_start.min(lot.y1 - 2), 0, None, s + 28),
+        make_prop(PropKind::Printer3dStation, split_x - 2, lot.y1 - 2, 0, None, s + 29),
+    ]);
+    if w_inner >= 6 && lot.y1 - south_start >= 4 {
+        cands.extend([
+            make_prop(PropKind::LabBench, lot.x0 + 2, lot.y1 - 2, 0, None, s + 30),
+            make_prop(PropKind::FilingCabinet, lot.x0, lot.y1 - 3, 0, None, s + 31),
+            make_prop(PropKind::WoodCrate, split_x - 3, lot.y1 - 2, 0, None, s + 32),
+            make_prop(PropKind::LinenCart, lot.x0 + 1, south_start + 1, 0, None, s + 33),
+            make_prop(PropKind::FireExtinguisher, split_x - 1, south_start, 0, None, s + 34),
+        ]);
+    }
+    if w_inner >= 9 && lot.y1 - south_start >= 5 {
+        cands.extend([
+            make_prop(PropKind::AirGappedTerminal, lot.x0 + 4, south_start, 0, None, s + 35),
+            make_prop(PropKind::PalletRack, lot.x0 + 5, lot.y1 - 3, 0, None, s + 36),
+            make_prop(PropKind::SteelShelving, lot.x0 + 1, lot.y1 - 3, 0, None, s + 37),
+            make_prop(PropKind::TrashCan, split_x - 2, south_start + 1, 0, None, s + 38),
+        ]);
+    }
+
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_bunker_east_qpu_vault(
+    b: &mut OutdoorBuilder,
+    lot: LotBox,
+    split_x: i32,
+    breaker_y: i32,
+    s: u32,
+) {
+    let mut cands = Vec::new();
+    let east_w = lot.x1 - split_x;
+    let north_h = breaker_y - lot.y0;
+
+    // Cryo-compute & Bio-server array rows spaced with 1+ cell service aisles
+    let mut col = split_x + 1;
+    let mut idx = 0u32;
+    while col + 1 < lot.x1 {
+        cands.push(make_prop(PropKind::CryoComputeCluster, col, lot.y0 + 1, 0, None, s + 40 + idx));
+        if north_h >= 6 {
+            cands.push(make_prop(
+                if idx.is_multiple_of(2) { PropKind::BioServerVat } else { PropKind::CryoComputeCluster },
+                col,
+                lot.y0 + 4,
+                0,
+                None,
+                s + 50 + idx,
+            ));
+        } else if north_h >= 4 {
+            cands.push(make_prop(PropKind::ServerRack, col, lot.y0, 0, None, s + 50 + idx));
+        }
+        if north_h >= 9 {
+            cands.push(make_prop(
+                PropKind::CryoComputeCluster,
+                col,
+                breaker_y - 3,
+                0,
+                None,
+                s + 60 + idx,
+            ));
+        }
+        col += 3;
+        idx += 1;
+    }
+
+    // Perimeter racks, cryo consoles, and safety equipment in north hall
+    for x in (split_x + 1..lot.x1 - 1).step_by(3) {
+        cands.push(make_prop(PropKind::ServerRack, x, lot.y0, 0, None, s + 70 + x as u32));
+    }
+    cands.extend([
+        make_prop(PropKind::FireExtinguisher, split_x + 1, breaker_y - 1, 0, None, s + 78),
+        make_prop(PropKind::AirGappedTerminal, (lot.x1 - 2).max(split_x + 1), lot.y0, 0, None, s + 79),
+    ]);
+
+    // South Breaker / Chiller SCADA & Power Bay
+    cands.extend([
+        make_prop(PropKind::AirGappedTerminal, split_x + 1, lot.y1 - 1, 0, None, s + 80),
+        make_prop(PropKind::BatteryBankWall, lot.x1 - 2, breaker_y + 1, 0, None, s + 81),
+        make_prop(PropKind::ServerRack, lot.x1 - 1, lot.y1 - 1, 0, None, s + 82),
+        make_prop(PropKind::TelemetryMonitor, (lot.x1 - 2).max(split_x + 2), breaker_y + 1, 0, None, s + 83),
+        make_prop(PropKind::FilingCabinet, split_x + 1, breaker_y + 1, 0, None, s + 84),
+        make_prop(PropKind::TrashCan, split_x + 2, lot.y1 - 1, 0, None, s + 85),
+    ]);
+    if east_w >= 8 && lot.y1 - breaker_y >= 4 {
+        cands.extend([
+            make_prop(PropKind::BatteryBankWall, lot.x1 - 4, breaker_y + 1, 0, None, s + 86),
+            make_prop(PropKind::DieselGenerator, lot.x1 - 3, lot.y1 - 2, 0, None, s + 87),
+            make_prop(PropKind::SteelShelving, split_x + 3, lot.y1 - 1, 0, None, s + 88),
+            make_prop(PropKind::Desk, split_x + 3, breaker_y + 2, 0, None, s + 89),
+            make_prop(PropKind::FireExtinguisher, lot.x1 - 1, breaker_y + 2, 0, None, s + 90),
+            make_prop(PropKind::WoodCrate, lot.x1 - 5, lot.y1 - 2, 0, None, s + 91),
+            make_prop(PropKind::DrumCluster, split_x + 2, breaker_y + 2, 0, None, s + 92),
+        ]);
+    }
+    if east_w >= 11 && lot.y1 - breaker_y >= 6 {
+        cands.extend([
+            make_prop(PropKind::ServerRack, lot.x1 - 5, breaker_y + 1, 0, None, s + 93),
+            make_prop(PropKind::ServerRack, lot.x1 - 7, breaker_y + 1, 0, None, s + 94),
+            make_prop(PropKind::LabBench, split_x + 5, lot.y1 - 2, 0, None, s + 95),
+            make_prop(PropKind::PalletRack, lot.x1 - 6, lot.y1 - 2, 0, None, s + 96),
+        ]);
+    }
+
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_bunker_exterior(b: &mut OutdoorBuilder, lot: LotBox, has_apron: bool) {
+    let w = b.w;
+    let h = b.h;
+    if w >= 12 && lot.x0 >= 3 {
+        let _ = b.try_place_cm(PropKind::Dumpster, 120, (lot.y0 + 1) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::AcUnit, lot.x0 * 100 - 55, (lot.y0 + 2) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::AcUnit, lot.x0 * 100 - 55, (lot.y1 - 2) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::WoodCrate, 120, (lot.y1 - 1) * 100, 0, None, true);
+    }
+    if w >= 16 && lot.x1 + 3 <= w {
+        let _ = b.try_place_cm(PropKind::DroneDockPad, lot.x1 * 100 + 150, lot.y0 * 100 + 200, 0, None, true);
+        let _ = b.try_place_cm(PropKind::AcUnit, lot.x1 * 100 + 55, (lot.y0 + 1) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::DieselGenerator, (lot.x1 + 1) * 100 + 60, (lot.y1 - 2) * 100, 0, None, true);
+        let _ = b.try_place_cm(PropKind::DrumCluster, lot.x1 * 100 + 120, (lot.y1 - 1) * 100, 0, None, true);
+    }
+    if has_apron {
+        let _ = b.try_place_cm(
+            PropKind::JerseyBarrier,
+            (lot.x0 * 100 + 150).min(w * 100 - 150),
+            lot.y1 * 100 + 50,
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::JerseyBarrier,
+            ((lot.x1 - 2) * 100 + 50).max(lot.x0 * 100 + 350),
+            lot.y1 * 100 + 50,
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(PropKind::SecurityCameraMast, (lot.x0 + 1) * 100, lot.y1 * 100 + 50, 0, None, true);
+        let _ = b.try_place_cm(PropKind::TrashCan, (lot.x1 - 1) * 100, lot.y1 * 100 + 50, 0, None, true);
+        if lot.y1 + 2 <= h {
+            let _ = b.try_place_cm(
+                PropKind::Car,
+                (lot.x1 - 2).max(4) * 100,
+                (lot.y1 + 2).min(h - 1) * 100,
+                90,
+                None,
+                true,
+            );
+            let _ = b.try_place_cm(
+                PropKind::UtilityVan,
+                (lot.x0 + 2).min(w - 5) * 100,
+                (lot.y1 + 2).min(h - 1) * 100,
+                90,
+                None,
+                true,
+            );
+        }
+    }
+}
+
 fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let mut b = OutdoorBuilder::new(w, h, seed);
     let has_apron = h >= 14;
@@ -974,20 +1182,53 @@ fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSect
     let split_x = lot.x0 + (lot.w() * 2 / 5).max(2);
     let breaker_y = lot.y0 + (lot.h() / 2).max(2);
     let has_wings = lot.w() >= 10 && lot.h() >= 7;
+    let sec_y = if has_wings && (split_x - lot.x0) >= 8 && lot.h() >= 12 {
+        Some(lot.y0 + (lot.h() * 2 / 5).max(3))
+    } else {
+        None
+    };
 
     if has_wings {
-        b.surfaces.push(
-            LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::AntiStaticCleanroomFloor, 0, s + 5),
-        );
-        b.surfaces.push(
-            LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 6),
-        );
-        if lot.x1 - split_x >= 4 && lot.h() >= 5 {
+        if let Some(sy) = sec_y {
             b.surfaces.push(
-                LotBox::new(lot.x1 - 1, lot.y0 + 1, lot.x1, lot.y1 - 1)
-                    .polygon_feature(SurfaceFeatureKind::SubstationGrating, 0, s + 7),
+                LotBox::new(lot.x0, lot.y0, split_x, sy)
+                    .polygon_feature(SurfaceFeatureKind::CarpetFloor, 0, s + 4),
+            );
+            b.surfaces.push(
+                LotBox::new(lot.x0, sy, split_x, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::AntiStaticCleanroomFloor, 0, s + 5),
+            );
+        } else {
+            b.surfaces.push(
+                LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::AntiStaticCleanroomFloor, 0, s + 5),
+            );
+        }
+
+        let sub_x = if lot.x1 - split_x >= 8 && lot.y1 - breaker_y >= 3 {
+            lot.x1 - 3
+        } else if lot.x1 - split_x >= 5 && lot.y1 - breaker_y >= 3 {
+            lot.x1 - 2
+        } else {
+            lot.x1
+        };
+        if sub_x < lot.x1 {
+            b.surfaces.push(
+                LotBox::new(split_x, lot.y0, lot.x1, breaker_y)
+                    .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 6),
+            );
+            b.surfaces.push(
+                LotBox::new(split_x, breaker_y, sub_x, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 7),
+            );
+            b.surfaces.push(
+                LotBox::new(sub_x, breaker_y, lot.x1, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::SubstationGrating, 0, s + 8),
+            );
+        } else {
+            b.surfaces.push(
+                LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 6),
             );
         }
     } else {
@@ -1008,58 +1249,31 @@ fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSect
                     fc.upsert(split_x, y, EdgeSide::West, WallEdgeKind::Window, MaterialClass::Glass);
                 }
             }
+            if let Some(sy) = sec_y {
+                fc.h_partition(sy, lot.x0, split_x, lot.x0 + (split_x - lot.x0) / 2, false, MaterialClass::ReinforcedConcrete);
+            }
             fc.h_partition(breaker_y, split_x + 2, lot.x1, (split_x + 2).min(lot.x1 - 1), true, MaterialClass::ArmorSteel);
         }
     }
 
-    let cands = if has_wings {
-        vec![
-            make_prop(PropKind::DeskL, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::BiometricTurnstile, lot.x0, lot.y0 + lot.h() / 2 + 1, 0, None, s + 11),
-            make_prop(PropKind::FilingCabinet, split_x - 1, lot.y1 - 1, 0, None, s + 12),
-            make_prop(PropKind::FireExtinguisher, split_x - 1, lot.y0, 0, None, s + 13),
-            make_prop(PropKind::CryoComputeCluster, split_x + 1, lot.y0 + 1, 0, None, s + 14),
-            make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 15),
-            make_prop(PropKind::BioServerVat, split_x + 2, lot.y0 + 3, 0, None, s + 16),
-            make_prop(PropKind::BatteryBankWall, lot.x1 - 2, breaker_y + 1, 0, None, s + 17),
-            make_prop(PropKind::AirGappedTerminal, split_x + 1, lot.y1 - 1, 0, None, s + 18),
-            make_prop(PropKind::ServerRack, lot.x1 - 1, lot.y1 - 1, 0, None, s + 19),
-            make_prop(PropKind::SteelShelving, lot.x0 + 1, lot.y1 - 1, 0, None, s + 20),
-        ]
+    if has_wings {
+        furnish_bunker_west_secops(&mut b, lot, split_x, sec_y, s);
+        furnish_bunker_east_qpu_vault(&mut b, lot, split_x, breaker_y, s);
     } else {
-        vec![
-            make_prop(PropKind::AirGappedTerminal, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 11),
-            make_prop(PropKind::BioServerVat, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
-        ]
-    };
-    for cand in cands {
-        let _ = try_push_prop(&b.edges, &mut b.props, &b.spawn_pads_m, w, h, cand);
-    }
-
-    if w >= 16 && lot.x1 + 3 <= w {
-        let _ = b.try_place_cm(PropKind::DroneDockPad, lot.x1 * 100 + 150, lot.y0 * 100 + 200, 0, None, true);
-    }
-    if has_apron {
-        let _ = b.try_place_cm(
-            PropKind::JerseyBarrier,
-            (lot.x0 * 100 + 150).min(w * 100 - 150),
-            lot.y1 * 100 + 50,
-            0,
-            None,
-            true,
+        push_props_checked(
+            &b.edges,
+            &mut b.props,
+            &b.spawn_pads_m,
+            w,
+            h,
+            [
+                make_prop(PropKind::AirGappedTerminal, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
+                make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 11),
+                make_prop(PropKind::BioServerVat, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
+            ],
         );
-        if lot.y1 + 2 <= h {
-            let _ = b.try_place_cm(
-                PropKind::Car,
-                (lot.x1 - 2).max(4) * 100,
-                (lot.y1 + 2).min(h - 1) * 100,
-                90,
-                None,
-                true,
-            );
-        }
     }
+    furnish_bunker_exterior(&mut b, lot, has_apron);
 
     trim_floor_props_to_connected(w, h, LotBox::new(0, 0, w, h), &b.edges, &mut b.props);
     prune_occluded_surfaces(&mut b.surfaces, w, h);
@@ -1129,6 +1343,234 @@ fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSect
     }
 }
 
+fn furnish_safehouse_1f_shop(b: &mut OutdoorBuilder, lot: LotBox, split_x: i32, s: u32) {
+    let shop_w = split_x - lot.x0;
+    let mut cands = vec![
+        make_prop(PropKind::Rug, lot.x0 + 1, lot.y0 + 2, 0, None, s + 11),
+        make_prop(PropKind::Desk, lot.x0, lot.y0 + 3, 0, None, s + 12),
+        make_prop(PropKind::Bookshelf, lot.x0 + 1, lot.y0, 0, None, s + 13),
+        make_prop(PropKind::Sofa, lot.x0 + 1, lot.y1 - 3, 0, None, s + 14),
+        make_prop(PropKind::CoffeeTable, lot.x0 + 1, lot.y1 - 4, 0, None, s + 15),
+        make_prop(PropKind::SteelShelving, split_x - 2, lot.y0, 0, None, s + 16),
+        make_prop(PropKind::Planter, lot.x0 + 2, lot.y1 - 1, 0, None, s + 17),
+        make_prop(PropKind::FireExtinguisher, split_x - 1, lot.y1 - 1, 0, None, s + 18),
+        make_prop(PropKind::TrashCan, lot.x0, lot.y1 - 2, 0, None, s + 19),
+    ];
+    if shop_w >= 6 && lot.h() >= 8 {
+        cands.extend([
+            make_prop(PropKind::Bookshelf, (lot.x0 + 3).min(split_x - 2), lot.y0, 0, None, s + 20),
+            make_prop(PropKind::CheckoutCounter, lot.x0 + 2, lot.y0 + 4, 0, None, s + 21),
+            make_prop(PropKind::SolderingStation, split_x - 2, lot.y0 + 2, 0, None, s + 22),
+            make_prop(PropKind::Armchair, lot.x0 + 3, lot.y1 - 3, 0, None, s + 23),
+            make_prop(PropKind::FilingCabinet, split_x - 1, lot.y0 + 1, 0, None, s + 24),
+            make_prop(PropKind::WoodCrate, split_x - 2, lot.y1 - 2, 0, None, s + 25),
+            make_prop(PropKind::DeskClutter, lot.x0 + 1, lot.y0 + 1, 0, None, s + 26),
+        ]);
+    }
+    if shop_w >= 8 && lot.h() >= 11 {
+        cands.extend([
+            make_prop(PropKind::TelemetryMonitor, split_x - 3, lot.y0 + 2, 0, None, s + 27),
+            make_prop(PropKind::LabBench, lot.x0 + 1, lot.y0 + 6, 0, None, s + 28),
+            make_prop(PropKind::Printer3dStation, lot.x0 + 4, lot.y0 + 6, 0, None, s + 29),
+            make_prop(PropKind::DrumCluster, split_x - 3, lot.y1 - 3, 0, None, s + 30),
+            make_prop(PropKind::DisplayRack, lot.x0 + 4, lot.y1 - 5, 0, None, s + 31),
+            make_prop(PropKind::WaterCooler, split_x - 1, lot.y0 + 5, 0, None, s + 32),
+            make_prop(PropKind::TvStand, lot.x0 + 3, lot.y1 - 1, 0, None, s + 33),
+        ]);
+    }
+    if shop_w >= 11 && lot.h() >= 15 {
+        cands.extend([
+            make_prop(PropKind::Bookshelf, (lot.x0 + 6).min(split_x - 2), lot.y0, 0, None, s + 34),
+            make_prop(PropKind::SteelShelving, lot.x0 + 6, lot.y0 + 4, 0, None, s + 35),
+            make_prop(PropKind::ServerRack, split_x - 2, lot.y0 + 7, 0, None, s + 36),
+            make_prop(PropKind::PalletRack, lot.x0 + 6, lot.y1 - 4, 0, None, s + 37),
+            make_prop(PropKind::Planter, lot.x0 + 5, lot.y1 - 1, 0, None, s + 38),
+        ]);
+    }
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_safehouse_1f_living(
+    b: &mut OutdoorBuilder,
+    lot: LotBox,
+    split_x: i32,
+    mid_y: i32,
+    bath: Option<LotBox>,
+    s: u32,
+) {
+    let portal_x = (lot.x1 - 2).max(split_x + 1);
+    let portal_y = lot.y0;
+    let east_w = lot.x1 - split_x;
+    let south_x1 = bath.map_or(lot.x1, |bl| bl.x0);
+    let mut cands = vec![
+        make_prop(PropKind::Stairwell, portal_x, portal_y, 0, None, s + 40),
+        make_prop(PropKind::Fridge, split_x + 1, lot.y0, 0, None, s + 41),
+        make_prop(PropKind::KitchenCounter, split_x + 2, lot.y0, 0, None, s + 42),
+        make_prop(PropKind::DiningTable, split_x + 2, (mid_y - 2).max(lot.y0 + 2), 0, None, s + 43),
+        make_prop(PropKind::WaterCooler, split_x + 3, lot.y0, 0, None, s + 44),
+        make_prop(PropKind::TrashCan, split_x + 1, (mid_y - 1).max(lot.y0 + 2), 0, None, s + 45),
+        make_prop(PropKind::Cot, split_x + 1, lot.y1 - 2, 0, None, s + 46),
+    ];
+
+    if east_w >= 7 {
+        cands.extend([
+            make_prop(PropKind::Stove, split_x + 4, lot.y0, 0, None, s + 47),
+            make_prop(PropKind::KitchenCounter, split_x + 5, lot.y0, 0, None, s + 48),
+            make_prop(PropKind::BarStool, split_x + 1, (mid_y - 2).max(lot.y0 + 2), 0, None, s + 49),
+            make_prop(PropKind::BarStool, split_x + 4, (mid_y - 2).max(lot.y0 + 2), 0, None, s + 50),
+        ]);
+    }
+
+    if let Some(bl) = bath {
+        cands.extend([
+            make_prop(PropKind::Toilet, bl.x1 - 1, bl.y1 - 1, 0, None, s + 51),
+            make_prop(PropKind::BathroomSink, bl.x1 - 1, bl.y0, 0, None, s + 52),
+            make_prop(PropKind::TrashCan, bl.x0, bl.y1 - 1, 0, None, s + 53),
+        ]);
+    }
+
+    if south_x1 - split_x >= 4 && lot.y1 - mid_y >= 4 {
+        cands.extend([
+            make_prop(PropKind::SingleBed, (south_x1 - 2).max(split_x + 1), lot.y1 - 2, 0, None, s + 54),
+            make_prop(PropKind::Nightstand, split_x + 2, lot.y1 - 1, 0, None, s + 55),
+            make_prop(PropKind::LinenCloset, split_x + 1, mid_y + 1, 0, None, s + 56),
+            make_prop(PropKind::Wardrobe, (south_x1 - 2).max(split_x + 2), mid_y + 1, 0, None, s + 57),
+            make_prop(PropKind::Rug, split_x + 2, mid_y + 2, 0, None, s + 58),
+            make_prop(PropKind::Planter, split_x + 3, lot.y1 - 1, 0, None, s + 59),
+        ]);
+    }
+    if east_w >= 10 && lot.y1 - mid_y >= 6 {
+        cands.extend([
+            make_prop(PropKind::Sofa, split_x + 3, mid_y + 2, 0, None, s + 60),
+            make_prop(PropKind::TvStand, split_x + 3, mid_y + 4, 0, None, s + 61),
+            make_prop(PropKind::SingleBed, split_x + 5, lot.y1 - 2, 0, None, s + 62),
+            make_prop(PropKind::Dresser, split_x + 7, mid_y + 1, 0, None, s + 63),
+            make_prop(PropKind::Desk, split_x + 8, mid_y + 1, 0, None, s + 64),
+            make_prop(PropKind::KitchenCounter, split_x + 6, lot.y0 + 1, 0, None, s + 65),
+        ]);
+    }
+
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_safehouse_exterior(b: &mut OutdoorBuilder, lot: LotBox, front_door_x: i32, has_street: bool) {
+    let w = b.w;
+    let h = b.h;
+    if w >= 12 && lot.x0 >= 3 {
+        let _ = b.try_place_cm(PropKind::Dumpster, 120, lot.y0 * 100 + 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::AcUnit, lot.x0 * 100 - 55, (lot.y0 + 2) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::WoodCrate, 120, (lot.y1 - 1) * 100, 0, None, true);
+    }
+    if w >= 16 && lot.x1 + 3 <= w {
+        let _ = b.try_place_cm(PropKind::AcUnit, lot.x1 * 100 + 55, (lot.y0 + 1) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::DieselGenerator, (lot.x1 + 1) * 100 + 50, lot.y0 * 100 + 160, 0, None, true);
+        let _ = b.try_place_cm(PropKind::DrumCluster, (lot.x1 + 1) * 100, (lot.y1 - 2) * 100, 0, None, true);
+    }
+    if has_street {
+        let _ = b.try_place_cm(PropKind::AwningCanopy, front_door_x * 100 + 100, lot.y1 * 100 + 40, 0, None, true);
+        let _ = b.try_place_cm(PropKind::TrashCan, (front_door_x + 3).min(lot.x1 - 1) * 100, lot.y1 * 100 + 50, 0, None, true);
+        let _ = b.try_place_cm(PropKind::SecurityCameraMast, (lot.x1 - 2).max(front_door_x + 2) * 100, lot.y1 * 100 + 50, 0, None, true);
+        if lot.y1 + 2 <= h {
+            let _ = b.try_place_cm(PropKind::Car, (lot.x1 - 2).max(4) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
+            let _ = b.try_place_cm(PropKind::UtilityVan, (lot.x0 + 1).min(w - 5) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
+        }
+    }
+}
+
+fn build_safehouse_b1_cellar(
+    b: &OutdoorBuilder,
+    lot: LotBox,
+    split_x: i32,
+    s: u32,
+) -> (MapFloorLevel, MapFaradayZone) {
+    let portal_x = (lot.x1 - 2).max(split_x + 1);
+    let portal_y = lot.y0;
+    let mut b1_edges = Vec::new();
+    {
+        let mut b1_fc = FloorCanvas::new(&mut b1_edges, b.w, b.h);
+        b1_fc.enclose(lot, MaterialClass::ReinforcedConcrete, 0);
+        b1_fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::ReinforcedConcrete);
+        if lot.h() >= 10 {
+            b1_fc.upsert(split_x, lot.y0 + 2, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel);
+        }
+    }
+
+    let mut cands = vec![
+        // East B1 stairwell & backup power/armory bay
+        make_prop(PropKind::Stairwell, portal_x, portal_y, 0, None, s + 70),
+        make_prop(PropKind::DieselGenerator, (lot.x1 - 3).max(split_x + 1), lot.y1 - 2, 0, None, s + 71),
+        make_prop(PropKind::LabBench, split_x + 1, lot.y0 + 1, 0, None, s + 72),
+        make_prop(PropKind::FilingCabinet, split_x + 1, lot.y0 + 3, 0, None, s + 73),
+        make_prop(PropKind::SteelShelving, split_x + 1, lot.y1 - 1, 0, None, s + 74),
+        make_prop(PropKind::WoodCrate, split_x + 3, lot.y1 - 2, 0, None, s + 75),
+        make_prop(PropKind::LinenCloset, split_x + 1, lot.y0 + 5, 0, None, s + 76),
+        make_prop(PropKind::FireExtinguisher, lot.x1 - 1, lot.y0 + 2, 0, None, s + 77),
+        // West B1 Copper-Mesh SIGINT Sanctuary
+        make_prop(PropKind::Rug, lot.x0 + 1, lot.y0 + 2, 0, None, s + 78),
+        make_prop(PropKind::AirGappedTerminal, lot.x0, lot.y0 + 1, 0, None, s + 79),
+        make_prop(PropKind::TelemetryMonitor, lot.x0 + 1, lot.y0, 0, None, s + 80),
+        make_prop(PropKind::SolderingStation, lot.x0, lot.y1 - 2, 0, None, s + 81),
+        make_prop(PropKind::TestBench, lot.x0 + 2, lot.y0 + 4, 0, None, s + 82),
+        make_prop(PropKind::BatteryBankWall, split_x - 2, lot.y1 - 1, 0, None, s + 83),
+        make_prop(PropKind::ServerRack, split_x - 1, lot.y0 + 1, 0, None, s + 84),
+        make_prop(PropKind::DeskClutter, lot.x0, lot.y0, 0, None, s + 85),
+        make_prop(PropKind::Printer3dStation, lot.x0 + 2, lot.y1 - 2, 0, None, s + 86),
+        make_prop(PropKind::Cot, lot.x0 + 1, lot.y0 + 6, 0, None, s + 87),
+        make_prop(PropKind::FilingCabinet, split_x - 2, lot.y0, 0, None, s + 88),
+        make_prop(PropKind::TrashCan, lot.x0, lot.y0 + 3, 0, None, s + 89),
+    ];
+
+    if split_x - lot.x0 >= 10 && lot.h() >= 14 {
+        cands.extend([
+            make_prop(PropKind::DeskL, lot.x0 + 3, lot.y0 + 1, 0, None, s + 90),
+            make_prop(PropKind::ServerRack, split_x - 1, lot.y0 + 4, 0, None, s + 91),
+            make_prop(PropKind::BatteryBankWall, split_x - 4, lot.y1 - 1, 0, None, s + 92),
+            make_prop(PropKind::AirGappedTerminal, lot.x0 + 5, lot.y0 + 5, 0, None, s + 93),
+            make_prop(PropKind::WaterCooler, lot.x0 + 1, lot.y0 + 8, 0, None, s + 94),
+            make_prop(PropKind::DrumCluster, lot.x0 + 4, lot.y1 - 3, 0, None, s + 95),
+            make_prop(PropKind::SteelShelving, split_x + 3, lot.y0 + 1, 0, None, s + 96),
+            make_prop(PropKind::PalletRack, lot.x1 - 4, lot.y0 + 4, 0, None, s + 97),
+            make_prop(PropKind::LinenCart, split_x + 2, lot.y1 - 3, 0, None, s + 98),
+            make_prop(PropKind::FilingCabinet, lot.x1 - 1, lot.y0 + 4, 0, None, s + 99),
+        ]);
+    }
+
+    let mut b1_props = Vec::new();
+    push_props_checked(&b1_edges, &mut b1_props, &b.spawn_pads_m, b.w, b.h, cands);
+    trim_floor_props_to_connected(b.w, b.h, lot, &b1_edges, &mut b1_props);
+
+    let mut b1_surfaces = vec![
+        LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
+            .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 100),
+        LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
+            .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 101),
+    ];
+    prune_occluded_surfaces(&mut b1_surfaces, b.w, b.h);
+
+    let level = MapFloorLevel {
+        floor_index: -1,
+        label: "B1 · Copper-Mesh Cellar".to_string(),
+        elevation_cm: -300,
+        wall_edges: b1_edges,
+        props: b1_props,
+        surfaces: b1_surfaces,
+        ground_floor_override: Some("faraday_copper_mesh".to_string()),
+        ground_tint_rgb: None,
+    };
+    let zone = MapFaradayZone {
+        zone_id: "faraday-safehouse-cellar".to_string(),
+        label: "B1 Copper-Mesh SIGINT Sanctuary".to_string(),
+        floor_index: -1,
+        x0_cm: lot.x0 * 100,
+        y0_cm: lot.y0 * 100,
+        x1_cm: split_x * 100,
+        y1_cm: lot.y1 * 100,
+        attenuation_db: 85,
+        forces_severed_faraday_reflex: true,
+    };
+    (level, zone)
+}
+
 fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let mut b = OutdoorBuilder::new(w, h, seed);
     let has_street = h >= 14;
@@ -1136,16 +1578,34 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let s = (b.rng.next() & 0xffff_ffff) as u32;
 
     if w >= 12 && lot.x0 >= 3 {
-        b.surfaces.push(
-            LotBox::new(0, lot.y0, lot.x0, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 1),
-        );
         if lot.h() >= 5 {
+            let puddle_x1 = 2.min(lot.x0);
             b.surfaces.push(
-                LotBox::new(0, lot.y1 - 2, 2.min(lot.x0), lot.y1)
+                LotBox::new(0, lot.y0, lot.x0, lot.y1 - 2)
+                    .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 1),
+            );
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 - 2, puddle_x1, lot.y1)
                     .polygon_feature(SurfaceFeatureKind::FloodedAsphalt, 0, s + 8),
             );
+            if puddle_x1 < lot.x0 {
+                b.surfaces.push(
+                    LotBox::new(puddle_x1, lot.y1 - 2, lot.x0, lot.y1)
+                        .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 9),
+                );
+            }
+        } else {
+            b.surfaces.push(
+                LotBox::new(0, lot.y0, lot.x0, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 1),
+            );
         }
+    }
+    if w >= 12 && lot.x1 + 3 <= w {
+        b.surfaces.push(
+            LotBox::new(lot.x1, lot.y0, w, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 2),
+        );
     }
     if has_street {
         b.surfaces.push(
@@ -1161,16 +1621,42 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     }
 
     let split_x = lot.x0 + lot.w() / 2;
+    let mid_y = lot.y0 + lot.h() / 2;
     let has_wings = lot.w() >= 10 && lot.h() >= 7;
+    let has_multi_floor = w >= 20 && h >= 14 && has_wings;
+    let bath = if has_wings && (lot.x1 - split_x) >= 6 && lot.h() >= 10 {
+        let bw = if lot.x1 - split_x >= 10 { 4 } else { 3 };
+        let bh = if lot.y1 - mid_y >= 6 { 3 } else { 2 };
+        Some(LotBox::new(lot.x1 - bw, lot.y1 - bh, lot.x1, lot.y1))
+    } else {
+        None
+    };
+
     if has_wings {
         b.surfaces.push(
             LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
                 .polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, s + 4),
         );
         b.surfaces.push(
-            LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::CarpetFloor, 0, s + 5),
+            LotBox::new(split_x, lot.y0, lot.x1, mid_y)
+                .polygon_feature(SurfaceFeatureKind::CeramicTileFloor, 0, s + 5),
         );
+        if let Some(bl) = bath {
+            b.surfaces.push(
+                LotBox::new(split_x, mid_y, bl.x0, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::CarpetFloor, 0, s + 6),
+            );
+            b.surfaces.push(
+                LotBox::new(bl.x0, mid_y, lot.x1, bl.y0)
+                    .polygon_feature(SurfaceFeatureKind::CarpetFloor, 0, s + 7),
+            );
+            b.surfaces.push(bl.polygon_feature(SurfaceFeatureKind::CeramicTileFloor, 0, s + 8));
+        } else {
+            b.surfaces.push(
+                LotBox::new(split_x, mid_y, lot.x1, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::CarpetFloor, 0, s + 6),
+            );
+        }
     } else {
         b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, s + 4));
     }
@@ -1182,87 +1668,45 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         fc.upsert(front_door_x, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SolidWood);
         fc.upsert(lot.x0, lot.y0 + 1, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SolidWood);
         if has_wings {
-            fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::Drywall);
+            fc.v_partition(split_x, lot.y0, lot.y1, mid_y, false, MaterialClass::Drywall);
+            if lot.h() >= 12 {
+                fc.upsert(split_x, lot.y0 + 2, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SolidWood);
+            }
+            fc.h_partition(mid_y, split_x, lot.x1, split_x + 2, false, MaterialClass::Drywall);
+            if let Some(bl) = bath {
+                fc.v_partition(bl.x0, bl.y0, bl.y1, bl.y0 + 1, false, MaterialClass::Drywall);
+                for x in bl.x0..bl.x1 {
+                    fc.upsert(x, bl.y0, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Drywall);
+                }
+            }
         }
     }
 
-    let portal_x = lot.x1 - 2;
-    let portal_y = lot.y0;
-    let has_multi_floor = w >= 20 && h >= 14 && has_wings;
-    let cands = if has_wings {
-        vec![
-            make_prop(PropKind::Stairwell, portal_x.max(split_x + 1), portal_y, 0, None, s + 10),
-            make_prop(PropKind::Rug, lot.x0 + 1, lot.y0 + 1, 0, None, s + 11),
-            make_prop(PropKind::Desk, lot.x0, lot.y0 + 1, 0, None, s + 12),
-            make_prop(PropKind::Bookshelf, split_x - 1, lot.y0, 0, None, s + 13),
-            make_prop(PropKind::Sofa, lot.x0 + 1, lot.y1 - 2, 0, None, s + 14),
-            make_prop(PropKind::KitchenCounter, split_x + 1, lot.y0, 0, None, s + 15),
-            make_prop(PropKind::Fridge, split_x, lot.y0, 0, None, s + 16),
-            make_prop(PropKind::Cot, lot.x1 - 2, lot.y1 - 2, 0, None, s + 17),
-            make_prop(PropKind::DiningTable, split_x + 1, lot.y1 - 2, 0, None, s + 18),
-        ]
+    if has_wings {
+        furnish_safehouse_1f_shop(&mut b, lot, split_x, s);
+        furnish_safehouse_1f_living(&mut b, lot, split_x, mid_y, bath, s);
     } else {
-        vec![
-            make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 1, 0, None, s + 12),
-            make_prop(PropKind::Sofa, lot.x1 - 3, lot.y1 - 2, 0, None, s + 14),
-        ]
-    };
-    for cand in cands {
-        let _ = try_push_prop(&b.edges, &mut b.props, &b.spawn_pads_m, w, h, cand);
+        push_props_checked(
+            &b.edges,
+            &mut b.props,
+            &b.spawn_pads_m,
+            w,
+            h,
+            [
+                make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 1, 0, None, s + 12),
+                make_prop(PropKind::Sofa, lot.x1 - 3, lot.y1 - 2, 0, None, s + 14),
+            ],
+        );
     }
-
-    if w >= 12 && lot.x0 >= 3 {
-        let _ = b.try_place_cm(PropKind::Dumpster, 120, lot.y0 * 100 + 100, 90, None, true);
-    }
-    if has_street {
-        let _ = b.try_place_cm(PropKind::AwningCanopy, front_door_x * 100 + 100, lot.y1 * 100 + 40, 0, None, true);
-        if lot.y1 + 2 <= h {
-            let _ = b.try_place_cm(PropKind::Car, (lot.x1 - 2).max(4) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
-        }
-    }
+    furnish_safehouse_exterior(&mut b, lot, front_door_x, has_street);
 
     trim_floor_props_to_connected(w, h, LotBox::new(0, 0, w, h), &b.edges, &mut b.props);
     prune_occluded_surfaces(&mut b.surfaces, w, h);
 
     let mut floors = Vec::new();
     let faraday_zone = if has_multi_floor {
-        let mut b1_edges = Vec::new();
-        {
-            let mut b1_fc = FloorCanvas::new(&mut b1_edges, w, h);
-            b1_fc.enclose(lot, MaterialClass::ReinforcedConcrete, 0);
-            b1_fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::ReinforcedConcrete);
-        }
-        let mut b1_props = Vec::new();
-        for cand in [
-            make_prop(PropKind::Stairwell, portal_x.max(split_x + 1), portal_y, 0, None, s + 30),
-            make_prop(PropKind::Rug, lot.x0 + 1, lot.y0 + 1, 0, None, s + 31),
-            make_prop(PropKind::AirGappedTerminal, lot.x0, lot.y0 + 1, 0, None, s + 32),
-            make_prop(PropKind::SolderingStation, lot.x0, lot.y1 - 2, 0, None, s + 33),
-            make_prop(PropKind::BatteryBankWall, split_x - 2, lot.y1 - 1, 0, None, s + 34),
-            make_prop(PropKind::ServerRack, split_x - 1, lot.y0 + 1, 0, None, s + 35),
-            make_prop(PropKind::SteelShelving, lot.x1 - 2, lot.y1 - 1, 0, None, s + 36),
-            make_prop(PropKind::WoodCrate, split_x + 1, lot.y1 - 2, 0, None, s + 37),
-        ] {
-            let _ = try_push_prop(&b1_edges, &mut b1_props, &b.spawn_pads_m, w, h, cand);
-        }
-        trim_floor_props_to_connected(w, h, lot, &b1_edges, &mut b1_props);
-        let mut b1_surfaces = vec![
-            LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 39),
-            LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 40),
-        ];
-        prune_occluded_surfaces(&mut b1_surfaces, w, h);
-        floors.push(MapFloorLevel {
-            floor_index: -1,
-            label: "B1 · Copper-Mesh Cellar".to_string(),
-            elevation_cm: -300,
-            wall_edges: b1_edges,
-            props: b1_props,
-            surfaces: b1_surfaces,
-            ground_floor_override: Some("faraday_copper_mesh".to_string()),
-            ground_tint_rgb: None,
-        });
+        let (b1_level, zone) = build_safehouse_b1_cellar(&b, lot, split_x, s);
+        floors.push(b1_level);
         floors.push(MapFloorLevel {
             floor_index: 0,
             label: "1F · Cover Shophouse".to_string(),
@@ -1273,17 +1717,7 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             ground_floor_override: None,
             ground_tint_rgb: None,
         });
-        MapFaradayZone {
-            zone_id: "faraday-safehouse-cellar".to_string(),
-            label: "B1 Copper-Mesh SIGINT Sanctuary".to_string(),
-            floor_index: -1,
-            x0_cm: lot.x0 * 100,
-            y0_cm: lot.y0 * 100,
-            x1_cm: split_x * 100,
-            y1_cm: lot.y1 * 100,
-            attenuation_db: 85,
-            forces_severed_faraday_reflex: true,
-        }
+        zone
     } else {
         MapFaradayZone {
             zone_id: "faraday-safehouse-backroom".to_string(),
@@ -1309,6 +1743,137 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     }
 }
 
+fn furnish_depot_warehouse(
+    b: &mut OutdoorBuilder,
+    lot: LotBox,
+    split_x: i32,
+    office: Option<LotBox>,
+    s: u32,
+) {
+    let mut cands = Vec::new();
+    let hall_w = split_x - lot.x0;
+    let floor_x0 = office.map_or(lot.x0 + 1, |o| o.x1 + 1);
+    let south_top = office.map_or(lot.y0 + 1, |o| o.y1 + 1);
+
+    if let Some(off) = office {
+        cands.extend([
+            make_prop(PropKind::DeskL, off.x0 + 1, off.y0 + 1, 0, None, s + 10),
+            make_prop(PropKind::FilingCabinet, off.x1 - 1, off.y0, 0, None, s + 11),
+            make_prop(PropKind::CopyMachine, off.x0, off.y0, 0, None, s + 12),
+            make_prop(PropKind::WaterCooler, off.x1 - 1, off.y1 - 1, 0, None, s + 13),
+            make_prop(PropKind::VendingMachine, off.x1 + 1, off.y0, 0, None, s + 14),
+            make_prop(PropKind::FireExtinguisher, off.x0, off.y1 - 1, 0, None, s + 15),
+        ]);
+    } else {
+        cands.extend([
+            make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 3, 0, None, s + 10),
+            make_prop(PropKind::FilingCabinet, lot.x0, lot.y1 - 1, 0, None, s + 11),
+        ]);
+    }
+
+    // Multi-row PalletRack aisles + CargoPallet staging in east half of warehouse
+    let mut ry = lot.y0 + 1;
+    let mut idx = 0u32;
+    while ry + 2 <= lot.y1 - 4 {
+        let row_x0 = if ry < south_top { floor_x0 } else { lot.x0 + 2 };
+        let mut rx = row_x0;
+        while rx + 3 <= split_x - 2 {
+            cands.push(make_prop(PropKind::PalletRack, rx, ry, 0, None, s + 20 + idx));
+            if idx.is_multiple_of(2) && rx + 4 < split_x - 1 {
+                cands.push(make_prop(PropKind::CargoPallet, rx + 3, ry, 0, None, s + 30 + idx));
+            }
+            rx += 5;
+            idx += 1;
+        }
+        ry += 4;
+    }
+
+    // Sorting ConveyorBelt lines, Forklifts & maintenance bay in south half
+    cands.extend([
+        make_prop(PropKind::ConveyorBelt, lot.x0 + 2, lot.y1 - 2, 0, Some((hall_w / 3).clamp(3, 5)), s + 40),
+        make_prop(PropKind::Forklift, split_x - 3, lot.y0 + 1, 90, None, s + 41),
+        make_prop(PropKind::ToolChestWorkbench, lot.x0 + 1, (south_top + 1).min(lot.y1 - 4), 0, None, s + 42),
+        make_prop(PropKind::WoodCrate, split_x - 2, lot.y1 - 2, 0, None, s + 43),
+        make_prop(PropKind::DrumCluster, split_x - 3, lot.y1 - 3, 0, None, s + 44),
+        make_prop(PropKind::CargoPallet, lot.x0 + 1, lot.y1 - 3, 0, None, s + 45),
+        make_prop(PropKind::SteelShelving, lot.x0 + 1, lot.y1 - 1, 0, None, s + 46),
+        make_prop(PropKind::FireExtinguisher, split_x - 1, lot.y0 + 1, 0, None, s + 47),
+    ]);
+    if hall_w >= 14 && lot.h() >= 14 {
+        let mid_c = lot.x0 + hall_w / 2;
+        cands.extend([
+            make_prop(PropKind::ConveyorBelt, mid_c, lot.y1 - 3, 0, Some(4), s + 48),
+            make_prop(PropKind::Forklift, mid_c - 2, lot.y1 - 5, 180, None, s + 49),
+            make_prop(PropKind::CargoPallet, mid_c + 4, lot.y1 - 2, 0, None, s + 50),
+            make_prop(PropKind::CargoPallet, lot.x0 + 6, lot.y1 - 4, 0, None, s + 51),
+            make_prop(PropKind::DrumCluster, split_x - 2, lot.y0 + 3, 0, None, s + 52),
+            make_prop(PropKind::WoodCrate, mid_c - 3, lot.y1 - 2, 0, None, s + 53),
+        ]);
+    }
+
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_depot_substation(b: &mut OutdoorBuilder, lot: LotBox, split_x: i32, s: u32) {
+    let sub_w = lot.x1 - split_x;
+    let mut cands = vec![
+        make_prop(PropKind::HvTransformer, split_x + 1, lot.y0, 0, None, s + 60),
+        make_prop(PropKind::DieselGenerator, (lot.x1 - 2).max(split_x + 3), lot.y0 + 1, 0, None, s + 61),
+        make_prop(PropKind::ElectricalSwitchgear, split_x + 1, lot.y0 + 3, 0, None, s + 62),
+        make_prop(PropKind::BatteryBankWall, (lot.x1 - 2).max(split_x + 2), lot.y1 - 1, 0, None, s + 63),
+        make_prop(PropKind::SecurityCameraMast, split_x, lot.y1 - 1, 0, None, s + 64),
+        make_prop(PropKind::JerseyBarrier, split_x + 2, lot.y1 - 1, 0, None, s + 65),
+        make_prop(PropKind::HazardSpill, split_x + 2, lot.y0 + 2, 0, None, s + 66),
+        make_prop(PropKind::DrumCluster, lot.x1 - 1, lot.y1 - 2, 0, None, s + 67),
+    ];
+    if sub_w >= 8 && lot.h() >= 10 {
+        cands.extend([
+            make_prop(PropKind::HvTransformer, (split_x + 4).min(lot.x1 - 2), lot.y0, 0, None, s + 68),
+            make_prop(PropKind::ElectricalSwitchgear, split_x + 4, lot.y0 + 3, 0, None, s + 69),
+            make_prop(PropKind::DieselGenerator, split_x + 1, lot.y1 - 4, 0, None, s + 70),
+            make_prop(PropKind::BatteryBankWall, split_x + 4, lot.y1 - 1, 0, None, s + 71),
+            make_prop(PropKind::ToolChestWorkbench, lot.x1 - 3, lot.y0 + 5, 0, None, s + 72),
+            make_prop(PropKind::CargoPallet, lot.x1 - 2, lot.y0 + 7, 0, None, s + 73),
+            make_prop(PropKind::JerseyBarrier, lot.x1 - 4, lot.y1 - 2, 0, None, s + 74),
+        ]);
+    }
+    if sub_w >= 11 && lot.h() >= 14 {
+        cands.extend([
+            make_prop(PropKind::HvTransformer, lot.x1 - 3, lot.y0 + 4, 0, None, s + 75),
+            make_prop(PropKind::ElectricalSwitchgear, lot.x1 - 3, lot.y0 + 7, 0, None, s + 76),
+            make_prop(PropKind::DieselGenerator, split_x + 2, lot.y0 + 6, 0, None, s + 77),
+            make_prop(PropKind::WoodCrate, split_x + 5, lot.y0 + 8, 0, None, s + 78),
+        ]);
+    }
+    push_props_checked(&b.edges, &mut b.props, &b.spawn_pads_m, b.w, b.h, cands);
+}
+
+fn furnish_depot_exterior(b: &mut OutdoorBuilder, lot: LotBox, has_street: bool) {
+    let (w, h) = (b.w, b.h);
+    if w >= 12 && lot.x0 >= 3 {
+        let _ = b.try_place_cm(PropKind::Dumpster, 120, (lot.y0 + 1) * 100, 90, None, true);
+        let _ = b.try_place_cm(PropKind::CargoPallet, 120, (lot.y0 + 3) * 100, 0, None, true);
+        let _ = b.try_place_cm(PropKind::StreetLamp, 120, (lot.y1 - 2) * 100, 0, None, true);
+    }
+    if w >= 16 && h >= 14 {
+        let _ = b.try_place_cm(PropKind::ShippingContainer, (w - 3) * 100 + 50, lot.y0 * 100 + 200, 90, None, true);
+        let _ = b.try_place_cm(PropKind::DroneDockPad, (w - 3) * 100 + 50, (lot.y0 + 5).min(lot.y1 - 2) * 100, 0, None, true);
+        let _ = b.try_place_cm(PropKind::ShippingContainer, (w - 3) * 100 + 50, (lot.y1 - 4).max(lot.y0 + 7) * 100, 90, None, true);
+    }
+    if has_street {
+        let can_x = (lot.x0 + 2).min(w - 3) * 100;
+        let _ = b.try_place_cm(PropKind::AwningCanopy, can_x, lot.y1 * 100 + 40, 0, None, true);
+        let _ = b.try_place_cm(PropKind::ParkBench, can_x + 200, lot.y1 * 100 + 45, 0, None, true);
+        let _ = b.try_place_cm(PropKind::WaterPurifierKiosk, can_x - 100, lot.y1 * 100 + 45, 0, None, true);
+        let _ = b.try_place_cm(PropKind::BusShelter, (lot.x0 + 7).min(w - 6) * 100, lot.y1 * 100 + 50, 0, None, true);
+        let _ = b.try_place_cm(PropKind::StreetLamp, (lot.x1 - 5).max(lot.x0 + 4) * 100, lot.y1 * 100 + 45, 0, None, true);
+        if lot.y1 + 2 <= h {
+            let _ = b.try_place_cm(PropKind::UtilityVan, (lot.x1 - 3).max(5) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
+            let _ = b.try_place_cm(PropKind::Car, (lot.x0 + 3).min(w - 6) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
+        }
+    }
+}
+
 fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let mut b = OutdoorBuilder::new(w, h, seed);
     let has_street = h >= 14;
@@ -1316,16 +1881,34 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
     let s = (b.rng.next() & 0xffff_ffff) as u32;
 
     if w >= 12 && lot.x0 >= 3 {
-        b.surfaces.push(
-            LotBox::new(0, lot.y0, lot.x0, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 9),
-        );
         if lot.h() >= 5 {
+            let puddle_x1 = 2.min(lot.x0);
             b.surfaces.push(
-                LotBox::new(0, lot.y1 - 2, 2.min(lot.x0), lot.y1)
+                LotBox::new(0, lot.y0, lot.x0, lot.y1 - 2)
+                    .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 9),
+            );
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 - 2, puddle_x1, lot.y1)
                     .polygon_feature(SurfaceFeatureKind::FloodedAsphalt, 0, s + 8),
             );
+            if puddle_x1 < lot.x0 {
+                b.surfaces.push(
+                    LotBox::new(puddle_x1, lot.y1 - 2, lot.x0, lot.y1)
+                        .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 10),
+                );
+            }
+        } else {
+            b.surfaces.push(
+                LotBox::new(0, lot.y0, lot.x0, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 9),
+            );
         }
+    }
+    if w >= 12 && lot.x1 + 3 <= w {
+        b.surfaces.push(
+            LotBox::new(lot.x1, lot.y0, w, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 11),
+        );
     }
     if has_street {
         b.surfaces.push(
@@ -1342,20 +1925,39 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
 
     let split_x = lot.x0 + (lot.w() * 3 / 5).max(2);
     let has_substation = lot.w() >= 10 && lot.h() >= 7;
+    let office = if has_substation && (split_x - lot.x0) >= 12 && lot.h() >= 12 {
+        Some(LotBox::new(lot.x0, lot.y0, lot.x0 + 6, lot.y0 + 4))
+    } else {
+        None
+    };
+
     if has_substation {
-        b.surfaces.push(
-            LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 3),
-        );
-        b.surfaces.push(
-            LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::GravelRoad, 0, s + 4),
-        );
+        if let Some(off) = office {
+            b.surfaces.push(off.polygon_feature(SurfaceFeatureKind::LinoleumCheckFloor, 0, s + 12));
+            b.surfaces.push(
+                LotBox::new(off.x1, lot.y0, split_x, off.y1)
+                    .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 13),
+            );
+            b.surfaces.push(
+                LotBox::new(lot.x0, off.y1, split_x, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 14),
+            );
+        } else {
+            b.surfaces.push(
+                LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 3),
+            );
+        }
         let pad_y1 = lot.y0 + (lot.h() / 2).max(2);
         b.surfaces.push(
             LotBox::new(split_x, lot.y0, lot.x1, pad_y1)
                 .polygon_feature(SurfaceFeatureKind::SubstationGrating, 0, s + 5),
         );
+        b.surfaces.push(
+            LotBox::new(split_x, pad_y1, lot.x1, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::GravelRoad, 0, s + 4),
+        );
+
         let door_y = lot.y0 + lot.h() / 2;
         let mut fc = FloorCanvas::new(&mut b.edges, w, h);
         fc.enclose(LotBox::new(lot.x0, lot.y0, split_x, lot.y1), MaterialClass::ConcreteBlock, 4);
@@ -1364,6 +1966,10 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
         fc.upsert(split_x, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
         fc.upsert(lot.x1, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
         fc.upsert(lot.x0 + 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        if let Some(off) = office {
+            fc.h_partition(off.y1, off.x0, off.x1, off.x0 + 3, true, MaterialClass::Drywall);
+            fc.v_partition(off.x1, off.y0, off.y1, off.y0 + 2, true, MaterialClass::Drywall);
+        }
     } else {
         b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 3));
         let mut fc = FloorCanvas::new(&mut b.edges, w, h);
@@ -1371,52 +1977,24 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
         fc.upsert(lot.x0 + lot.w() / 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
     }
 
-    let cands = if has_substation {
-        vec![
-            make_prop(PropKind::PalletRack, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::ConveyorBelt, lot.x0 + 1, lot.y1 - 2, 0, Some(3), s + 11),
-            make_prop(PropKind::Forklift, split_x - 2, lot.y0 + 1, 90, None, s + 12),
-            make_prop(PropKind::WoodCrate, split_x - 2, lot.y1 - 2, 0, None, s + 13),
-            make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 3, 0, None, s + 14),
-            make_prop(PropKind::FilingCabinet, lot.x0, lot.y1 - 1, 0, None, s + 15),
-            make_prop(PropKind::HvTransformer, split_x + 1, lot.y0, 0, None, s + 16),
-            make_prop(PropKind::DieselGenerator, lot.x1 - 2, lot.y0 + 1, 0, None, s + 17),
-            make_prop(PropKind::BatteryBankWall, lot.x1 - 2, lot.y1 - 1, 0, None, s + 18),
-            make_prop(PropKind::SecurityCameraMast, split_x, lot.y1 - 1, 0, None, s + 19),
-            make_prop(PropKind::JerseyBarrier, split_x + 2, lot.y1 - 1, 0, None, s + 20),
-            make_prop(PropKind::HazardSpill, split_x + 2, lot.y0 + 2, 0, None, s + 21),
-        ]
+    if has_substation {
+        furnish_depot_warehouse(&mut b, lot, split_x, office, s);
+        furnish_depot_substation(&mut b, lot, split_x, s);
     } else {
-        vec![
-            make_prop(PropKind::PalletRack, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::DieselGenerator, lot.x1 - 2, lot.y1 - 2, 0, None, s + 11),
-            make_prop(PropKind::WoodCrate, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
-        ]
-    };
-    for cand in cands {
-        let _ = try_push_prop(&b.edges, &mut b.props, &b.spawn_pads_m, w, h, cand);
+        push_props_checked(
+            &b.edges,
+            &mut b.props,
+            &b.spawn_pads_m,
+            w,
+            h,
+            [
+                make_prop(PropKind::PalletRack, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
+                make_prop(PropKind::DieselGenerator, lot.x1 - 2, lot.y1 - 2, 0, None, s + 11),
+                make_prop(PropKind::WoodCrate, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
+            ],
+        );
     }
-
-    if w >= 16 && h >= 14 {
-        let _ = b.try_place_cm(PropKind::ShippingContainer, (w - 3) * 100 + 50, lot.y0 * 100 + 200, 90, None, true);
-        let _ = b.try_place_cm(PropKind::DroneDockPad, (w - 3) * 100 + 50, (lot.y0 + 4).min(lot.y1 - 2) * 100, 0, None, true);
-    }
-    if has_street {
-        let can_x = (lot.x0 + 2).min(w - 3) * 100;
-        let _ = b.try_place_cm(PropKind::AwningCanopy, can_x, lot.y1 * 100 + 40, 0, None, true);
-        let _ = b.try_place_cm(PropKind::ParkBench, can_x + 200, lot.y1 * 100 + 45, 0, None, true);
-        let _ = b.try_place_cm(PropKind::WaterPurifierKiosk, can_x - 100, lot.y1 * 100 + 45, 0, None, true);
-        if lot.y1 + 2 <= h {
-            let _ = b.try_place_cm(
-                PropKind::UtilityVan,
-                (lot.x1 - 3).max(5) * 100,
-                (lot.y1 + 2).min(h - 1) * 100,
-                90,
-                None,
-                true,
-            );
-        }
-    }
+    furnish_depot_exterior(&mut b, lot, has_street);
 
     trim_floor_props_to_connected(w, h, LotBox::new(0, 0, w, h), &b.edges, &mut b.props);
     prune_occluded_surfaces(&mut b.surfaces, w, h);

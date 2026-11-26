@@ -1388,7 +1388,7 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
         b.props.extend(unit.props);
     }
 
-    // Promenade furniture: cafe patio tables, benches, and outdoor MallKiosk cart strictly on promenade.
+    // Promenade furniture: cafe patio tables, benches, kiosks, transit shelter, and lamps strictly off road.
     let kiosk_cx = OutdoorBuilder::cm(w as f32 * 0.5 + b.rng.f32_range(-1.5, 1.5));
     let kiosk_rot = b.rng.range(-12, 13);
     let prom_cy = OutdoorBuilder::cm(prom_y - 0.15);
@@ -1396,12 +1396,63 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let patio_x = OutdoorBuilder::cm(bx0 as f32 + 2.5);
     let _ = b.try_place_off_road_cm(PropKind::RoundTable, patio_x, prom_cy, 15, None);
     let _ = b.try_place_off_road_cm(
+        PropKind::PatioUmbrellaTable,
+        OutdoorBuilder::cm(bx0 as f32 + 5.5),
+        prom_cy,
+        8,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
+        PropKind::PatioUmbrellaTable,
+        OutdoorBuilder::cm(bx1 as f32 - 5.5),
+        prom_cy,
+        24,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
+        PropKind::AtmKiosk,
+        OutdoorBuilder::cm((w as f32 * 0.36).max(bx0 as f32 + 8.0)),
+        prom_cy,
+        0,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
+        PropKind::VendingMachine,
+        OutdoorBuilder::cm((w as f32 * 0.64).min(bx1 as f32 - 8.0)),
+        prom_cy,
+        0,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
         PropKind::ParkBench,
         OutdoorBuilder::cm(bx1 as f32 - 2.5),
         prom_cy,
         180,
         None,
     );
+    let _ = b.try_place_off_road_cm(
+        PropKind::StreetLamp,
+        OutdoorBuilder::cm(bx0 as f32 + 1.2),
+        prom_cy,
+        0,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
+        PropKind::StreetLamp,
+        OutdoorBuilder::cm(bx1 as f32 - 1.2),
+        prom_cy,
+        0,
+        None,
+    );
+    if w >= 28 {
+        let _ = b.try_place_off_road_cm(
+            PropKind::BusShelter,
+            OutdoorBuilder::cm((bx0 as f32 + 9.5).min(w as f32 * 0.30)),
+            OutdoorBuilder::cm(prom_y + 0.35),
+            0,
+            None,
+        );
+    }
 
     // Angled parking vehicles along parking lane.
     for (idx, frac) in [0.18_f32, 0.38, 0.62, 0.82].iter().enumerate() {
@@ -1625,6 +1676,46 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             true,
         );
         let _ = b.try_place_cm(
+            PropKind::EspressoCounter,
+            OutdoorBuilder::cm(w as f32 * 0.50),
+            OutdoorBuilder::cm(conc_y0 as f32 + 1.0),
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::PatioUmbrellaTable,
+            OutdoorBuilder::cm(w as f32 * 0.34),
+            cy_mid_cm,
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::PatioUmbrellaTable,
+            OutdoorBuilder::cm(w as f32 * 0.66),
+            cy_mid_cm,
+            15,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::AtmKiosk,
+            OutdoorBuilder::cm(cx0 as f32 + 0.8),
+            OutdoorBuilder::cm(conc_y0 as f32 + 1.5),
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::VendingMachine,
+            OutdoorBuilder::cm(cx1 as f32 - 0.8),
+            OutdoorBuilder::cm(conc_y1 as f32 - 0.8),
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
             PropKind::SmallFountain,
             OutdoorBuilder::cm(w as f32 * 0.40),
             cy_mid_cm,
@@ -1704,6 +1795,20 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         floor_seed + 3,
     );
     let _ = place_indoor_checked(&f2_edges, &mut f2_props, full_lot, planter_2f);
+    for (ci, extra_2f) in [
+        make_prop(PropKind::EspressoCounter, (w / 4).max(2), conc_y0 + 1, 0, Some(2), floor_seed + 10),
+        make_prop(PropKind::PatioUmbrellaTable, (w / 4 + 4).min(cx0 - 2), conc_y0 + 2, 0, None, floor_seed + 11),
+        make_prop(PropKind::PatioUmbrellaTable, (3 * w / 4 - 2).min(w - 4), conc_y0 + 2, 0, None, floor_seed + 12),
+        make_prop(PropKind::AtmKiosk, cx0, conc_y0 + 3, 0, None, floor_seed + 13),
+        make_prop(PropKind::VendingMachine, cx1 - 1, conc_y1 - 1, 0, None, floor_seed + 14),
+        make_prop(PropKind::ParkBench, (w * 3 / 5).min(w - 4), conc_y0, 0, None, floor_seed + 15),
+        make_prop(PropKind::TrashCan, (w * 3 / 5 + 2).min(w - 2), conc_y0, 0, None, floor_seed + 16),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let _ = (ci, place_indoor_checked(&f2_edges, &mut f2_props, full_lot, extra_2f));
+    }
     trim_floor_props_to_connected(w, h, full_lot, &f2_edges, &mut f2_props);
 
     let mut f2_surfaces = vec![

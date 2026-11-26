@@ -8,6 +8,7 @@ Activate [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKIL
    - Centralize shared wire DTOs (e.g., `GmSessionLogEntry`, `GmTrajectoryReportRequest`, `MoveMapTokenRequest`) and role-filtering methods (e.g., `GmMapUpdateRequest::filtered_for_role(SessionRole)`) here rather than duplicating DTO structs or filtering rules in downstream crates.
 2. **Macros & Shared Wire Primitives**:
    - Declare `SCREAMING_SNAKE_CASE` wire enums via `define_wire_enum!` (`src/wire_enum.rs`) with `aliases` (for legacy string migrations such as `MaterialClass::ConcreteBlock` aliasing `"CONCRETE"` or `CombatStance`), `ALL`, `as_str`, `code`, `label`, and `from_code_str`.
+   - When adding `PropKind` variants in `tactical_map_dressing_dto.rs`, update `[count = N]` and `PropKind::ALL.len()`, match `serde` `SCREAMING_SNAKE_CASE` on both digit and acronym boundaries (e.g., `Printer3dStation` → `"PRINTER3D_STATION"`, `SciFiCargoPod` → `"SCI_FI_CARGO_POD"`), and append matching `PropSpec` entries in identical enum order to `PROP_CATALOG` (`crates/satya-maps/src/map_dressing.rs`).
    - Use `MapPropPlacement::footprint_m()` (`PropFootprintM`) for rotated continuous metric prop transforms rather than re-deriving center/half-extents/rotation in downstream crates.
    - Register builtin Avro schemas in `BUILTIN_SCHEMAS` (`src/registry.rs`).
 3. **Module Responsibility Map (`crates/satya-schema/src/`)**:

@@ -752,7 +752,13 @@ mod tests {
     fn hot_tub_and_new_object_textures_render_valid_balanced_svg_in_painted_and_vector_modes() {
         let mut painted_outputs = Vec::new();
         for variant_seed in 0..4_u32 {
-            let spa = make_prop(PropKind::HotTub, 2, 2, 0, None, variant_seed);
+            let mut spa = make_prop(PropKind::HotTub, 2, 2, 0, None, variant_seed);
+            let mut sprite_svg = String::new();
+            push_furniture_glyph_with_mode(&mut sprite_svg, &spa, 64.0, BattlemapTextureMode::Painted);
+            assert!(sprite_svg.contains("/assets/sprites/props/hot_tub"));
+
+            // Custom-tinted placements fall back to SVG pattern overlays.
+            spa.tint_rgb = Some([210, 200, 190]);
             let mut painted = String::new();
             push_furniture_glyph_with_mode(&mut painted, &spa, 64.0, BattlemapTextureMode::Painted);
             assert_eq!(
@@ -786,17 +792,22 @@ mod tests {
         assert!(painted_outputs[2].contains("url(#bm-rock)"));
         assert!(painted_outputs[3].contains("url(#bm-porcelain)"));
 
-        let sofa_fabric = make_prop(PropKind::Sofa, 1, 1, 0, None, 1);
-        let sofa_leather = make_prop(PropKind::Sofa, 1, 1, 0, None, 0);
-        let rug = make_prop(PropKind::Rug, 3, 3, 0, None, 7);
-        let car = make_prop(PropKind::Car, 6, 4, 0, None, 3);
+        let mut sofa_fabric = make_prop(PropKind::Sofa, 1, 1, 0, None, 1);
+        let mut sofa_leather = make_prop(PropKind::Sofa, 1, 1, 0, None, 0);
+        let mut rug = make_prop(PropKind::Rug, 3, 3, 0, None, 7);
+        let mut car = make_prop(PropKind::Car, 6, 4, 0, None, 3);
         let tree = make_prop(PropKind::LargeTree, 8, 8, 0, None, 5);
         let gazebo = make_prop(PropKind::Gazebo, 10, 10, 0, None, 2);
 
         let mut svg = String::new();
         push_furniture_glyph_with_mode(&mut svg, &sofa_fabric, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("/assets/sprites/props/sofa"));
+        sofa_fabric.tint_rgb = Some([120, 130, 140]);
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &sofa_fabric, 64.0, BattlemapTextureMode::Painted);
         assert!(svg.contains("url(#bm-fabric)"));
 
+        sofa_leather.tint_rgb = Some([110, 90, 80]);
         svg.clear();
         push_furniture_glyph_with_mode(
             &mut svg,
@@ -808,8 +819,16 @@ mod tests {
 
         svg.clear();
         push_furniture_glyph_with_mode(&mut svg, &rug, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("/assets/sprites/props/rug"));
+        rug.tint_rgb = Some([160, 120, 110]);
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &rug, 64.0, BattlemapTextureMode::Painted);
         assert!(svg.contains("url(#bm-rug-weave)"));
 
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &car, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("/assets/sprites/props/car"));
+        car.tint_rgb = Some([90, 110, 130]);
         svg.clear();
         push_furniture_glyph_with_mode(&mut svg, &car, 64.0, BattlemapTextureMode::Painted);
         assert!(svg.contains("url(#bm-car-coat)"));

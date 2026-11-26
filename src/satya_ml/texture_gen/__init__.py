@@ -8,6 +8,15 @@ from satya_ml.texture_gen.catalog import (
     select_texture_specs,
 )
 from satya_ml.texture_gen.prop_catalog import (
+    BATCH_2_CLINIC_PROP_IDS,
+    BATCH_3_LIVING_BEDROOM_IDS,
+    BATCH_4_KITCHEN_BATH_BAR_IDS,
+    BATCH_5_OFFICE_CLINICAL_PORTALS_IDS,
+    BATCH_6_LAB_RETAIL_INDUSTRIAL_IDS,
+    BATCH_7_OUTDOOR_VEHICLES_INFRA_IDS,
+    BATCH_8_CAFE_RETAIL_IDS,
+    BATCH_9_INDUSTRIAL_FARM_IDS,
+    BATCH_10_SCIFI_OFFICE_STREET_IDS,
     PILOT_CLINIC_PROP_IDS,
     PROP_SPRITE_CATALOG,
     PropSpriteSpec,
@@ -21,6 +30,7 @@ from satya_ml.texture_gen.prop_matting import (
     extract_chroma_alpha,
     matte_prop_sprite,
     render_prop_contact_sheet,
+    render_prop_variants_contact_sheet,
     verify_sprite_alpha_quality,
 )
 from satya_ml.texture_gen.seamless import (
@@ -34,6 +44,15 @@ from satya_ml.texture_gen.seamless import (
 )
 
 __all__ = [
+    "BATCH_2_CLINIC_PROP_IDS",
+    "BATCH_3_LIVING_BEDROOM_IDS",
+    "BATCH_4_KITCHEN_BATH_BAR_IDS",
+    "BATCH_5_OFFICE_CLINICAL_PORTALS_IDS",
+    "BATCH_6_LAB_RETAIL_INDUSTRIAL_IDS",
+    "BATCH_7_OUTDOOR_VEHICLES_INFRA_IDS",
+    "BATCH_8_CAFE_RETAIL_IDS",
+    "BATCH_9_INDUSTRIAL_FARM_IDS",
+    "BATCH_10_SCIFI_OFFICE_STREET_IDS",
     "BATTLEMAP_2D_TEXTURE_CATALOG",
     "PILOT_4_IDS",
     "PILOT_CLINIC_PROP_IDS",
@@ -52,6 +71,7 @@ __all__ = [
     "matte_prop_sprite",
     "render_contact_sheet_3x3",
     "render_prop_contact_sheet",
+    "render_prop_variants_contact_sheet",
     "roll_half",
     "select_prop_sprite_specs",
     "select_texture_specs",

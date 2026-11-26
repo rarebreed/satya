@@ -96,19 +96,31 @@ fn furnish_storefront(b: &mut SectorBuilder, r: Rect, role_idx: usize) {
     if rw(r) < 3 || rh(r) < 3 {
         return;
     }
+    let big = rw(r) >= 6 && rh(r) >= 5;
     match role_idx % 4 {
         0 => {
-            let _ = b.against_any_wall(PropKind::KitchenCounter, r, Some((rw(r) / 2).clamp(2, 4)));
+            let _ = b.against_any_wall(PropKind::EspressoCounter, r, Some((rw(r) / 3).clamp(2, 4)));
+            let _ = b.against_any_wall(PropKind::CommercialPrepTable, r, None);
+            if big {
+                let _ = b.against_any_wall(PropKind::BuffetCounter, r, Some(2));
+                let _ = b.against_any_wall(PropKind::Booth, r, None);
+                let _ = b.against_any_wall(PropKind::RefrigeratedDisplayCase, r, None);
+            }
             b.scatter_in(
                 PropKind::RoundTable,
                 r,
-                (rw(r) * rh(r) / 10).clamp(2, 5) as usize,
+                (rw(r) * rh(r) / 10).clamp(2, 6) as usize,
                 false,
             );
         }
         1 => {
+            let _ = b.against_any_wall(PropKind::CheckoutCounter, r, Some(2));
+            let _ = b.against_any_wall(PropKind::RefrigeratedDisplayCase, r, None);
             let _ = b.against_any_wall(PropKind::SteelShelving, r, None);
-            let _ = b.against_any_wall(PropKind::Fridge, r, None);
+            if big {
+                let _ = b.against_any_wall(PropKind::DisplayRack, r, Some(2));
+                let _ = b.against_any_wall(PropKind::VendingMachine, r, None);
+            }
             b.scatter_in(
                 PropKind::WoodCrate,
                 r,
@@ -120,10 +132,20 @@ fn furnish_storefront(b: &mut SectorBuilder, r: Rect, role_idx: usize) {
             let _ = b.against_any_wall(PropKind::Desk, r, None);
             let _ = b.against_any_wall(PropKind::Bookshelf, r, None);
             let _ = b.against_any_wall(PropKind::Sofa, r, None);
+            if big {
+                let _ = b.against_any_wall(PropKind::ConferenceTable, r, None);
+                let _ = b.against_any_wall(PropKind::CopyMachine, r, None);
+                let _ = b.against_any_wall(PropKind::FilingCabinet, r, None);
+            }
         }
         _ => {
+            let _ = b.against_any_wall(PropKind::ClothingRack, r, Some(2));
+            let _ = b.against_any_wall(PropKind::CheckoutCounter, r, Some(2));
             let _ = b.against_any_wall(PropKind::SteelShelving, r, None);
-            let _ = b.against_any_wall(PropKind::DrumCluster, r, None);
+            if big {
+                let _ = b.against_any_wall(PropKind::ToolChestWorkbench, r, None);
+                let _ = b.against_any_wall(PropKind::CargoPallet, r, None);
+            }
             b.scatter_in(PropKind::WoodCrate, r, 2, false);
         }
     }
@@ -797,5 +819,11 @@ fn dress_urban_street_props(b: &mut SectorBuilder, bw: i32, bh: i32, cx: i32, cy
     ) == 0
     {
         b.scatter_filtered(PropKind::WoodCrate, whole, 1, false, off_road);
+    }
+    b.scatter_filtered(PropKind::StreetLamp, whole, (scale / 2).max(1), w >= 16, off_road);
+    b.scatter_filtered(PropKind::AtmKiosk, whole, 1, w >= 16, off_road);
+    if w >= 20 && h >= 14 {
+        b.scatter_filtered(PropKind::PatioUmbrellaTable, whole, (scale / 2).max(1), true, off_road);
+        b.scatter_filtered(PropKind::BusShelter, whole, 1, true, off_road);
     }
 }

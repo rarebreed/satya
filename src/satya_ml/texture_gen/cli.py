@@ -7,6 +7,7 @@ import base64
 import io
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,7 @@ class GeminiImageClient:
         self._api_key = api_key
         self._preferred_model = preferred_model
         self._cached_strategy: tuple[bool, str, str] | None = None
+        self._strategy_lock = threading.Lock()
 
     def generate(
         self,
@@ -57,59 +59,67 @@ class GeminiImageClient:
         from google import genai
         from google.genai import types
 
-        if self._cached_strategy is not None:
-            vertexai, api_kind, model_id = self._cached_strategy
-            return self._invoke_with_recitation_retry(
-                genai,
-                types,
-                vertexai,
-                api_kind,
-                model_id,
-                prompt,
-                ref_png_bytes,
-                aspect_ratio,
-            )
+        strategy = self._cached_strategy
+        if strategy is None:
+            with self._strategy_lock:
+                strategy = self._cached_strategy
+                if strategy is None:
+                    models = list(
+                        dict.fromkeys(
+                            [
+                                self._preferred_model,
+                                "gemini-nano-banana-2.1",
+                                "gemini-3.1-flash-image",
+                                "gemini-3.1-flash-image-preview",
+                                "gemini-2.5-flash-image",
+                            ]
+                        )
+                    )
+                    attempts: list[tuple[bool, str, str]] = []
+                    for vertexai in (False, True):
+                        for model_id in models:
+                            attempts.append((vertexai, "interactions", model_id))
+                            attempts.append((vertexai, "generate_content", model_id))
 
-        models = list(
-            dict.fromkeys(
-                [
-                    self._preferred_model,
-                    "gemini-nano-banana-2.1",
-                    "gemini-3.1-flash-image",
-                    "gemini-3.1-flash-image-preview",
-                    "gemini-2.5-flash-image",
-                ]
-            )
+                    errors: list[str] = []
+                    for vertexai, api_kind, model_id in attempts:
+                        try:
+                            data = self._invoke_with_recitation_retry(
+                                genai,
+                                types,
+                                vertexai,
+                                api_kind,
+                                model_id,
+                                prompt,
+                                ref_png_bytes,
+                                aspect_ratio,
+                            )
+                            self._cached_strategy = (vertexai, api_kind, model_id)
+                            mode = "vertex-express" if vertexai else "gemini-dev"
+                            print(f"[texture_gen] connected via {mode} / {api_kind} ({model_id})")
+                            return data
+                        except Exception as exc:  # noqa: BLE001
+                            msg = str(exc).replace(self._api_key, "***")
+                            errors.append(
+                                f"vertexai={vertexai}/{api_kind}/{model_id}: {msg[:180]}"
+                            )
+
+                    summary = "\n  - ".join(errors)
+                    raise RuntimeError(
+                        f"All Gemini image generation strategies failed:\n  - {summary}"
+                    )
+
+        vertexai, api_kind, model_id = strategy
+        return self._invoke_with_recitation_retry(
+            genai,
+            types,
+            vertexai,
+            api_kind,
+            model_id,
+            prompt,
+            ref_png_bytes,
+            aspect_ratio,
         )
-        attempts: list[tuple[bool, str, str]] = []
-        for vertexai in (False, True):
-            for model_id in models:
-                attempts.append((vertexai, "interactions", model_id))
-                attempts.append((vertexai, "generate_content", model_id))
-
-        errors: list[str] = []
-        for vertexai, api_kind, model_id in attempts:
-            try:
-                data = self._invoke_with_recitation_retry(
-                    genai,
-                    types,
-                    vertexai,
-                    api_kind,
-                    model_id,
-                    prompt,
-                    ref_png_bytes,
-                    aspect_ratio,
-                )
-                self._cached_strategy = (vertexai, api_kind, model_id)
-                mode = "vertex-express" if vertexai else "gemini-dev"
-                print(f"[texture_gen] connected via {mode} / {api_kind} ({model_id})")
-                return data
-            except Exception as exc:  # noqa: BLE001
-                msg = str(exc).replace(self._api_key, "***")
-                errors.append(f"vertexai={vertexai}/{api_kind}/{model_id}: {msg[:180]}")
-
-        summary = "\n  - ".join(errors)
-        raise RuntimeError(f"All Gemini image generation strategies failed:\n  - {summary}")
 
     def _invoke_with_recitation_retry(
         self,

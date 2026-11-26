@@ -12,7 +12,7 @@ When working on any Rust crate, Python module, or documentation file in this rep
 - **`crates/satya-schema` & `schemas/v*/`**: [`crates/satya-schema/AGENTS.md`](crates/satya-schema/AGENTS.md)
 - **`crates/satya-rules-book` & `docs/ttrpg/`**: [`crates/satya-rules-book/AGENTS.md`](crates/satya-rules-book/AGENTS.md)
 - **`crates/satya-engine` (Core TTRPG Rules) & `docs/ttrpg/`**: Skill [`satya-rust-engine`](.agents/skills/satya-rust-engine/SKILL.md) · [`crates/satya-engine/AGENTS.md`](crates/satya-engine/AGENTS.md)
-- **`crates/satya-maps` (Continuous Metric Battlemaps & Procedural Generators)**: Skill [`satya-rust-engine`](.agents/skills/satya-rust-engine/SKILL.md) · [`crates/satya-maps/AGENTS.md`](crates/satya-maps/AGENTS.md)
+- **`crates/satya-maps` (Continuous Metric Battlemaps & Procedural Generators)**: Skill [`satya-maps`](.agents/skills/satya-maps/SKILL.md) · [`crates/satya-maps/AGENTS.md`](crates/satya-maps/AGENTS.md)
 - **`crates/satya-campaign` (*Awakened* 2035 Substrates, Arcs, Factions, Hooks, NPCs & World Clocks)**: [`crates/satya-campaign/AGENTS.md`](crates/satya-campaign/AGENTS.md)
 - **`crates/satya-storage` (Apache Iggy WAL & Avro Batch Sink)**: [`crates/satya-storage/AGENTS.md`](crates/satya-storage/AGENTS.md)
 - **`crates/satya-signaling` (Axum HTTP/WS Server, Auth, GM Vault & AI GM Bridge)**: [`crates/satya-signaling/AGENTS.md`](crates/satya-signaling/AGENTS.md)

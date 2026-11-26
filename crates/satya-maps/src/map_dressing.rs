@@ -220,6 +220,32 @@ prop_catalog! {
     DieselGenerator: 2 x 1, FullObstacle, SheetSteel, 155 cm, [0.64, 0.48, 0.16];
     BatteryBankWall: 2 x 1, FullObstacle, SheetSteel, 190 cm, [0.22, 0.28, 0.34], stretch;
     WaterPurifierKiosk: 1 x 1, HalfCover, SheetSteel, 165 cm, [0.32, 0.62, 0.78];
+    EspressoCounter: 2 x 1, HalfCover, WoodFurniture, 112 cm, [0.42, 0.28, 0.18], stretch;
+    CommercialPrepTable: 2 x 1, HalfCover, SheetSteel, 92 cm, [0.76, 0.79, 0.82], stretch;
+    CommercialGrillHood: 2 x 1, HalfCover, Appliance, 115 cm, [0.66, 0.70, 0.74];
+    PatioUmbrellaTable: 2 x 2, HalfCover, Upholstery, 230 cm, [0.78, 0.34, 0.26];
+    BuffetCounter: 2 x 1, HalfCover, WoodFurniture, 105 cm, [0.56, 0.42, 0.30], stretch;
+    RefrigeratedDisplayCase: 2 x 1, FullObstacle, Appliance, 195 cm, [0.78, 0.86, 0.90], stretch;
+    ClothingRack: 2 x 1, HalfCover, Upholstery, 148 cm, [0.64, 0.56, 0.52], stretch;
+    PharmacyCounter: 2 x 1, HalfCover, WoodFurniture, 118 cm, [0.84, 0.88, 0.90], stretch;
+    VendingMachine: 1 x 1, FullObstacle, Appliance, 188 cm, [0.24, 0.40, 0.62];
+    AtmKiosk: 1 x 1, HalfCover, SheetSteel, 155 cm, [0.28, 0.36, 0.46];
+    RoboticAssemblyArm: 2 x 2, FullObstacle, ArmorSteel, 220 cm, [0.86, 0.54, 0.14];
+    ToolChestWorkbench: 2 x 1, HalfCover, SheetSteel, 98 cm, [0.72, 0.18, 0.16];
+    CargoPallet: 1 x 1, HalfCover, WoodFurniture, 120 cm, [0.66, 0.54, 0.38];
+    ElectricalSwitchgear: 2 x 1, FullObstacle, SheetSteel, 210 cm, [0.42, 0.46, 0.48], stretch;
+    Tractor: 2 x 3, FullObstacle, VehicleBody, 235 cm, [0.24, 0.52, 0.24];
+    HayBaleStack: 2 x 1, HalfCover, Foliage, 130 cm, [0.78, 0.66, 0.32];
+    LivestockTrough: 2 x 1, HalfCover, SheetSteel, 72 cm, [0.58, 0.62, 0.65];
+    ConservatorySpecimenIsland: 2 x 2, HalfCover, Earth, 145 cm, [0.24, 0.54, 0.28];
+    CommandConsole: 2 x 1, HalfCover, SheetSteel, 118 cm, [0.20, 0.28, 0.36], stretch;
+    EvaSuitLocker: 2 x 1, FullObstacle, ArmorSteel, 210 cm, [0.66, 0.70, 0.74], stretch;
+    SciFiCargoPod: 2 x 1, HalfCover, ArmorSteel, 135 cm, [0.38, 0.44, 0.50];
+    HullDebris: 2 x 1, HalfCover, SheetSteel, 95 cm, [0.36, 0.38, 0.40];
+    ConferenceTable: 3 x 2, HalfCover, WoodFurniture, 76 cm, [0.48, 0.34, 0.24];
+    CopyMachine: 1 x 1, HalfCover, Appliance, 112 cm, [0.84, 0.86, 0.88];
+    StreetLamp: 1 x 1, FloorLayer, SheetSteel, 360 cm, [0.32, 0.36, 0.40], floor;
+    BusShelter: 3 x 1, HalfCover, Glass, 240 cm, [0.46, 0.62, 0.74];
 }
 
 /// Catalog entry for `kind`.

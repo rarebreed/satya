@@ -104,7 +104,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_maps::map_dressing::prop_spec`.
-    pub enum PropKind [count = 128] {
+    pub enum PropKind [count = 154] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -233,6 +233,32 @@ define_wire_enum! {
         DieselGenerator => ("DIESEL_GENERATOR", "Backup diesel microgrid generator", aliases: ["GENERATOR", "BACKUP_GENERATOR"]),
         BatteryBankWall => ("BATTERY_BANK_WALL", "Modular LFP microgrid battery cabinet", aliases: ["BATTERY_BANK", "POWER_WALL"]),
         WaterPurifierKiosk => ("WATER_PURIFIER_KIOSK", "Municipal ration water & misting kiosk", aliases: ["WATER_KIOSK", "MISTING_STATION"]),
+        EspressoCounter => ("ESPRESSO_COUNTER", "Barista espresso & pastry display counter", aliases: ["COFFEE_BAR", "CAFE_COUNTER"]),
+        CommercialPrepTable => ("COMMERCIAL_PREP_TABLE", "Stainless commercial kitchen prep island", aliases: ["PREP_TABLE", "STAINLESS_PREP"]),
+        CommercialGrillHood => ("COMMERCIAL_GRILL_HOOD", "Commercial range, fryer & exhaust hood", aliases: ["FLAT_TOP_GRILL", "COMMERCIAL_RANGE"]),
+        PatioUmbrellaTable => ("PATIO_UMBRELLA_TABLE", "Outdoor bistro table with parasol umbrella", aliases: ["PATIO_TABLE", "UMBRELLA_TABLE"]),
+        BuffetCounter => ("BUFFET_COUNTER", "Self-serve salad, pastry & coffee bar counter", aliases: ["BUFFET", "SALAD_BAR"]),
+        RefrigeratedDisplayCase => ("REFRIGERATED_DISPLAY_CASE", "Glass-door beverage & deli cooler wall", aliases: ["BEVERAGE_COOLER", "DELI_CASE"]),
+        ClothingRack => ("CLOTHING_RACK", "Retail apparel garment rack", aliases: ["GARMENT_RACK", "APPAREL_RACK"]),
+        PharmacyCounter => ("PHARMACY_COUNTER", "Clinical pharmacy dispensary counter", aliases: ["DISPENSARY_COUNTER", "PHARMACY_DESK"]),
+        VendingMachine => ("VENDING_MACHINE", "Automated snack & beverage vending machine", aliases: ["SNACK_MACHINE", "DRINK_MACHINE"]),
+        AtmKiosk => ("ATM_KIOSK", "Walk-up ATM & teller kiosk", aliases: ["ATM", "CASH_MACHINE"]),
+        RoboticAssemblyArm => ("ROBOTIC_ASSEMBLY_ARM", "Articulated industrial welding robot cell", aliases: ["WELDING_ROBOT", "ROBOT_ARM"]),
+        ToolChestWorkbench => ("TOOL_CHEST_WORKBENCH", "Rolling red steel tool chest & mechanic bench", aliases: ["TOOL_CHEST", "MECHANIC_BENCH"]),
+        CargoPallet => ("CARGO_PALLET", "Shrink-wrapped freight cargo pallet", aliases: ["FREIGHT_PALLET", "PALLET_STACK"]),
+        ElectricalSwitchgear => ("ELECTRICAL_SWITCHGEAR", "High-voltage industrial breaker switchgear cabinet", aliases: ["SWITCHGEAR", "BREAKER_CABINET"]),
+        Tractor => ("TRACTOR", "Utility agricultural farm tractor", aliases: ["FARM_TRACTOR"]),
+        HayBaleStack => ("HAY_BALE_STACK", "Stacked golden agricultural hay bales", aliases: ["HAY_BALES", "STRAW_BALES"]),
+        LivestockTrough => ("LIVESTOCK_TROUGH", "Galvanized steel feed & water trough", aliases: ["FEED_TROUGH", "WATER_TROUGH"]),
+        ConservatorySpecimenIsland => ("CONSERVATORY_SPECIMEN_ISLAND", "Lush tiered botanical specimen bed & palms", aliases: ["SPECIMEN_BED", "BOTANICAL_ISLAND"]),
+        CommandConsole => ("COMMAND_CONSOLE", "Multi-screen flight & security control console", aliases: ["CONTROL_CONSOLE", "OPS_CONSOLE"]),
+        EvaSuitLocker => ("EVA_SUIT_LOCKER", "Pressurized EVA suit bay & helmet locker", aliases: ["SUIT_LOCKER", "SPACE_SUIT_RACK"]),
+        SciFiCargoPod => ("SCI_FI_CARGO_POD", "Sealed polymer-alloy orbital freight pod", aliases: ["CARGO_POD", "STASIS_POD", "SCIFI_CARGO_POD"]),
+        HullDebris => ("HULL_DEBRIS", "Twisted bulkhead plating & severed cabling debris", aliases: ["WRECKAGE", "BULKHEAD_DEBRIS"]),
+        ConferenceTable => ("CONFERENCE_TABLE", "Boardroom conference table & chairs", aliases: ["MEETING_TABLE", "BOARD_TABLE"]),
+        CopyMachine => ("COPY_MACHINE", "Office multifunction printer & copier station", aliases: ["PRINTER_COPIER", "COPIER"]),
+        StreetLamp => ("STREET_LAMP", "Cast-iron sidewalk streetlight standard", aliases: ["LAMP_POST", "STREETLIGHT"]),
+        BusShelter => ("BUS_SHELTER", "Glazed transit bus stop shelter & bench", aliases: ["TRANSIT_SHELTER", "BUS_STOP"]),
     }
 }
 
@@ -567,7 +593,7 @@ mod tests {
                 Some(k)
             );
         }
-        assert_eq!(PropKind::ALL.len(), 128);
+        assert_eq!(PropKind::ALL.len(), 154);
         assert_eq!(parse_hex_rgb("#38bdf8"), Some([0x38, 0xbd, 0xf8]));
         assert_eq!(format_rgb_hex([0x38, 0xbd, 0xf8]), "#38bdf8");
         assert!(PropKind::ElevatorCar.is_vertical_portal());

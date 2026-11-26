@@ -2341,3 +2341,387 @@ fn community_clinic_annex_is_richly_furnished_and_valid() {
         }
     }
 }
+
+#[test]
+fn corporate_bunker_and_safehouse_are_richly_furnished_and_valid() {
+    use crate::map_surface_geom::topmost_surface_at_m;
+    use crate::tactical_map_geom::prop_crosses_wall_edge;
+
+    for &(w, h) in &[(36, 26), (24, 18)] {
+        let bunker = generate_procedural_sector(SectorPreset::CorporateServerBunker, w, h, 404);
+        let min_bunker = if w >= 36 { 45 } else { 22 };
+        assert!(
+            bunker.props.len() >= min_bunker,
+            "CorporateServerBunker {w}x{h} expected >= {min_bunker} props, got {}",
+            bunker.props.len()
+        );
+        for required in [
+            PropKind::BiometricTurnstile,
+            PropKind::CryoComputeCluster,
+            PropKind::BioServerVat,
+            PropKind::AirGappedTerminal,
+            PropKind::BatteryBankWall,
+            PropKind::DeskL,
+        ] {
+            assert!(
+                bunker.props.iter().any(|p| p.kind == required),
+                "CorporateServerBunker {w}x{h} missing {required:?}"
+            );
+        }
+        assert!(
+            bunker
+                .props
+                .iter()
+                .all(|p| !prop_crosses_wall_edge(p, &bunker.wall_edges)),
+            "CorporateServerBunker {w}x{h} has a prop crossing a wall"
+        );
+        for p in &bunker.props {
+            let (cx, cy) = p.center_m();
+            if let Some(top) = topmost_surface_at_m(&bunker.surfaces, cx, cy)
+                && top.kind == SurfaceFeatureKind::AsphaltRoad
+            {
+                assert!(
+                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan),
+                    "CorporateServerBunker {w}x{h} placed non-vehicle {:?} on AsphaltRoad",
+                    p.kind
+                );
+            }
+        }
+        assert!(
+            all_walkable_areas_connected(w, h, &bunker.wall_edges, &bunker.props),
+            "CorporateServerBunker {w}x{h} disconnected walkable area"
+        );
+        for surf in &bunker.surfaces {
+            let mut exposed = false;
+            'bunker_surf: for gy in 0..h {
+                for gx in 0..w {
+                    for &(ox, oy) in &[(0.25_f32, 0.25_f32), (0.75, 0.75)] {
+                        if let Some(top) =
+                            topmost_surface_at_m(&bunker.surfaces, gx as f32 + ox, gy as f32 + oy)
+                            && std::ptr::eq(top, surf)
+                        {
+                            exposed = true;
+                            break 'bunker_surf;
+                        }
+                    }
+                }
+            }
+            assert!(
+                exposed,
+                "CorporateServerBunker {w}x{h} 1F surface {:?} is completely occluded",
+                surf.kind
+            );
+        }
+
+        let sh = generate_procedural_sector(SectorPreset::SatyangSafehouse, w, h, 505);
+        let min_1f = if w >= 36 { 42 } else { 26 };
+        assert!(
+            sh.props.len() >= min_1f,
+            "SatyangSafehouse {w}x{h} expected >= {min_1f} 1F props, got {}",
+            sh.props.len()
+        );
+        for required in [
+            PropKind::Stairwell,
+            PropKind::Bookshelf,
+            PropKind::KitchenCounter,
+            PropKind::Fridge,
+            PropKind::Toilet,
+            PropKind::BathroomSink,
+            PropKind::SingleBed,
+        ] {
+            assert!(
+                sh.props.iter().any(|p| p.kind == required),
+                "SatyangSafehouse {w}x{h} 1F missing {required:?}"
+            );
+        }
+        assert!(
+            sh.props
+                .iter()
+                .all(|p| !prop_crosses_wall_edge(p, &sh.wall_edges)),
+            "SatyangSafehouse {w}x{h} has a 1F prop crossing a wall"
+        );
+        for p in &sh.props {
+            let (cx, cy) = p.center_m();
+            if let Some(top) = topmost_surface_at_m(&sh.surfaces, cx, cy)
+                && top.kind == SurfaceFeatureKind::AsphaltRoad
+            {
+                assert!(
+                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan),
+                    "SatyangSafehouse {w}x{h} placed non-vehicle {:?} on AsphaltRoad",
+                    p.kind
+                );
+            }
+        }
+        assert!(
+            all_walkable_areas_connected(w, h, &sh.wall_edges, &sh.props),
+            "SatyangSafehouse {w}x{h} 1F disconnected walkable area"
+        );
+        for surf in &sh.surfaces {
+            let mut exposed = false;
+            'sh_surf: for gy in 0..h {
+                for gx in 0..w {
+                    for &(ox, oy) in &[(0.25_f32, 0.25_f32), (0.75, 0.75)] {
+                        if let Some(top) =
+                            topmost_surface_at_m(&sh.surfaces, gx as f32 + ox, gy as f32 + oy)
+                            && std::ptr::eq(top, surf)
+                        {
+                            exposed = true;
+                            break 'sh_surf;
+                        }
+                    }
+                }
+            }
+            assert!(
+                exposed,
+                "SatyangSafehouse {w}x{h} 1F surface {:?} is completely occluded",
+                surf.kind
+            );
+        }
+
+        let b1 = sh
+            .floors
+            .iter()
+            .find(|f| f.floor_index == -1)
+            .expect("SatyangSafehouse should emit B1 cellar floor");
+        let min_b1 = if w >= 36 { 22 } else { 14 };
+        assert!(
+            b1.props.len() >= min_b1,
+            "SatyangSafehouse {w}x{h} B1 expected >= {min_b1} props, got {}",
+            b1.props.len()
+        );
+        for required in [
+            PropKind::Stairwell,
+            PropKind::AirGappedTerminal,
+            PropKind::SolderingStation,
+            PropKind::TestBench,
+            PropKind::BatteryBankWall,
+            PropKind::DieselGenerator,
+        ] {
+            assert!(
+                b1.props.iter().any(|p| p.kind == required),
+                "SatyangSafehouse {w}x{h} B1 missing {required:?}"
+            );
+        }
+        assert!(
+            b1.props
+                .iter()
+                .all(|p| !prop_crosses_wall_edge(p, &b1.wall_edges)),
+            "SatyangSafehouse {w}x{h} has a B1 prop crossing a wall"
+        );
+        let b1_x0 = b1.wall_edges.iter().map(|e| e.x).min().unwrap();
+        let b1_x1 = b1
+            .wall_edges
+            .iter()
+            .filter(|e| e.side == EdgeSide::West)
+            .map(|e| e.x)
+            .max()
+            .unwrap();
+        let b1_y0 = b1.wall_edges.iter().map(|e| e.y).min().unwrap();
+        let b1_y1 = b1
+            .wall_edges
+            .iter()
+            .filter(|e| e.side == EdgeSide::North)
+            .map(|e| e.y)
+            .max()
+            .unwrap();
+        let b1_lot = LotBox::new(b1_x0, b1_y0, b1_x1, b1_y1);
+        assert!(
+            floor_lot_connected(w, h, b1_lot, &b1.wall_edges, &b1.props),
+            "SatyangSafehouse {w}x{h} B1 cellar lot disconnected"
+        );
+    }
+}
+
+#[test]
+fn enriched_sectors_use_new_prop_packs_and_are_valid() {
+    use crate::map_surface_geom::topmost_surface_at_m;
+    use crate::tactical_map_geom::prop_crosses_wall_edge;
+
+    let checks: &[(SectorPreset, usize, &[PropKind])] = &[
+        (
+            SectorPreset::BrownoutLogisticsDepot,
+            34,
+            &[
+                PropKind::PalletRack,
+                PropKind::CargoPallet,
+                PropKind::ElectricalSwitchgear,
+                PropKind::ToolChestWorkbench,
+                PropKind::StreetLamp,
+            ],
+        ),
+        (
+            SectorPreset::ManufacturingPlant,
+            24,
+            &[
+                PropKind::ConveyorBelt,
+                PropKind::IndustrialPress,
+                PropKind::RoboticAssemblyArm,
+                PropKind::ToolChestWorkbench,
+                PropKind::ElectricalSwitchgear,
+                PropKind::CargoPallet,
+            ],
+        ),
+        (
+            SectorPreset::Warehouse,
+            36,
+            &[
+                PropKind::PalletRack,
+                PropKind::CargoPallet,
+                PropKind::ToolChestWorkbench,
+                PropKind::ElectricalSwitchgear,
+                PropKind::CopyMachine,
+            ],
+        ),
+        (
+            SectorPreset::Farms,
+            28,
+            &[
+                PropKind::Tractor,
+                PropKind::HayBaleStack,
+                PropKind::LivestockTrough,
+                PropKind::CropRow,
+            ],
+        ),
+        (
+            SectorPreset::BotanicalGarden,
+            24,
+            &[
+                PropKind::PlanterTable,
+                PropKind::ConservatorySpecimenIsland,
+                PropKind::PatioUmbrellaTable,
+                PropKind::StreetLamp,
+            ],
+        ),
+        (
+            SectorPreset::ShoppingPlaza,
+            35,
+            &[
+                PropKind::PatioUmbrellaTable,
+                PropKind::AtmKiosk,
+                PropKind::VendingMachine,
+                PropKind::StreetLamp,
+                PropKind::BusShelter,
+                PropKind::EspressoCounter,
+                PropKind::CommercialPrepTable,
+                PropKind::RefrigeratedDisplayCase,
+                PropKind::ClothingRack,
+                PropKind::PharmacyCounter,
+            ],
+        ),
+        (
+            SectorPreset::ShoppingMall,
+            60,
+            &[
+                PropKind::EspressoCounter,
+                PropKind::PatioUmbrellaTable,
+                PropKind::AtmKiosk,
+                PropKind::VendingMachine,
+                PropKind::CommercialGrillHood,
+                PropKind::BuffetCounter,
+            ],
+        ),
+        (
+            SectorPreset::UrbanCrossroads,
+            20,
+            &[PropKind::StreetLamp, PropKind::EspressoCounter],
+        ),
+        (
+            SectorPreset::OfficeFloor,
+            18,
+            &[PropKind::ConferenceTable, PropKind::CopyMachine, PropKind::VendingMachine],
+        ),
+        (
+            SectorPreset::DockingBay,
+            32,
+            &[
+                PropKind::CommandConsole,
+                PropKind::EvaSuitLocker,
+                PropKind::ToolChestWorkbench,
+                PropKind::CargoPallet,
+            ],
+        ),
+        (
+            SectorPreset::DerelictCorridor,
+            20,
+            &[
+                PropKind::CommandConsole,
+                PropKind::EvaSuitLocker,
+                PropKind::SciFiCargoPod,
+                PropKind::HullDebris,
+            ],
+        ),
+        (
+            SectorPreset::OrbitalAirlock,
+            16,
+            &[
+                PropKind::CommandConsole,
+                PropKind::EvaSuitLocker,
+                PropKind::SciFiCargoPod,
+            ],
+        ),
+    ];
+
+    for &(preset, min_props, required) in checks {
+        let (w, h) = preset.default_dimensions();
+        let sec = generate_procedural_sector(preset, w, h, 42);
+        assert!(
+            sec.props.len() >= min_props,
+            "{preset:?} ({w}x{h}) expected >= {min_props} 1F props, got {}",
+            sec.props.len()
+        );
+        for &req_kind in required {
+            assert!(
+                sec.props.iter().any(|p| p.kind == req_kind),
+                "{preset:?} ({w}x{h}) missing {req_kind:?}"
+            );
+        }
+        assert!(
+            sec.props
+                .iter()
+                .all(|p| !prop_crosses_wall_edge(p, &sec.wall_edges)),
+            "{preset:?} ({w}x{h}) has a prop crossing a wall"
+        );
+        if preset != SectorPreset::DockingBay {
+            for p in &sec.props {
+                let (cx, cy) = p.center_m();
+                if let Some(top) = topmost_surface_at_m(&sec.surfaces, cx, cy)
+                    && top.kind == SurfaceFeatureKind::AsphaltRoad
+                {
+                    assert!(
+                        matches!(
+                            p.kind,
+                            PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
+                        ),
+                        "{preset:?} ({w}x{h}) placed non-vehicle {:?} on AsphaltRoad",
+                        p.kind
+                    );
+                }
+            }
+        }
+        assert!(
+            all_walkable_areas_connected(w, h, &sec.wall_edges, &sec.props),
+            "{preset:?} ({w}x{h}) disconnected walkable area"
+        );
+        for surf in &sec.surfaces {
+            let mut exposed = false;
+            'surf_probe: for gy in 0..h {
+                for gx in 0..w {
+                    for &(ox, oy) in &[(0.25_f32, 0.25_f32), (0.75, 0.75)] {
+                        if let Some(top) =
+                            topmost_surface_at_m(&sec.surfaces, gx as f32 + ox, gy as f32 + oy)
+                            && std::ptr::eq(top, surf)
+                        {
+                            exposed = true;
+                            break 'surf_probe;
+                        }
+                    }
+                }
+            }
+            assert!(
+                exposed,
+                "{preset:?} ({w}x{h}) 1F surface {:?} is completely occluded",
+                surf.kind
+            );
+        }
+    }
+}

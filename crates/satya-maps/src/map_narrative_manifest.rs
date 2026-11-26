@@ -184,9 +184,14 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::TelemetryMonitor
         | PropKind::BiohazardBin
         | PropKind::LinenCart => Some(("clinical_medical", "Clinical / Triage Bay")),
-        PropKind::DisplayRack | PropKind::CheckoutCounter | PropKind::MallKiosk => {
-            Some(("retail_concourse", "Retail Concourse / Counter"))
-        }
+        PropKind::DisplayRack
+        | PropKind::CheckoutCounter
+        | PropKind::MallKiosk
+        | PropKind::RefrigeratedDisplayCase
+        | PropKind::ClothingRack
+        | PropKind::PharmacyCounter
+        | PropKind::VendingMachine
+        | PropKind::AtmKiosk => Some(("retail_concourse", "Retail Concourse / Counter")),
         PropKind::ConveyorBelt
         | PropKind::IndustrialPress
         | PropKind::PalletRack
@@ -198,9 +203,12 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::DrumCluster
         | PropKind::SteelShelving
         | PropKind::ElevatedCatwalk
-        | PropKind::StructuralPillar => {
-            Some(("industrial_logistics", "Industrial / Logistics Floor"))
-        }
+        | PropKind::StructuralPillar
+        | PropKind::RoboticAssemblyArm
+        | PropKind::ToolChestWorkbench
+        | PropKind::CargoPallet
+        | PropKind::SciFiCargoPod
+        | PropKind::HullDebris => Some(("industrial_logistics", "Industrial / Logistics Floor")),
         PropKind::LabBench
         | PropKind::SolderingStation
         | PropKind::TestBench
@@ -212,10 +220,15 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::AirGappedTerminal => Some(("lab_workshop", "Cryo-Compute / Air-Gapped Vault")),
         PropKind::BiometricTurnstile
         | PropKind::SecurityCameraMast
-        | PropKind::DroneDockPad => {
+        | PropKind::DroneDockPad
+        | PropKind::CommandConsole
+        | PropKind::EvaSuitLocker => {
             Some(("security_checkpoint", "Security Checkpoint / Sensor Perimeter"))
         }
-        PropKind::HvTransformer | PropKind::DieselGenerator | PropKind::BatteryBankWall => {
+        PropKind::HvTransformer
+        | PropKind::DieselGenerator
+        | PropKind::BatteryBankWall
+        | PropKind::ElectricalSwitchgear => {
             Some(("power_substation", "High-Voltage Substation / Microgrid"))
         }
         PropKind::WaterPurifierKiosk => {
@@ -227,13 +240,20 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Bookshelf
         | PropKind::DeskClutter
         | PropKind::FilingCabinet
-        | PropKind::WaterCooler => Some(("office_ops", "Command / Office Suite")),
+        | PropKind::WaterCooler
+        | PropKind::ConferenceTable
+        | PropKind::CopyMachine => Some(("office_ops", "Command / Office Suite")),
         PropKind::BarCounter
         | PropKind::BackBarShelf
         | PropKind::BarStool
         | PropKind::Booth
         | PropKind::PoolTable
-        | PropKind::Jukebox => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
+        | PropKind::Jukebox
+        | PropKind::EspressoCounter
+        | PropKind::CommercialPrepTable
+        | PropKind::CommercialGrillHood
+        | PropKind::PatioUmbrellaTable
+        | PropKind::BuffetCounter => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
         PropKind::Sofa
         | PropKind::Loveseat
         | PropKind::Armchair
@@ -267,10 +287,16 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::FloorToys => Some(("residential_quarters", "Living Quarters / Unit")),
         PropKind::Car
         | PropKind::UtilityVan
+        | PropKind::Tractor
         | PropKind::JerseyBarrier
         | PropKind::StreetDebris
-        | PropKind::AwningCanopy => Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter")),
+        | PropKind::AwningCanopy
+        | PropKind::StreetLamp
+        | PropKind::BusShelter => Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter")),
         PropKind::CropRow
+        | PropKind::HayBaleStack
+        | PropKind::LivestockTrough
+        | PropKind::ConservatorySpecimenIsland
         | PropKind::Planter
         | PropKind::PlanterTable
         | PropKind::LargeTree

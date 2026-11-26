@@ -220,8 +220,15 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     b.reserve_spawns_and_doors();
 
     let whole = b.whole();
+    let _ = b.against_wall(PropKind::CommandConsole, dispatch, Side::North, Some(2));
     let _ = b.against_wall(PropKind::Desk, dispatch, Side::West, None);
+    let _ = b.against_wall(PropKind::FilingCabinet, dispatch, Side::South, None);
+    let _ = b.against_wall(PropKind::CopyMachine, dispatch, Side::South, None);
+    let _ = b.against_wall(PropKind::WaterCooler, dispatch, Side::West, None);
+    let _ = b.against_wall(PropKind::EvaSuitLocker, cage, Side::North, Some(2));
     let _ = b.against_wall(PropKind::SteelShelving, cage, Side::West, None);
+    let _ = b.against_wall(PropKind::ToolChestWorkbench, cage, Side::South, None);
+    let _ = b.against_wall(PropKind::ElectricalSwitchgear, cage, Side::South, None);
     let area = w * h;
     let van_y0 = 4;
     let van_y1 = (h - 6).max(van_y0 + 3);
@@ -229,6 +236,17 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     let r1 = 90 + b.rng.range(-4, 5);
     let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y0), r0, None, whole);
     let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y1), r1, None, whole);
+    b.scatter_in(
+        PropKind::RoboticAssemblyArm,
+        Rect {
+            x0: 10,
+            y0: 4,
+            x1: mid_x - 2,
+            y1: h - 4,
+        },
+        (area / 700).clamp(1, 2) as usize,
+        true,
+    );
     b.scatter_in(
         PropKind::SteelShelving,
         Rect {
@@ -240,6 +258,18 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
         (area / 180).clamp(3, 8) as usize,
         true,
     );
+    b.scatter_in(
+        PropKind::CargoPallet,
+        Rect {
+            x0: 3,
+            y0: 3,
+            x1: w - 4,
+            y1: h - 3,
+        },
+        (area / 220).clamp(3, 8) as usize,
+        true,
+    );
+    let _ = b.against_any_wall(PropKind::VendingMachine, whole, None);
     b.scatter_in(
         PropKind::JerseyBarrier,
         Rect {
@@ -719,35 +749,55 @@ pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {
         x1: w - 1,
         y1: y_bot.min(h - 1).max(y_top + 1),
     };
-    let _ = b
-        .against_any_wall(
-            PropKind::SteelShelving,
-            Rect {
-                x0: 1,
+    if w >= 12 && h >= 10 {
+        let mut xs = vec![0];
+        if w >= 28 {
+            xs.extend([w / 4, w / 2, (3 * w) / 4]);
+        } else {
+            xs.extend([w / 3, (2 * w) / 3]);
+        }
+        xs.push(w);
+        for (i, pair) in xs.windows(2).enumerate() {
+            let (ax0, ax1) = (pair[0], pair[1]);
+            let top_alcove = Rect {
+                x0: ax0,
                 y0: 0,
-                x1: w - 1,
+                x1: ax1,
                 y1: y_top,
-            },
-            None,
-        )
-        .or_else(|| b.against_any_wall(PropKind::SteelShelving, whole, None));
-    let _ = b
-        .against_any_wall(
-            PropKind::Desk,
-            Rect {
-                x0: 1,
+            };
+            let bot_alcove = Rect {
+                x0: ax0,
                 y0: y_bot,
-                x1: w - 1,
+                x1: ax1,
                 y1: h,
-            },
-            None,
-        )
-        .or_else(|| b.against_any_wall(PropKind::Desk, whole, None));
+            };
+            let top_kind = match i % 4 {
+                0 => PropKind::EvaSuitLocker,
+                1 => PropKind::CommandConsole,
+                2 => PropKind::ElectricalSwitchgear,
+                _ => PropKind::SteelShelving,
+            };
+            let bot_kind = match i % 4 {
+                0 => PropKind::Desk,
+                1 => PropKind::VendingMachine,
+                2 => PropKind::ServerRack,
+                _ => PropKind::CommandConsole,
+            };
+            let _ = b.against_any_wall(top_kind, top_alcove, None);
+            let _ = b.against_any_wall(PropKind::ServerRack, top_alcove, None);
+            let _ = b.against_any_wall(bot_kind, bot_alcove, None);
+            let _ = b.against_any_wall(PropKind::SciFiCargoPod, bot_alcove, None);
+        }
+    } else {
+        let _ = b.against_any_wall(PropKind::SteelShelving, whole, None);
+        let _ = b.against_any_wall(PropKind::Desk, whole, None);
+    }
     let clear_ring = w >= 14 && h >= 12;
     let scale = (w * h / 120).clamp(1, 5) as usize;
-    b.scatter_in(PropKind::Boulder, spine, 2 * scale, clear_ring);
-    b.scatter_in(PropKind::DrumCluster, whole, 4 * scale, clear_ring);
-    b.scatter_in(PropKind::WoodCrate, whole, 4 * scale, clear_ring);
+    b.scatter_in(PropKind::HullDebris, spine, (2 * scale).min(5), clear_ring);
+    b.scatter_in(PropKind::SciFiCargoPod, whole, (2 * scale).min(6), clear_ring);
+    b.scatter_in(PropKind::DrumCluster, whole, 3 * scale, clear_ring);
+    b.scatter_in(PropKind::WoodCrate, whole, 2 * scale, clear_ring);
 }
 
 pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
@@ -854,9 +904,12 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
     b.reserve_spawns_and_doors();
     let whole = b.whole();
     for booth in booths {
+        let _ = b.against_any_wall(PropKind::CommandConsole, booth, None);
+        let _ = b.against_any_wall(PropKind::EvaSuitLocker, booth, None);
         let _ = b.against_any_wall(PropKind::Desk, booth, None);
-        let _ = b.against_any_wall(PropKind::Wardrobe, booth, None);
+        let _ = b.against_any_wall(PropKind::ServerRack, booth, None);
     }
+    let _ = b.against_any_wall(PropKind::ElectricalSwitchgear, whole, None);
     let _ = b
         .try_place(
             PropKind::JerseyBarrier,
@@ -877,6 +930,8 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
         y1: (h - if clear_ring { 3 } else { 1 }).max(4),
     };
     let scale = (w * h / 120).clamp(1, 5) as usize;
-    b.scatter_in(PropKind::WoodCrate, cargo_bounds, 4 * scale, clear_ring);
+    b.scatter_in(PropKind::SciFiCargoPod, cargo_bounds, (2 * scale).min(5), clear_ring);
+    b.scatter_in(PropKind::HullDebris, cargo_bounds, scale.min(2), clear_ring);
+    b.scatter_in(PropKind::WoodCrate, cargo_bounds, 3 * scale, clear_ring);
     b.scatter_in(PropKind::DrumCluster, cargo_bounds, 2 * scale, clear_ring);
 }

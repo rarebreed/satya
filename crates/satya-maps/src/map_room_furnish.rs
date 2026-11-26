@@ -827,12 +827,12 @@ impl Furnisher {
                 self.scatter(P::DeskT, r, (r.area() / 48).clamp(1, 4) as usize, 0);
                 let _ = self.against_any_wall(P::DeskL, r, None);
                 let _ = self.against_any_wall(P::DeskL, r, None);
-                let desk_count = ((r.area() / 22).clamp(1, 8)) as usize;
-                self.scatter(P::Desk, r, desk_count, 0);
+                self.scatter(P::Desk, r, (r.area() / 22).clamp(1, 8) as usize, 0);
                 let desks_added: Vec<MapPropPlacement> = self.props[prev..].to_vec();
                 for d in desks_added {
                     self.attach_desk_clutter(d, r);
                 }
+                let _ = self.against_any_wall(P::CopyMachine, r, None);
                 let _ = self.against_any_wall(P::FilingCabinet, r, None);
                 let _ = self.against_any_wall(P::FilingCabinet, r, None);
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
@@ -842,11 +842,10 @@ impl Furnisher {
                 self.scatter(P::Planter, r, (r.area() / 60).clamp(1, 4) as usize, 0);
             }
             Role::ConferenceRoom => {
-                let cx = r.x0 + (r.w() - 2) / 2;
-                let cy = r.y0 + (r.h() - 2) / 2;
-                if r.w() >= 6 && r.h() >= 5 {
-                    let _ = self.try_place(P::DiningTable, cx - 1, cy, 0, None, r);
-                    let _ = self.try_place(P::DiningTable, cx + 1, cy, 0, None, r);
+                let cx = r.x0 + (r.w() - 3).max(0) / 2;
+                let cy = r.y0 + (r.h() - 2).max(0) / 2;
+                if let Some(ct) = self.try_place(P::ConferenceTable, cx, cy, 0, None, r) {
+                    self.attach_desk_clutter(ct, r);
                 } else if let Some(dt) = self.try_place(P::DiningTable, cx, cy, 0, None, r) {
                     self.attach_desk_clutter(dt, r);
                 }
@@ -872,6 +871,8 @@ impl Furnisher {
                 let _ = self
                     .against_wall(P::Fridge, r, side, None)
                     .or_else(|| self.against_any_wall(P::Fridge, r, None));
+                let _ = self.against_any_wall(P::VendingMachine, r, None);
+                let _ = self.in_corner(P::CopyMachine, r);
                 let _ = self.in_corner(P::WaterCooler, r);
                 let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::FireExtinguisher, r);

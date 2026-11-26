@@ -117,17 +117,20 @@ pub fn push_furniture_glyph_with_mode(
     let (cx, cy) = (fp.cx_m * cell_px, fp.cy_m * cell_px);
     let (lw, lh) = (fp.span_w_m * cell_px, fp.span_h_m * cell_px);
     let rot = fp.rot_deg;
-    if painted
-        && let Some(sprite) =
-            crate::wasm_client::map_2d_art_sprites::prop_sprite_for_placement(p)
-    {
-        let _ = write!(
-            out,
-            r#"<g transform="translate({cx:.1} {cy:.1}) rotate({rot})">"#
-        );
-        crate::wasm_client::map_2d_art_sprites::push_prop_sprite_image(out, sprite, lw, lh);
-        out.push_str("</g>");
-        return;
+    if painted {
+        let mut sprite_inner = String::new();
+        if crate::wasm_client::map_2d_art_sprites::push_prop_sprite_for_placement(
+            &mut sprite_inner,
+            p,
+            lw,
+            lh,
+        ) {
+            let _ = write!(
+                out,
+                r#"<g transform="translate({cx:.1} {cy:.1}) rotate({rot})">{sprite_inner}</g>"#
+            );
+            return;
+        }
     }
     let legacy = match p.kind {
         PropKind::Armchair => Some(BattlemapPropKind::Armchair),
@@ -1405,6 +1408,36 @@ pub fn push_furniture_glyph_with_mode(
                 out, p.kind, lw, lh, painted, v,
             );
         }
+        PropKind::EspressoCounter
+        | PropKind::CommercialPrepTable
+        | PropKind::CommercialGrillHood
+        | PropKind::PatioUmbrellaTable
+        | PropKind::BuffetCounter
+        | PropKind::RefrigeratedDisplayCase
+        | PropKind::ClothingRack
+        | PropKind::PharmacyCounter
+        | PropKind::VendingMachine
+        | PropKind::AtmKiosk
+        | PropKind::RoboticAssemblyArm
+        | PropKind::ToolChestWorkbench
+        | PropKind::CargoPallet
+        | PropKind::ElectricalSwitchgear
+        | PropKind::Tractor
+        | PropKind::HayBaleStack
+        | PropKind::LivestockTrough
+        | PropKind::ConservatorySpecimenIsland
+        | PropKind::CommandConsole
+        | PropKind::EvaSuitLocker
+        | PropKind::SciFiCargoPod
+        | PropKind::HullDebris
+        | PropKind::ConferenceTable
+        | PropKind::CopyMachine
+        | PropKind::StreetLamp
+        | PropKind::BusShelter => {
+            let _ = crate::wasm_client::map_2d_art_props_packs::push_pack_furniture_glyph(
+                out, p.kind, lw, lh, painted, v,
+            );
+        }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
     }
     if p.kind != PropKind::AwningCanopy
@@ -1574,12 +1607,17 @@ mod tests {
             assert_eq!(c.matches("<g").count(), c.matches("</g>").count());
             assert!(!c.contains("NaN"));
         }
+        let mut table = make_prop(PropKind::DiningTable, 2, 2, 0, None, 7);
         let mut table_svg = String::new();
-        push_furniture_glyph(
-            &mut table_svg,
-            &make_prop(PropKind::DiningTable, 2, 2, 0, None, 7),
-            64.0,
+        push_furniture_glyph(&mut table_svg, &table, 64.0);
+        assert!(table_svg.contains("/assets/sprites/props/dining_table"));
+
+        table.tint_rgb = Some([160, 120, 80]);
+        let mut tinted_table_svg = String::new();
+        push_furniture_glyph(&mut tinted_table_svg, &table, 64.0);
+        assert!(
+            tinted_table_svg.contains("url(#bm-wood-veneer)")
+                && !tinted_table_svg.contains("url(#bm-oak)")
         );
-        assert!(table_svg.contains("url(#bm-wood-veneer)") && !table_svg.contains("url(#bm-oak)"));
     }
 }

@@ -562,9 +562,19 @@ pub fn generate_store_unit(
 
     // Populate back-of-house rooms first so stockroom shelving & prep counters stay intact.
     for (sub_room, role) in back_rooms {
-        furn.furnish(role, sub_room);
+        if role == Role::BackKitchen && archetype == StoreArchetype::CafeRestaurant {
+            let _ = furn.against_any_wall(PropKind::CommercialPrepTable, sub_room, Some(2));
+            let _ = furn.against_any_wall(PropKind::CommercialGrillHood, sub_room, None);
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sub_room, None);
+            let _ = furn.against_any_wall(PropKind::Fridge, sub_room, None);
+            let _ = furn.in_corner(PropKind::TrashCan, sub_room);
+            let _ = furn.in_corner(PropKind::FireExtinguisher, sub_room);
+        } else {
+            furn.furnish(role, sub_room);
+        }
         if role == Role::Storage {
             furn.scatter(PropKind::WoodCrate, sub_room, 2, 0);
+            let _ = furn.against_any_wall(PropKind::CargoPallet, sub_room, None);
         }
     }
 
@@ -573,7 +583,10 @@ pub fn generate_store_unit(
     match archetype {
         StoreArchetype::Grocery => {
             place_checkout_bank(&mut furn, sales, front_side, 2, 2, false);
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(2));
             let _ = furn.against_any_wall(PropKind::SteelShelving, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::VendingMachine, sales, None);
             let len = if (along_x && sales.w() >= 10) || (!along_x && sales.h() >= 10) {
                 3
             } else {
@@ -583,14 +596,25 @@ pub fn generate_store_unit(
         }
         StoreArchetype::ApparelBoutique => {
             place_checkout_bank(&mut furn, sales, front_side, 1, 2, false);
+            let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(2));
+            let _ = furn.against_any_wall(PropKind::Armchair, sales, None);
             place_display_aisles(&mut furn, sales, along_x, 2, 3, 12, seed);
         }
         StoreArchetype::CafeRestaurant => {
-            place_checkout_bank(&mut furn, sales, front_side, 1, 3, true);
-            furn.furnish(Role::BarHall, sales);
+            place_checkout_bank(&mut furn, sales, front_side, 1, 2, true);
+            let _ = furn.against_any_wall(PropKind::EspressoCounter, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::BuffetCounter, sales, Some(2));
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(2));
+            let _ = furn.against_any_wall(PropKind::Booth, sales, None);
+            let _ = furn.against_any_wall(PropKind::Booth, sales, None);
+            furn.scatter(PropKind::RoundTable, sales, (sales.area() / 16).clamp(2, 6) as usize, 0);
+            let _ = furn.against_any_wall(PropKind::Planter, sales, None);
         }
         StoreArchetype::Pharmacy => {
             place_checkout_bank(&mut furn, sales, front_side, 1, 3, true);
+            let _ = furn.against_any_wall(PropKind::PharmacyCounter, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(2));
             place_display_aisles(&mut furn, sales, along_x, 2, 2, 0, seed);
             let _ = furn.against_any_wall(PropKind::SteelShelving, sales, Some(2));
         }
@@ -598,14 +622,21 @@ pub fn generate_store_unit(
             place_checkout_bank(&mut furn, sales, front_side, 1, 2, true);
             place_display_aisles(&mut furn, sales, !along_x, 2, 3, 0, seed);
             let _ = furn.against_any_wall(PropKind::SteelShelving, sales, Some(2));
+            let _ = furn.against_any_wall(PropKind::VendingMachine, sales, None);
         }
         StoreArchetype::ConvenienceBodega => {
             place_checkout_bank(&mut furn, sales, front_side, 1, 2, false);
+            let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(2));
+            let _ = furn.against_any_wall(PropKind::VendingMachine, sales, None);
             place_display_aisles(&mut furn, sales, along_x, 2, 2, 6, seed);
         }
         StoreArchetype::DepartmentAnchor => {
             place_anchor_pillars(&mut furn, sales);
             place_checkout_bank(&mut furn, sales, front_side, 3, 2, false);
+            let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(3));
+            let _ = furn.against_any_wall(PropKind::AtmKiosk, sales, None);
+            let _ = furn.against_any_wall(PropKind::VendingMachine, sales, None);
             let _ = furn.against_any_wall(PropKind::SteelShelving, sales, Some(4));
             place_display_aisles(&mut furn, sales, along_x, 3, 3, 0, seed);
         }

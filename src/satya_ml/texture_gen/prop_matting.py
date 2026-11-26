@@ -34,40 +34,16 @@ def _key_dominance(rgb_f: np.ndarray, key_color: str) -> np.ndarray:
 def _flood_fill_border(candidate: np.ndarray) -> np.ndarray:
     """Flood-fill True pixels in `candidate` reachable from any outer image edge."""
     h, w = candidate.shape
-    visited = np.zeros((h, w), dtype=bool)
-    queue: deque[tuple[int, int]] = deque()
-
-    for x in range(w):
-        if candidate[0, x] and not visited[0, x]:
-            visited[0, x] = True
-            queue.append((0, x))
-        if candidate[h - 1, x] and not visited[h - 1, x]:
-            visited[h - 1, x] = True
-            queue.append((h - 1, x))
-    for y in range(1, h - 1):
-        if candidate[y, 0] and not visited[y, 0]:
-            visited[y, 0] = True
-            queue.append((y, 0))
-        if candidate[y, w - 1] and not visited[y, w - 1]:
-            visited[y, w - 1] = True
-            queue.append((y, w - 1))
-
-    while queue:
-        cy, cx = queue.popleft()
-        if cy > 0 and candidate[cy - 1, cx] and not visited[cy - 1, cx]:
-            visited[cy - 1, cx] = True
-            queue.append((cy - 1, cx))
-        if cy + 1 < h and candidate[cy + 1, cx] and not visited[cy + 1, cx]:
-            visited[cy + 1, cx] = True
-            queue.append((cy + 1, cx))
-        if cx > 0 and candidate[cy, cx - 1] and not visited[cy, cx - 1]:
-            visited[cy, cx - 1] = True
-            queue.append((cy, cx - 1))
-        if cx + 1 < w and candidate[cy, cx + 1] and not visited[cy, cx + 1]:
-            visited[cy, cx + 1] = True
-            queue.append((cy, cx + 1))
-
-    return visited
+    # Pad with a 1px ring of candidate=255 so one C-speed floodfill from (0,0) visits all 4 borders.
+    padded = np.zeros((h + 2, w + 2), dtype=np.uint8)
+    padded[1:-1, 1:-1] = np.where(candidate, 255, 0).astype(np.uint8)
+    padded[0, :] = 255
+    padded[-1, :] = 255
+    padded[:, 0] = 255
+    padded[:, -1] = 255
+    img = Image.fromarray(padded, mode="L")
+    ImageDraw.floodfill(img, (0, 0), 128)
+    return np.asarray(img, dtype=np.uint8)[1:-1, 1:-1] == 128
 
 
 def _dilate_mask(mask: np.ndarray, radius: int) -> np.ndarray:
@@ -174,13 +150,8 @@ def despill_edges(
     return np.rint(np.clip(rgb_f, 0.0, 255.0)).astype(np.uint8)
 
 
-def _keep_main_foreground(alpha_u8: np.ndarray, *, min_alpha: int = 18) -> np.ndarray:
-    """Zero out tiny isolated specks while preserving multi-part objects (e.g. twin bins)."""
-    fg = alpha_u8 >= min_alpha
-    if not np.any(fg):
-        return alpha_u8
+def _filter_large_components(fg: np.ndarray, min_area: int) -> np.ndarray:
     h, w = fg.shape
-    min_area = max(16, int(0.002 * h * w))
     visited = np.zeros((h, w), dtype=bool)
     keep = np.zeros((h, w), dtype=bool)
 
@@ -201,7 +172,42 @@ def _keep_main_foreground(alpha_u8: np.ndarray, *, min_alpha: int = 18) -> np.nd
         if len(comp) >= min_area:
             for cy, cx in comp:
                 keep[cy, cx] = True
+    return keep
 
+
+def _keep_main_foreground(alpha_u8: np.ndarray, *, min_alpha: int = 18) -> np.ndarray:
+    """Zero out tiny isolated specks while preserving multi-part objects (e.g. twin bins)."""
+    fg = alpha_u8 >= min_alpha
+    if not np.any(fg):
+        return alpha_u8
+    h, w = fg.shape
+    if max(h, w) > 256:
+        sw = max(32, w // 4)
+        sh = max(32, h // 4)
+        small_fg = (
+            np.asarray(
+                Image.fromarray((fg.astype(np.uint8) * 255), mode="L").resize(
+                    (sw, sh), Image.Resampling.BOX
+                ),
+                dtype=np.uint8,
+            )
+            > 0
+        )
+        small_keep = _filter_large_components(small_fg, max(4, int(0.002 * sh * sw)))
+        if not np.any(small_keep):
+            return alpha_u8
+        keep = (
+            np.asarray(
+                Image.fromarray((small_keep.astype(np.uint8) * 255), mode="L").resize(
+                    (w, h), Image.Resampling.NEAREST
+                ),
+                dtype=np.uint8,
+            )
+            > 0
+        )
+        return np.where(_dilate_mask(keep, 2), alpha_u8, 0).astype(np.uint8)
+
+    keep = _filter_large_components(fg, max(16, int(0.002 * h * w)))
     if not np.any(keep):
         return alpha_u8
     return np.where(_dilate_mask(keep, 1), alpha_u8, 0).astype(np.uint8)
@@ -335,5 +341,54 @@ def render_prop_contact_sheet(
             f"{spec.id} ({spec.base_w_cells}x{spec.base_h_cells}m)",
             fill=(232, 236, 242),
         )
+
+    return np.asarray(sheet, dtype=np.uint8)
+
+
+def render_prop_variants_contact_sheet(
+    rows: list[tuple[PropSpriteSpec, list[np.ndarray]]], *, props_per_row: int = 2
+) -> np.ndarray:
+    """Render a compact sheet showing each prop's 3 variants side-by-side on 3-strip backdrops."""
+    props_per_row = max(1, props_per_row)
+    variants_per_prop = max((len(v) for _, v in rows), default=3)
+    cols = props_per_row * variants_per_prop
+    num_rows = max(1, (len(rows) + props_per_row - 1) // props_per_row)
+    tile_w, tile_h = 280, 260
+    label_h = 30
+    pad = 12
+    sheet = Image.new("RGB", (cols * tile_w + pad, num_rows * tile_h + pad), (28, 32, 38))
+    draw = ImageDraw.Draw(sheet)
+
+    strip_colors = [(214, 224, 228), (216, 212, 203), (58, 65, 74)]
+    for prop_idx, (spec, variants) in enumerate(rows):
+        r = prop_idx // props_per_row
+        group_c = (prop_idx % props_per_row) * variants_per_prop
+        for v_idx, rgba in enumerate(variants):
+            c = group_c + v_idx
+            x0 = pad + c * tile_w
+            y0 = pad + r * tile_h
+            box_w = tile_w - pad
+            box_h = tile_h - pad - label_h
+            for s_idx, col in enumerate(strip_colors):
+                sx0 = x0 + (box_w * s_idx) // 3
+                sx1 = x0 + (box_w * (s_idx + 1)) // 3
+                draw.rectangle([sx0, y0, sx1, y0 + box_h], fill=col)
+
+            sh, sw = rgba.shape[:2]
+            scale = min((box_w - 18) / float(sw), (box_h - 18) / float(sh))
+            dw = max(1, int(round(sw * scale)))
+            dh = max(1, int(round(sh * scale)))
+            sprite_img = Image.fromarray(rgba, mode="RGBA").resize(
+                (dw, dh), Image.Resampling.LANCZOS
+            )
+            px = x0 + (box_w - dw) // 2
+            py = y0 + (box_h - dh) // 2
+            sheet.paste(sprite_img, (px, py), sprite_img)
+            draw.rectangle([x0, y0, x0 + box_w, y0 + box_h], outline=(90, 98, 110), width=1)
+            draw.text(
+                (x0 + 4, y0 + box_h + 5),
+                f"{spec.id} v{v_idx}",
+                fill=(232, 236, 242),
+            )
 
     return np.asarray(sheet, dtype=np.uint8)
