@@ -91,15 +91,25 @@ async fn handle_ws_client(
     .to_string();
     state.broadcast_to_session(&session_id, &sync_msg).await;
 
+    let (closed_tx, mut closed_rx) = tokio::sync::oneshot::channel::<()>();
     let forward_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if ws_tx.send(WsMessage::Text(msg)).await.is_err() {
                 break;
             }
         }
+        let _ = ws_tx.send(WsMessage::Close(None)).await;
+        let _ = closed_tx.send(());
     });
 
-    while let Some(Ok(msg)) = ws_rx.next().await {
+    loop {
+        let msg = tokio::select! {
+            _ = &mut closed_rx => break,
+            next = ws_rx.next() => match next {
+                Some(Ok(m)) => m,
+                _ => break,
+            }
+        };
         let WsMessage::Text(text) = msg else {
             continue;
         };
@@ -108,6 +118,9 @@ async fn handle_ws_client(
         };
 
         let current_roster = state.auth.get_session_roster(&session_id).await;
+        if !current_roster.iter().any(|p| p.user_id == user_id) {
+            break;
+        }
 
         match packet {
             ClientWsPacket::SendChat {

@@ -133,6 +133,11 @@ impl SignalingAppState {
         }
     }
 
+    /// Drops all active `/ws/notifications` outbound channels for `user_id` (closing those sockets).
+    pub async fn disconnect_account_sockets(&self, user_id: &str) {
+        self.account_sockets.write().await.remove(user_id);
+    }
+
     /// Pushes a [`ServerWsPacket`] to `owner_user_id` across any active `/ws/session` room they are in.
     pub async fn send_user_live_session_packet(&self, user_id: &str, pkt: &ServerWsPacket) {
         let Ok(payload) = serde_json::to_string(pkt) else {

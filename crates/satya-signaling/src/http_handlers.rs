@@ -116,6 +116,7 @@ pub async fn logout_handler(
         )
             .into_response();
     };
+    state.disconnect_account_sockets(&user.user_id).await;
 
     let mut disconnected_ids = Vec::new();
     let mut last_mode = SessionMode::Ttrpg;
@@ -555,7 +556,7 @@ pub async fn leave_session_handler(
                 "status": "already_disconnected",
                 "session_id": req.session_id,
                 "user_id": user.user_id,
-                "remaining_roster": state.auth.get_session_roster(&req.session_id).await,
+                "remaining_roster": Vec::<Participant>::new(),
             })),
         )
             .into_response()

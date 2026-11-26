@@ -1309,6 +1309,14 @@ async fn persist_and_notify_access_request(
     .execute(state.auth.db_pool())
     .await
     {
+        let err_msg = e.to_string();
+        if err_msg.contains("UNIQUE constraint failed") {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "You already have a pending join request for this session" })),
+            )
+                .into_response();
+        }
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": format!("Failed to persist request: {e}") })),
@@ -2003,8 +2011,62 @@ pub async fn decide_join_request_handler(
         .map(|s| session_mode_from_db(&s))
         .unwrap_or(SessionMode::Ttrpg);
 
+    let next_status = if req.approve {
+        JoinRequestStatus::Approved
+    } else {
+        JoinRequestStatus::Denied
+    };
+    let approval_token = if req.approve {
+        Some(format!("aprv_{}", Uuid::new_v4()))
+    } else {
+        None
+    };
+    let grant_ttl_us = (state.storage.config().quotas.approval_grant_ttl_hours as i64) * 3_600_000_000;
+    let expires_at_us = if req.approve {
+        now_us + grant_ttl_us
+    } else {
+        row.try_get("expires_at_us").unwrap_or(now_us)
+    };
+    let decision_note = req
+        .decision_note
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().take(280).collect::<String>());
+
+    let claim_res = sqlx::query(
+        r#"
+        UPDATE session_join_requests
+        SET status = ?1, approval_token = ?2, decision_note = ?3, updated_at_us = ?4, expires_at_us = ?5
+        WHERE request_id = ?6 AND status = 'PENDING'
+        "#,
+    )
+    .bind(join_request_status_to_db(next_status))
+    .bind(&approval_token)
+    .bind(&decision_note)
+    .bind(now_us)
+    .bind(expires_at_us)
+    .bind(&rid)
+    .execute(state.auth.db_pool())
+    .await;
+
+    let rows_claimed = claim_res.map(|r| r.rows_affected()).unwrap_or(0);
+    if rows_claimed != 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Request is no longer PENDING" })),
+        )
+            .into_response();
+    }
+
     if req.approve && updated_record.request_kind == JoinRequestKind::CreateSession {
         let Some(ref cid) = campaign_id else {
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET status = 'PENDING', approval_token = NULL, decision_note = NULL WHERE request_id = ?1 AND status = 'APPROVED'",
+            )
+            .bind(&rid)
+            .execute(state.auth.db_pool())
+            .await;
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": "Session creation request is missing campaign_id" })),
@@ -2019,6 +2081,12 @@ pub async fn decide_join_request_handler(
         .await
         .ok()
         .flatten() else {
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET status = 'PENDING', approval_token = NULL, decision_note = NULL WHERE request_id = ?1 AND status = 'APPROVED'",
+            )
+            .bind(&rid)
+            .execute(state.auth.db_pool())
+            .await;
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": format!("Campaign '{cid}' no longer exists") })),
@@ -2026,6 +2094,12 @@ pub async fn decide_join_request_handler(
                 .into_response();
         };
         if camp_row.try_get::<i64, _>("is_archived").unwrap_or(0) != 0 {
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET status = 'PENDING', approval_token = NULL, decision_note = NULL WHERE request_id = ?1 AND status = 'APPROVED'",
+            )
+            .bind(&rid)
+            .execute(state.auth.db_pool())
+            .await;
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": "Cannot create a session in an archived campaign" })),
@@ -2034,6 +2108,12 @@ pub async fn decide_join_request_handler(
         }
         let campaign_slug: String = camp_row.try_get("slug").unwrap_or_default();
         let Some(owner_acct) = state.auth.get_user_by_id(&owner_user_id).await else {
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET status = 'PENDING', approval_token = NULL, decision_note = NULL WHERE request_id = ?1 AND status = 'APPROVED'",
+            )
+            .bind(&rid)
+            .execute(state.auth.db_pool())
+            .await;
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": "Campaign owner account not found" })),
@@ -2059,6 +2139,12 @@ pub async fn decide_join_request_handler(
             )
             .await
         {
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET status = 'PENDING', approval_token = NULL, decision_note = NULL WHERE request_id = ?1 AND status = 'APPROVED'",
+            )
+            .bind(&rid)
+            .execute(state.auth.db_pool())
+            .await;
             let msg = err.to_string();
             let status = if msg.starts_with("Quota exceeded:") {
                 StatusCode::TOO_MANY_REQUESTS
@@ -2084,45 +2170,6 @@ pub async fn decide_join_request_handler(
         )
         .await;
     }
-
-    let next_status = if req.approve {
-        JoinRequestStatus::Approved
-    } else {
-        JoinRequestStatus::Denied
-    };
-    let approval_token = if req.approve {
-        Some(format!("aprv_{}", Uuid::new_v4()))
-    } else {
-        None
-    };
-    let grant_ttl_us = (state.storage.config().quotas.approval_grant_ttl_hours as i64) * 3_600_000_000;
-    let expires_at_us = if req.approve {
-        now_us + grant_ttl_us
-    } else {
-        row.try_get("expires_at_us").unwrap_or(now_us)
-    };
-    let decision_note = req
-        .decision_note
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.chars().take(280).collect::<String>());
-
-    let _ = sqlx::query(
-        r#"
-        UPDATE session_join_requests
-        SET status = ?1, approval_token = ?2, decision_note = ?3, updated_at_us = ?4, expires_at_us = ?5
-        WHERE request_id = ?6
-        "#,
-    )
-    .bind(join_request_status_to_db(next_status))
-    .bind(&approval_token)
-    .bind(&decision_note)
-    .bind(now_us)
-    .bind(expires_at_us)
-    .bind(&rid)
-    .execute(state.auth.db_pool())
-    .await;
 
     let requester_user_id = updated_record.requester_user_id.clone();
     let requester_username = updated_record.requester_username.clone();
@@ -2231,13 +2278,20 @@ pub async fn cancel_join_request_handler(
             .into_response();
     }
 
-    let _ = sqlx::query(
-        "UPDATE session_join_requests SET status = 'CANCELLED', updated_at_us = ?1 WHERE request_id = ?2",
+    let cancel_res = sqlx::query(
+        "UPDATE session_join_requests SET status = 'CANCELLED', updated_at_us = ?1 WHERE request_id = ?2 AND status = 'PENDING'",
     )
     .bind(now_us)
     .bind(&rid)
     .execute(state.auth.db_pool())
     .await;
+    if cancel_res.map(|r| r.rows_affected()).unwrap_or(0) != 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Only PENDING join requests can be cancelled" })),
+        )
+            .into_response();
+    }
 
     let session_id: String = row.try_get("session_id").unwrap_or_default();
     let owner_user_id: String = row.try_get("owner_user_id").unwrap_or_default();
@@ -2310,14 +2364,6 @@ async fn handle_notifications_socket(
         .next_conn_id
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-    {
-        let mut guard = state.account_sockets.write().await;
-        guard
-            .entry(user.user_id.clone())
-            .or_default()
-            .insert(conn_id, tx.clone());
-    }
-
     let pending_incoming_count = count_pending_incoming(&state, &user.user_id).await;
     if let Ok(hello) = serde_json::to_string(&AccountWsPacket::Connected {
         user_id: user.user_id.clone(),
@@ -2326,17 +2372,36 @@ async fn handle_notifications_socket(
         let _ = tx.send(hello);
     }
 
+    {
+        let mut guard = state.account_sockets.write().await;
+        guard
+            .entry(user.user_id.clone())
+            .or_default()
+            .insert(conn_id, tx);
+    }
+
+    let (closed_tx, mut closed_rx) = tokio::sync::oneshot::channel::<()>();
     let forward_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             if ws_tx.send(WsMessage::Text(msg)).await.is_err() {
                 break;
             }
         }
+        let _ = ws_tx.send(WsMessage::Close(None)).await;
+        let _ = closed_tx.send(());
     });
 
-    while let Some(Ok(msg)) = ws_rx.next().await {
-        if matches!(msg, WsMessage::Close(_)) {
-            break;
+    loop {
+        tokio::select! {
+            _ = &mut closed_rx => break,
+            next = ws_rx.next() => match next {
+                Some(Ok(msg)) => {
+                    if matches!(msg, WsMessage::Close(_)) {
+                        break;
+                    }
+                }
+                _ => break,
+            }
         }
     }
 

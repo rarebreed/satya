@@ -321,6 +321,13 @@ impl AuthAndSessionManager {
         Vec<Participant>,
         SessionHistorySnapshot,
     )> {
+        if !user.account_role.can_host_sessions() {
+            anyhow::bail!(
+                "Account role '{}' cannot host or import sessions; GM or Admin privilege is required",
+                user.account_role.as_db_str()
+            );
+        }
+
         let target_sid = req
             .session_id_override
             .as_deref()
@@ -349,6 +356,25 @@ impl AuthAndSessionManager {
             if !authorized {
                 anyhow::bail!(
                     "Session '{target_sid}' already exists; only an authorized GM/HOST may import over it"
+                );
+            }
+        } else {
+            let mult = if user.account_role == satya_schema::AccountRole::Admin {
+                10
+            } else {
+                1
+            };
+            let total_limit = self.quotas.max_total_sessions_per_gm.saturating_mul(mult);
+            let total_used: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM saved_sessions WHERE COALESCE(NULLIF(owner_user_id, ''), host_user_id) = ?1",
+            )
+            .bind(&user.user_id)
+            .fetch_one(&self.db_pool)
+            .await
+            .unwrap_or(0);
+            if (total_used.max(0) as usize) >= total_limit {
+                anyhow::bail!(
+                    "Quota exceeded: maximum {total_limit} sessions per GM reached (delete old sessions to reclaim quota)"
                 );
             }
         }
@@ -447,7 +473,17 @@ impl AuthAndSessionManager {
 
         let mut gm_documents = req.bundle.gm_documents;
         for doc in &mut gm_documents {
+            let (clean_title, clean_body, flagged) =
+                crate::gm_docs::sanitize_and_guard_gm_document(&doc.title, &doc.sanitized_content)
+                    .map_err(|msg| anyhow::anyhow!("{msg}"))?;
+            doc.title = clean_title;
+            doc.sanitized_content = clean_body;
+            doc.char_count = doc.sanitized_content.chars().count();
+            doc.safety_flagged = doc.safety_flagged || flagged;
             doc.session_id = target_sid.clone();
+            doc.campaign_tag = Some(target_sid.clone());
+            doc.uploader_user_id = user.user_id.clone();
+            doc.uploader_display_name = user.display_name.clone();
             let sid_prefix = format!("{target_sid}::");
             if !doc.doc_id.starts_with(&sid_prefix) {
                 doc.doc_id = format!("{sid_prefix}{}", doc.doc_id);
@@ -460,8 +496,11 @@ impl AuthAndSessionManager {
         let mut gm_memories = req.bundle.gm_memories;
         for mem in &mut gm_memories {
             mem.session_id = target_sid.clone();
+            mem.campaign_tag = target_sid.clone();
+            mem.author_user_id = user.user_id.clone();
+            mem.author_display_name = user.display_name.clone();
             let sid_prefix = format!("{target_sid}::");
-            if !mem.memory_id.starts_with(&sid_prefix) && !mem.memory_id.starts_with("mem_npc_") {
+            if !mem.memory_id.starts_with(&sid_prefix) {
                 mem.memory_id = format!("{sid_prefix}{}", mem.memory_id);
             }
             if mem.is_persistent {
@@ -513,11 +552,7 @@ impl AuthAndSessionManager {
             ai_gm_vault: None,
             active_map: req.bundle.active_map,
             gm_documents,
-            campaign_tag: if req.bundle.campaign_tag.trim().is_empty() {
-                target_sid.clone()
-            } else {
-                req.bundle.campaign_tag
-            },
+            campaign_tag: target_sid.clone(),
             gm_memories,
             combat_tracker,
             created_at_us: Utc::now().timestamp_micros(),
@@ -678,6 +713,35 @@ pub async fn import_session_snapshot_handler(
             .into_response();
     };
 
+    if !user.account_role.can_host_sessions() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "GM or Admin account role required to import sessions" })),
+        )
+            .into_response();
+    }
+
+    let create_limit = state.storage.config().quotas.max_creates_per_user_per_hour;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "session_create",
+            &user.user_id,
+            create_limit,
+            std::time::Duration::from_secs(3600),
+        )
+        .await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": format!("Session creation rate limit exceeded; retry in {retry_secs}s"),
+                "retry_after_secs": retry_secs
+            })),
+        )
+            .into_response();
+    }
+
     match state.auth.import_session_snapshot(&user, req).await {
         Ok((join_token, session_mode, self_participant, roster, history)) => {
             let sid = history
@@ -701,11 +765,19 @@ pub async fn import_session_snapshot_handler(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": e.to_string() })),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = e.to_string();
+            let status = if msg.starts_with("Quota exceeded:") {
+                StatusCode::TOO_MANY_REQUESTS
+            } else if msg.contains("already exists; only an authorized GM/HOST")
+                || msg.contains("cannot host or import")
+            {
+                StatusCode::FORBIDDEN
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            (status, Json(json!({ "error": msg }))).into_response()
+        }
     }
 }
 

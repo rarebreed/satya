@@ -389,6 +389,7 @@ macro_rules! for_all_window_callbacks {
             "satyaCharSheetLoadSaved" => satya_char_sheet_load_saved(String),
             "satyaCharSheetBindSession" => satya_char_sheet_bind_session(),
             "satyaCharSheetUploadAsset" => satya_char_sheet_upload_asset(),
+            "satyaOpenCharacterAsset" => satya_open_character_asset(String, String, String),
         )
     };
 }

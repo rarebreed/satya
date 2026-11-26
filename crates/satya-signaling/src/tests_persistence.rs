@@ -2387,7 +2387,7 @@ async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
         )
         .await
         .unwrap();
-    assert_eq!(hijack_resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(hijack_resp.status(), StatusCode::FORBIDDEN);
 
     // H8: GM_ONLY roll stays off player/observer sockets.
     let (gm_tx, mut gm_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -3605,6 +3605,487 @@ async fn test_owner_and_member_resume_without_password_or_with_stale_password() 
         )
         .await
         .expect("Stranger with valid session password must succeed");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+
+#[tokio::test]
+async fn test_wave1_security_hardening_assets_import_leave_and_join_races() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use satya_schema::{
+        AccountRole, CharacterAssetKind, CharacterSheetRecord, GmMemoryCategory,
+        GmMemoryNoteRecord, ImportSessionSnapshotRequest, SessionSnapshotBundle,
+        UploadCharacterAssetRequest, UpsertGmMemoryRequest,
+    };
+    use sqlx::Row;
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_wave1_sec_{}", Uuid::now_v7()));
+    let mut cfg = StorageConfig::default();
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("wave1_sec.db")
+        .to_string_lossy()
+        .to_string();
+    cfg.quotas.max_total_sessions_per_gm = 2;
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let marcus_auth = state
+        .auth
+        .authenticate_user("marcus_recon", "satya-truth-2026")
+        .await
+        .unwrap();
+
+    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let _sara_gm = state
+        .auth
+        .set_user_account_role("sara_valkyrie", AccountRole::Gm)
+        .await
+        .unwrap();
+
+    // 1. Character Asset Auth, MIME allowlist & nosniff header
+    let char_rec = CharacterSheetRecord {
+        character_id: "char-wave1-sec".to_string(),
+        character_name: "Asset Owner".to_string(),
+        ..Default::default()
+    };
+    let save_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/characters")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({ "character": char_rec, "bind_to_session": false }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(save_res.status(), StatusCode::OK);
+
+    for bad_mime in ["image/svg+xml", "text/html", "application/javascript"] {
+        let bad_upload = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters/char-wave1-sec/assets")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&UploadCharacterAssetRequest {
+                            asset_kind: CharacterAssetKind::PortraitImage,
+                            filename: "xss.svg".to_string(),
+                            mime_type: bad_mime.to_string(),
+                            data_base64: "PHN2Zy8+".to_string(),
+                            session_id: None,
+                        })
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            bad_upload.status(),
+            StatusCode::BAD_REQUEST,
+            "Unsafe MIME {bad_mime} must be rejected"
+        );
+    }
+
+    let good_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/characters/char-wave1-sec/assets")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&UploadCharacterAssetRequest {
+                        asset_kind: CharacterAssetKind::PortraitImage,
+                        filename: "avatar.png".to_string(),
+                        mime_type: "image/png".to_string(),
+                        data_base64: "iVBORw0KGgo=".to_string(),
+                        session_id: None,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(good_upload.status(), StatusCode::OK);
+    let good_bytes = to_bytes(good_upload.into_body(), 64 * 1024).await.unwrap();
+    let saved_after: satya_schema::SaveCharacterResponse =
+        serde_json::from_slice(&good_bytes).unwrap();
+    let asset_id = saved_after.character.assets[0].asset_id.clone();
+
+    let asset_uri = format!("/api/characters/char-wave1-sec/assets/{asset_id}");
+    let unauth_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&asset_uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauth_get.status(), StatusCode::UNAUTHORIZED);
+
+    let stranger_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&asset_uri)
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stranger_get.status(), StatusCode::NOT_FOUND);
+
+    let owner_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(&asset_uri)
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(owner_get.status(), StatusCode::OK);
+    assert_eq!(
+        owner_get
+            .headers()
+            .get(axum::http::header::X_CONTENT_TYPE_OPTIONS)
+            .and_then(|v| v.to_str().ok()),
+        Some("nosniff")
+    );
+
+    // 2. Session Import RBAC + mem_npc_* cross-GM overwrite prevention
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "w1-gm-orig",
+            "gm-pass-w1",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .upsert_session_gm_memory(
+            "w1-gm-orig",
+            &gm_user.user_id,
+            &gm_user.display_name,
+            true,
+            UpsertGmMemoryRequest {
+                memory_id: Some("mem_npc_collision".to_string()),
+                title: "GM Original Secret".to_string(),
+                category: GmMemoryCategory::NpcSecret,
+                content: "ORIGINAL_GM_SECRET".to_string(),
+                is_pinned: true,
+                is_persistent: true,
+                campaign_tag: Some("w1-gm-orig".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    let empty_bundle = SessionSnapshotBundle {
+        format_version: 1,
+        exported_at_us: 1,
+        session_id: "bundle-src".to_string(),
+        session_mode: SessionMode::Ttrpg,
+        campaign_tag: "evil-tag".to_string(),
+        roster: Vec::new(),
+        active_map: None,
+        combat_tracker: None,
+        gm_documents: vec![satya_schema::GmDocumentRecord {
+            doc_id: "doc_xss".to_string(),
+            session_id: "bundle-src".to_string(),
+            uploader_user_id: "spoofed".to_string(),
+            uploader_display_name: "Spoof".to_string(),
+            title: "XSS Note".to_string(),
+            source_kind: satya_schema::GmDocumentSource::DirectTextUpload,
+            google_file_id: None,
+            visibility: satya_schema::MessageVisibility::GmOnly,
+            sanitized_content: "<script>alert(1)</script>Safe Note".to_string(),
+            char_count: 34,
+            safety_flagged: false,
+            is_persistent: true,
+            campaign_tag: Some("evil-tag".to_string()),
+            created_at_us: 2,
+        }],
+        gm_memories: vec![GmMemoryNoteRecord {
+            memory_id: "mem_npc_collision".to_string(),
+            session_id: "bundle-src".to_string(),
+            campaign_tag: "w1-gm-orig".to_string(),
+            author_user_id: "spoofed".to_string(),
+            author_display_name: "Spoof".to_string(),
+            category: GmMemoryCategory::NpcSecret,
+            title: "Overwritten".to_string(),
+            content: "OVERWRITTEN_BY_IMPORT".to_string(),
+            is_pinned: false,
+            is_persistent: true,
+            updated_at_us: 2,
+        }],
+        session_characters: Vec::new(),
+        chat_events: Vec::new(),
+        mechanics_events: Vec::new(),
+        ai_players: Vec::new(),
+    };
+
+    // Non-owner cannot overwrite another user's existing session via import
+    let user_imp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/import")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&ImportSessionSnapshotRequest {
+                        bundle: empty_bundle.clone(),
+                        session_id_override: Some("w1-gm-orig".to_string()),
+                        session_password: "pw".to_string(),
+                        role: Some(SessionRole::Gm),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(user_imp.status(), StatusCode::FORBIDDEN);
+
+    // Second GM importing `mem_npc_collision` namespaces it and leaves GM's original intact
+    let sara_imp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/import")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&ImportSessionSnapshotRequest {
+                        bundle: empty_bundle.clone(),
+                        session_id_override: Some("sara-imported-room".to_string()),
+                        session_password: "pw".to_string(),
+                        role: Some(SessionRole::Gm),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(sara_imp.status(), StatusCode::OK);
+
+    let imported_docs = state
+        .auth
+        .list_session_gm_documents_for_user("sara-imported-room", &sara_auth.user_id)
+        .await
+        .unwrap();
+    assert_eq!(imported_docs.len(), 1);
+    assert!(!imported_docs[0].sanitized_content.contains("<script>"));
+    assert!(imported_docs[0].sanitized_content.contains("Safe Note"));
+    assert!(imported_docs[0].safety_flagged);
+
+    let sara_imp_2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/import")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&ImportSessionSnapshotRequest {
+                        bundle: empty_bundle.clone(),
+                        session_id_override: Some("sara-imported-room-2".to_string()),
+                        session_password: "pw".to_string(),
+                        role: Some(SessionRole::Gm),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(sara_imp_2.status(), StatusCode::OK);
+
+    let sara_imp_3 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/import")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&ImportSessionSnapshotRequest {
+                        bundle: empty_bundle,
+                        session_id_override: Some("sara-imported-room-3".to_string()),
+                        session_password: "pw".to_string(),
+                        role: Some(SessionRole::Gm),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(sara_imp_3.status(), StatusCode::TOO_MANY_REQUESTS);
+    let quota_body = String::from_utf8(
+        to_bytes(sara_imp_3.into_body(), 16 * 1024)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(quota_body.contains("Quota exceeded:"));
+
+    let orig_row = sqlx::query(
+        "SELECT content, campaign_tag FROM gm_memories WHERE memory_id = 'mem_npc_collision'",
+    )
+    .fetch_one(state.auth.db_pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        orig_row.try_get::<String, _>("content").unwrap(),
+        "ORIGINAL_GM_SECRET"
+    );
+
+    let namespaced_row = sqlx::query(
+        "SELECT content, campaign_tag FROM gm_memories WHERE memory_id = 'sara-imported-room::mem_npc_collision'",
+    )
+    .fetch_one(state.auth.db_pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        namespaced_row.try_get::<String, _>("content").unwrap(),
+        "OVERWRITTEN_BY_IMPORT"
+    );
+    assert_eq!(
+        namespaced_row.try_get::<String, _>("campaign_tag").unwrap(),
+        "sara-imported-room"
+    );
+
+    // 3. Non-member leave must not disclose active session roster
+    let leave_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/leave")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({ "session_id": "w1-gm-orig" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(leave_res.status(), StatusCode::OK);
+    let leave_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(leave_res.into_body(), 16 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(leave_json["remaining_roster"].as_array().unwrap().len(), 0);
+
+    // 4. Duplicate pending join request -> 409; concurrent decide vs cancel -> exactly one 200 and one 409
+    let jr_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/w1-gm-orig/join-requests")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({ "requested_role": "PLAYER" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(jr_res.status(), StatusCode::OK);
+    let jr_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(jr_res.into_body(), 16 * 1024).await.unwrap()).unwrap();
+    let req_id = jr_json["request_id"].as_str().unwrap().to_string();
+
+    let dup_jr = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/w1-gm-orig/join-requests")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({ "requested_role": "PLAYER" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(dup_jr.status(), StatusCode::CONFLICT);
+
+    let decide_fut = app.clone().oneshot(
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/join-requests/{req_id}/decide"))
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!({ "approve": true }).to_string()))
+            .unwrap(),
+    );
+    let cancel_fut = app.clone().oneshot(
+        Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/join-requests/{req_id}"))
+            .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+            .body(Body::empty())
+            .unwrap(),
+    );
+    let (dec_res, can_res) = tokio::join!(decide_fut, cancel_fut);
+    let statuses = [dec_res.unwrap().status(), can_res.unwrap().status()];
+    assert!(
+        statuses == [StatusCode::OK, StatusCode::CONFLICT]
+            || statuses == [StatusCode::CONFLICT, StatusCode::OK],
+        "Concurrent decide vs cancel must have exactly one 200 and one 409, got {statuses:?}"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

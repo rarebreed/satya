@@ -361,6 +361,9 @@ impl AuthAndSessionManager {
                 ON session_join_requests(requester_user_id, status, updated_at_us DESC);
             CREATE INDEX IF NOT EXISTS idx_join_req_session
                 ON session_join_requests(session_id, requester_user_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_join_req_unique_pending
+                ON session_join_requests(session_id, requester_user_id)
+                WHERE status = 'PENDING';
             CREATE TABLE IF NOT EXISTS email_outbox (
                 outbox_id     TEXT PRIMARY KEY NOT NULL,
                 to_email      TEXT NOT NULL,

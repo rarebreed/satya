@@ -478,3 +478,52 @@ pub(crate) async fn fetch_text(
 ) -> Result<String, String> {
     fetch_raw_text(method, url, auth_token, None).await
 }
+
+pub(crate) async fn fetch_bytes(
+    method: &str,
+    url: &str,
+    auth_token: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let win = window().ok_or_else(|| "No browser Window available".to_string())?;
+    let opts = RequestInit::new();
+    opts.set_method(method);
+
+    let headers = Headers::new().map_err(|_| "Failed to construct Headers".to_string())?;
+    if let Some(tok) = auth_token {
+        let _ = headers.set("Authorization", &format!("Bearer {tok}"));
+    }
+    opts.set_headers(&headers);
+
+    let request =
+        Request::new_with_str_and_init(url, &opts).map_err(|_| "Invalid Request".to_string())?;
+    let resp_val = JsFuture::from(win.fetch_with_request(&request))
+        .await
+        .map_err(|_| "Network fetch failed".to_string())?;
+    let resp: Response = resp_val
+        .dyn_into()
+        .map_err(|_| "Invalid Response cast".to_string())?;
+
+    if !resp.ok() {
+        let text_val = JsFuture::from(
+            resp.text()
+                .map_err(|_| "Failed to read error response".to_string())?,
+        )
+        .await
+        .map_err(|_| "Failed awaiting error response".to_string())?;
+        let text = text_val.as_string().unwrap_or_default();
+        if let Ok(err_val) = serde_json::from_str::<serde_json::Value>(&text)
+            && let Some(msg) = err_val.get("error").and_then(|v| v.as_str())
+        {
+            return Err(msg.to_string());
+        }
+        return Err(format!("HTTP {}: {}", resp.status(), text));
+    }
+
+    let buf_promise = resp
+        .array_buffer()
+        .map_err(|_| "Failed to read binary response".to_string())?;
+    let buf_val = JsFuture::from(buf_promise)
+        .await
+        .map_err(|_| "Failed awaiting binary response".to_string())?;
+    Ok(js_sys::Uint8Array::new(&buf_val).to_vec())
+}

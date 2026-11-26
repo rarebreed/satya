@@ -830,6 +830,32 @@ pub async fn bind_character_session_handler(
         .into_response()
 }
 
+fn normalize_safe_asset_mime(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "image/png" => Some("image/png"),
+        "image/jpeg" | "image/jpg" => Some("image/jpeg"),
+        "image/webp" => Some("image/webp"),
+        "image/gif" => Some("image/gif"),
+        "application/pdf" => Some("application/pdf"),
+        "model/gltf-binary" => Some("model/gltf-binary"),
+        "application/octet-stream" => Some("application/octet-stream"),
+        _ => None,
+    }
+}
+
+fn sanitize_asset_filename(raw: &str) -> String {
+    let clean: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        .take(80)
+        .collect();
+    if clean.is_empty() {
+        "asset.bin".to_string()
+    } else {
+        clean
+    }
+}
+
 /// Uploads a multimodal asset (`PORTRAIT_IMAGE`, `TACTICAL_TOKEN`, `DOSSIER_PDF`, `MODEL_3D_GLB`)
 /// to a character sheet (`POST /api/characters/:character_id/assets`), stores the binary in SQLite
 /// `character_assets` + `data/characters/assets/` (for PyLance compaction), and emits `CHARACTER_ASSET_UPLOADED`
@@ -867,6 +893,14 @@ pub async fn upload_character_asset_handler(
             .into_response();
     }
 
+    let Some(safe_mime) = normalize_safe_asset_mime(&req.mime_type) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Unsupported or unsafe asset MIME type" })),
+        )
+            .into_response();
+    };
+
     let blob_data = match base64_decode(&req.data_base64) {
         Ok(b) if !b.is_empty() => b,
         _ => {
@@ -889,23 +923,13 @@ pub async fn upload_character_asset_handler(
     let now_us = Utc::now().timestamp_micros();
     let asset_id = format!("asset_{}", Uuid::now_v7());
     let sha256_hex = hex::encode(sha256_digest(&blob_data));
-    let clean_filename: String = req
-        .filename
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-        .take(80)
-        .collect();
-    let filename = if clean_filename.is_empty() {
-        "asset.bin".to_string()
-    } else {
-        clean_filename
-    };
+    let filename = sanitize_asset_filename(&req.filename);
 
     let asset_ref = CharacterAssetRef {
         asset_id: asset_id.clone(),
         asset_kind: req.asset_kind,
         filename: filename.clone(),
-        mime_type: req.mime_type.clone(),
+        mime_type: safe_mime.to_string(),
         sha256_hex: sha256_hex.clone(),
         size_bytes: blob_data.len() as i64,
         created_at_us: now_us,
@@ -989,6 +1013,11 @@ pub async fn get_character_asset_handler(
     headers: HeaderMap,
     Path((character_id, asset_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
+    let user = match require_authenticated_user(&state, &headers).await {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
+
     let row = match sqlx::query(
         "SELECT owner_user_id, mime_type, filename, blob_data FROM character_assets WHERE character_id = ?1 AND asset_id = ?2",
     )
@@ -1007,30 +1036,26 @@ pub async fn get_character_asset_handler(
         }
     };
 
-    if headers.contains_key("Authorization") {
-        let Ok(user) = require_authenticated_user(&state, &headers).await else {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({ "error": "Invalid auth token" })),
-            )
-                .into_response();
-        };
-        let owner_id: String = row.try_get("owner_user_id").unwrap_or_default();
-        if owner_id != user.user_id {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "error": "Character asset not found" })),
-            )
-                .into_response();
-        }
+    let owner_id: String = row.try_get("owner_user_id").unwrap_or_default();
+    if owner_id != user.user_id && user.account_role != satya_schema::AccountRole::Admin {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Character asset not found" })),
+        )
+            .into_response();
     }
 
-    let mime_type: String = row
+    let raw_mime: String = row
         .try_get("mime_type")
         .unwrap_or_else(|_| "application/octet-stream".to_string());
-    let filename: String = row
+    let (mime_type, disp_kind) = match normalize_safe_asset_mime(&raw_mime) {
+        Some(safe) => (safe.to_string(), "inline"),
+        None => ("application/octet-stream".to_string(), "attachment"),
+    };
+    let raw_filename: String = row
         .try_get("filename")
         .unwrap_or_else(|_| "asset.bin".to_string());
+    let filename = sanitize_asset_filename(&raw_filename);
     let blob_data: Vec<u8> = row.try_get("blob_data").unwrap_or_default();
 
     (
@@ -1039,8 +1064,9 @@ pub async fn get_character_asset_handler(
             (header::CONTENT_TYPE, mime_type),
             (
                 header::CONTENT_DISPOSITION,
-                format!("inline; filename=\"{filename}\""),
+                format!("{disp_kind}; filename=\"{filename}\""),
             ),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
         ],
         Body::from(blob_data),
     )

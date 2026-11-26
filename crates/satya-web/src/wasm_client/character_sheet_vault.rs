@@ -142,18 +142,17 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
                 };
                 let kb = (a.size_bytes as f64) / 1024.0;
                 let sha_short = a.sha256_hex.chars().take(12).collect::<String>();
-                let url = format!(
-                    "/api/characters/{}/assets/{}",
-                    escape_html(&sheet.character_id),
-                    escape_html(&a.asset_id)
-                );
+                let cid_js =
+                    crate::wasm_client::dom::escape_js_single_quoted_attr(&sheet.character_id);
+                let aid_js = crate::wasm_client::dom::escape_js_single_quoted_attr(&a.asset_id);
+                let fname_js = crate::wasm_client::dom::escape_js_single_quoted_attr(&a.filename);
                 format!(
                     r#"<tr>
                         <td><span class="pill pill-iggy">{kind_lbl}</span></td>
                         <td><strong>{fname}</strong></td>
                         <td class="mono">{mime} · {kb:.1} KB</td>
                         <td class="mono">{sha_short}…</td>
-                        <td><a class="btn btn-sm btn-secondary" href="{url}" target="_blank" rel="noopener">Open / Download</a></td>
+                        <td><button type="button" class="btn btn-sm btn-secondary" onclick="window.satyaOpenCharacterAsset('{cid_js}', '{aid_js}', '{fname_js}')">Open / Download</button></td>
                     </tr>"#,
                     fname = escape_html(&a.filename),
                     mime = escape_html(&a.mime_type),
@@ -721,5 +720,43 @@ pub fn satya_char_sheet_upload_asset() {
             }
         }
         render_character_sheet();
+    });
+}
+
+/// Fetches an authenticated character vault asset (`GET /api/characters/:id/assets/:asset_id`)
+/// using the caller's bearer token and prompts the browser to save it locally.
+#[wasm_bindgen]
+pub fn satya_open_character_asset(character_id: String, asset_id: String, filename: String) {
+    spawn_local(async move {
+        let Some(tok) = with_state(|st| st.auth_token.clone()) else {
+            with_state_mut(|st| {
+                st.character_sheet.vault_feedback =
+                    "Log in first to download character assets.".to_string();
+            });
+            render_character_sheet();
+            return;
+        };
+        let cid = character_id.trim();
+        let aid = asset_id.trim();
+        if cid.is_empty() || aid.is_empty() {
+            return;
+        }
+        let url = format!("/api/characters/{cid}/assets/{aid}");
+        match crate::wasm_client::dom::fetch_bytes("GET", &url, Some(&tok)).await {
+            Ok(bytes) => {
+                let name = if filename.trim().is_empty() {
+                    "asset.bin"
+                } else {
+                    filename.trim()
+                };
+                let _ = crate::wasm_client::dom::prompt_save_bytes(name, &bytes).await;
+            }
+            Err(err) => {
+                with_state_mut(|st| {
+                    st.character_sheet.vault_feedback = format!("Asset download failed: {err}");
+                });
+                render_character_sheet();
+            }
+        }
     });
 }
