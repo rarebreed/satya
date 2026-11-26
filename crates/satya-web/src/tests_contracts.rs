@@ -898,12 +898,12 @@ fn test_map_controls_vertical_sidebar_layout_contracts() {
     for snippet in [
         "class=\"map-workspace-layout\"",
         "class=\"map-controls-sidebar\"",
-        "class=\"map-stage-column\"",
         "class=\"map-ctrl-section-title\"",
         "class=\"map-zoom-row\"",
+        "flex: 0 0 clamp(168px, 27%, 236px);",
         "overflow-y: auto;",
         "height: 100%;",
-        "@container map-pane (max-width: 560px)",
+        "@container map-pane (max-width: 360px)",
     ] {
         assert!(
             html.contains(snippet),
@@ -911,17 +911,52 @@ fn test_map_controls_vertical_sidebar_layout_contracts() {
         );
     }
 
+    for forbidden in [
+        "@container map-pane (max-width: 560px)",
+        "class=\"map-stage-column\"",
+    ] {
+        assert!(
+            !html.contains(forbidden),
+            "unexpected collapsed/stale map layout snippet: {forbidden}"
+        );
+    }
+
+    let layout_idx = html
+        .find("class=\"map-workspace-layout\"")
+        .expect("missing map-workspace-layout");
     let sidebar_idx = html
         .find("class=\"map-controls-sidebar\"")
         .expect("missing map-controls-sidebar aside");
-    let stage_idx = html
-        .find("class=\"map-stage-column\"")
-        .expect("missing map-stage-column");
+    let aside_end_idx = html[sidebar_idx..]
+        .find("</aside>")
+        .map(|off| sidebar_idx + off)
+        .expect("missing closing </aside> for map-controls-sidebar");
     let viewport_idx = html
         .find("id=\"tabletop-map-viewport\"")
         .expect("missing tabletop-map-viewport");
+    let hud_idx = html
+        .find("id=\"tabletop-map-los-hud\"")
+        .expect("missing tabletop-map-los-hud");
     assert!(
-        sidebar_idx < stage_idx && stage_idx < viewport_idx,
-        "map-controls-sidebar must precede map-stage-column and tabletop-map-viewport"
+        layout_idx < sidebar_idx
+            && sidebar_idx < aside_end_idx
+            && aside_end_idx < viewport_idx
+            && viewport_idx < hud_idx,
+        "map-controls-sidebar must sit directly beside tabletop-map-viewport inside map-workspace-layout, with tabletop-map-los-hud below"
+    );
+
+    let stages_1240_idx = html
+        .find(":where(.workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed)) .map-workspace-layout")
+        .expect("missing 1240px map-workspace-layout bounded-height rule");
+    let stages_360_idx = html
+        .find("@container map-pane (max-width: 360px)")
+        .expect("missing 360px map-pane container fallback");
+    assert!(
+        stages_360_idx > stages_1240_idx,
+        "@container map-pane (max-width: 360px) must cascade after 1240px/900px rules"
+    );
+    assert!(
+        !html[stages_1240_idx..stages_360_idx].contains("flex-direction: column;"),
+        "1240px and 900px stacked workspace rules must keep map-workspace-layout side-by-side"
     );
 }

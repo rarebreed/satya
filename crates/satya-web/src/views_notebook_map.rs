@@ -1000,7 +1000,6 @@ pub fn NotebookMapPane() -> impl IntoView {
             </div>
             </aside>
 
-            <div class="map-stage-column">
             <div id="tabletop-map-viewport" class="tabletop-map-viewport">
                 <div id="wgpu-map-canvas-wrap" class="wgpu-map-canvas-wrap">
                     <canvas
@@ -1087,6 +1086,7 @@ pub fn NotebookMapPane() -> impl IntoView {
                     style="display: none;"
                 ></div>
             </div>
+            </div>
             <div
                 id="tabletop-map-los-hud"
                 class="map-los-hud"
@@ -1100,8 +1100,6 @@ pub fn NotebookMapPane() -> impl IntoView {
                     class="roster-chips"
                     inner_html=wasm_client::default_tactical_map_tokens_html()
                 ></div>
-            </div>
-            </div>
             </div>
         </div>
     }
