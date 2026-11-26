@@ -890,3 +890,38 @@ fn test_responsive_stacked_layout_cascade_order_and_flex_contracts() {
         "stacked inner viewports must reset flex: 0 0 auto"
     );
 }
+
+#[test]
+fn test_map_controls_vertical_sidebar_layout_contracts() {
+    let html = render_satya_app_html();
+
+    for snippet in [
+        "class=\"map-workspace-layout\"",
+        "class=\"map-controls-sidebar\"",
+        "class=\"map-stage-column\"",
+        "class=\"map-ctrl-section-title\"",
+        "class=\"map-zoom-row\"",
+        "overflow-y: auto;",
+        "height: 100%;",
+        "@container map-pane (max-width: 560px)",
+    ] {
+        assert!(
+            html.contains(snippet),
+            "missing vertical map sidebar layout contract snippet: {snippet}"
+        );
+    }
+
+    let sidebar_idx = html
+        .find("class=\"map-controls-sidebar\"")
+        .expect("missing map-controls-sidebar aside");
+    let stage_idx = html
+        .find("class=\"map-stage-column\"")
+        .expect("missing map-stage-column");
+    let viewport_idx = html
+        .find("id=\"tabletop-map-viewport\"")
+        .expect("missing tabletop-map-viewport");
+    assert!(
+        sidebar_idx < stage_idx && stage_idx < viewport_idx,
+        "map-controls-sidebar must precede map-stage-column and tabletop-map-viewport"
+    );
+}
