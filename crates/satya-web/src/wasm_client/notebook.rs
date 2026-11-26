@@ -323,11 +323,13 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
         "hit_zones" => "#f43f5e",
         "thermal" => "#f59e0b",
         "cel" => "#34d399",
+        "cel_graphic_novel" => "#fbbf24",
         _ => "#38bdf8",
     };
     let mode_badge = match render_mode {
         "pbr" => "PBR-SHADED",
         "cel" => "CEL-SHADED",
+        "cel_graphic_novel" => "GRAPHIC-NOVEL",
         "hit_zones" => "HIT-ZONES",
         "thermal" => "THERMAL-IR",
         _ => "WIREFRAME+PBR",

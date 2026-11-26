@@ -25,6 +25,8 @@ mod map_wgpu_runtime {
     struct GpuMeshSlice {
         vertex_buffer: wgpu::Buffer,
         vertex_count: u32,
+        _texture: Option<wgpu::Texture>,
+        bind_group: Option<wgpu::BindGroup>,
     }
 
     pub struct MapDioramaPipeline {
@@ -33,7 +35,10 @@ mod map_wgpu_runtime {
         surface: wgpu::Surface<'static>,
         surface_config: wgpu::SurfaceConfiguration,
         depth_view: wgpu::TextureView,
+        bind_group_layout: wgpu::BindGroupLayout,
         uniform_buffer: wgpu::Buffer,
+        sampler: wgpu::Sampler,
+        _default_texture: wgpu::Texture,
         bind_group: wgpu::BindGroup,
         render_pipeline: wgpu::RenderPipeline,
         outline_pipeline: wgpu::RenderPipeline,
@@ -105,11 +110,27 @@ mod map_wgpu_runtime {
             mapped_at_creation: false,
         });
         pipe.queue.write_buffer(&vb, 0, bytes);
+        let (tex, bg) = if let Some(atlas) = model.albedo_atlas.as_ref() {
+            let (t, b) = create_diorama_albedo_bind_group(
+                &pipe.device,
+                &pipe.queue,
+                &pipe.bind_group_layout,
+                &pipe.uniform_buffer,
+                &pipe.sampler,
+                Some(atlas),
+                "satya-map-mini-albedo",
+            );
+            (Some(t), Some(b))
+        } else {
+            (None, None)
+        };
         pipe.miniature_meshes.insert(
             preset.to_string(),
             GpuMeshSlice {
                 vertex_buffer: vb,
                 vertex_count: model.vertices.len() as u32,
+                _texture: tex,
+                bind_group: bg,
             },
         );
         if preset == "custom_glb" {
@@ -300,6 +321,7 @@ mod map_wgpu_runtime {
                 occlusion_query_set: None,
             });
             let draw_solids = |rp: &mut wgpu::RenderPass<'_>| {
+                rp.set_bind_group(0, &pipe.bind_group, &[]);
                 rp.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
                 rp.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
                 rp.draw(0..pipe.diorama_opaque_vcount, 0..1);
@@ -310,6 +332,11 @@ mod map_wgpu_runtime {
                         && mesh.vertex_count > 0
                     {
                         let off = (idx as u64) * stride;
+                        rp.set_bind_group(
+                            0,
+                            mesh.bind_group.as_ref().unwrap_or(&pipe.bind_group),
+                            &[],
+                        );
                         rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                         rp.set_vertex_buffer(1, pipe.miniature_ib.slice(off..off + stride));
                         rp.draw(0..mesh.vertex_count, 0..1);
@@ -319,20 +346,18 @@ mod map_wgpu_runtime {
 
             // 1. Draw opaque floor, cover, bulkheads, reach envelope, LoS laser & miniatures
             rpass.set_pipeline(&pipe.render_pipeline);
-            rpass.set_bind_group(0, &pipe.bind_group, &[]);
             draw_solids(&mut rpass);
 
-            // 2. Style C inverted-hull ink outlines on opaque cover, props, bulkheads & miniatures
-            if ctrl.shader_mode == "cel" {
+            // 2. Style C / Graphic-Novel inverted-hull ink outlines on opaque cover, props & miniatures
+            if shader_mode_uses_outline(&ctrl.shader_mode) {
                 rpass.set_pipeline(&pipe.outline_pipeline);
-                rpass.set_bind_group(0, &pipe.bind_group, &[]);
                 draw_solids(&mut rpass);
                 rpass.set_pipeline(&pipe.render_pipeline);
-                rpass.set_bind_group(0, &pipe.bind_group, &[]);
             }
 
             // 3. Draw translucent canopies (trees, gazebos) after miniatures so tokens underneath stay visible
             if pipe.diorama_vcount > pipe.diorama_opaque_vcount {
+                rpass.set_bind_group(0, &pipe.bind_group, &[]);
                 rpass.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
                 rpass.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
                 rpass.draw(pipe.diorama_opaque_vcount..pipe.diorama_vcount, 0..1);
@@ -577,8 +602,12 @@ mod map_wgpu_runtime {
             surface_config.height,
             "satya-map-depth",
         );
-        let (uniform_buffer, bind_group, render_pipeline, outline_pipeline) =
-            create_shared_diorama_pipelines(&device, surface_config.format, "satya-map");
+        let shared = create_shared_diorama_pipelines(
+            &device,
+            &queue,
+            surface_config.format,
+            "satya-map",
+        );
 
         let diorama_vb = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-map-empty-vb"),
@@ -605,10 +634,13 @@ mod map_wgpu_runtime {
             surface,
             surface_config,
             depth_view,
-            uniform_buffer,
-            bind_group,
-            render_pipeline,
-            outline_pipeline,
+            bind_group_layout: shared.bind_group_layout,
+            uniform_buffer: shared.uniform_buffer,
+            sampler: shared.sampler,
+            _default_texture: shared.default_texture,
+            bind_group: shared.default_bind_group,
+            render_pipeline: shared.render_pipeline,
+            outline_pipeline: shared.outline_pipeline,
             diorama_vb,
             diorama_opaque_vcount: 0,
             diorama_vcount: 0,

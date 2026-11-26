@@ -586,6 +586,12 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
             .0
             .contains("CEL-SHADED")
     );
+    assert!(
+        wasm_client::format_3d_model_stage_html("custom_glb", "cel_graphic_novel")
+            .0
+            .contains("GRAPHIC-NOVEL")
+    );
+    assert!(html.contains(r#"value="cel_graphic_novel""#));
 
     for chapter_val in [
         "notation_glossary",

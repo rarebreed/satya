@@ -6,9 +6,11 @@
 //! [`parse_glb_bytes`], exercising the exact same codepath used when importing external `.glb` files
 //! from Blender, Quaternius, Kenney, or KayKit.
 
+use crate::wasm_client::glb_png::{DecodedPng, decode_png_rgba8};
 use crate::wasm_client::wgpu_shared::{cross3, normalize3};
 use bytemuck::{Pod, Zeroable};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 const GLB_MAGIC: u32 = 0x4654_6C67; // b"glTF"
 const GLB_VERSION_2: u32 = 2;
@@ -53,7 +55,7 @@ impl HitZoneTag {
     }
 }
 
-/// Interleaved GPU triangle vertex (`56` bytes) for `.glb` characters, props, and tactical map tiles.
+/// Interleaved GPU triangle vertex (`64` bytes) for `.glb` characters, props, and tactical map tiles.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
 pub struct GlbVertex {
@@ -63,6 +65,16 @@ pub struct GlbVertex {
     pub color: [f32; 4],
     /// `xyz` = triangle barycentric coords (`[1,0,0]`, `[0,1,0]`, `[0,0,1]`) for anti-aliased WGSL wireframe; `w` = [`HitZoneTag`].
     pub bary_zone: [f32; 4],
+    /// Normalized glTF `TEXCOORD_0` UV (`0..=1`), or `[-1.0, -1.0]` sentinel for untextured vertices.
+    pub uv: [f32; 2],
+}
+
+/// Packed RGBA8 albedo texture atlas extracted from embedded glTF 2.0 PNG images.
+#[derive(Debug, Clone)]
+pub struct GlbTextureAtlas {
+    pub width: u32,
+    pub height: u32,
+    pub rgba8: Vec<u8>,
 }
 
 /// Named submesh preserved for round-trip `.glb` export (`File -> Import -> glTF 2.0` in Blender).
@@ -76,6 +88,9 @@ pub struct GlbSubmesh {
     pub zone: HitZoneTag,
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
+    pub uvs: Vec<[f32; 2]>,
+    pub vertex_colors: Vec<[f32; 3]>,
+    pub texture_index: Option<usize>,
     pub indices: Vec<u32>,
 }
 
@@ -85,6 +100,7 @@ pub struct LoadedGlbModel {
     pub name: String,
     pub vertices: Vec<GlbVertex>,
     pub submeshes: Vec<GlbSubmesh>,
+    pub albedo_atlas: Option<GlbTextureAtlas>,
     pub bounds_min: [f32; 3],
     pub bounds_max: [f32; 3],
     pub triangle_count: usize,
@@ -239,6 +255,76 @@ fn read_accessor_vec3_f32(
     Ok(out)
 }
 
+fn read_accessor_vec2_f32(
+    gltf: &Value,
+    bin: &[u8],
+    acc_idx: usize,
+) -> Result<Vec<[f32; 2]>, String> {
+    let (count, comp_type, base_offset, stride) =
+        accessor_buffer_offset_and_stride(gltf, acc_idx, 8)?;
+    if comp_type != 5126 {
+        return Err(format!(
+            "Unsupported VEC2 componentType {comp_type} (expected 5126 FLOAT)"
+        ));
+    }
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = base_offset + i * stride;
+        let u = read_f32_le(bin, off).ok_or_else(|| "Truncated GLB VEC2 buffer".to_string())?;
+        let v =
+            read_f32_le(bin, off + 4).ok_or_else(|| "Truncated GLB VEC2 buffer".to_string())?;
+        out.push([u, v]);
+    }
+    Ok(out)
+}
+
+fn read_accessor_color_rgb(
+    gltf: &Value,
+    bin: &[u8],
+    acc_idx: usize,
+) -> Result<Vec<[f32; 3]>, String> {
+    let acc = gltf
+        .get("accessors")
+        .and_then(Value::as_array)
+        .and_then(|a| a.get(acc_idx))
+        .ok_or_else(|| format!("Missing accessor {acc_idx}"))?;
+    let vec_type = acc.get("type").and_then(Value::as_str).unwrap_or("VEC3");
+    let comps = if vec_type == "VEC4" { 4_usize } else { 3_usize };
+    let comp_type = acc
+        .get("componentType")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let comp_bytes = match comp_type {
+        5121 => 1_usize,
+        5123 => 2_usize,
+        5126 => 4_usize,
+        other => return Err(format!("Unsupported COLOR_0 componentType {other}")),
+    };
+    let (count, _, base_offset, stride) =
+        accessor_buffer_offset_and_stride(gltf, acc_idx, comps * comp_bytes)?;
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = base_offset + i * stride;
+        let read_chan = |c: usize| -> Result<f32, String> {
+            let coff = off + c * comp_bytes;
+            match comp_type {
+                5121 => bin
+                    .get(coff)
+                    .map(|&b| f32::from(b) / 255.0)
+                    .ok_or_else(|| "Truncated u8 COLOR_0 buffer".to_string()),
+                5123 => read_u16_le(bin, coff)
+                    .map(|v| f32::from(v) / 65535.0)
+                    .ok_or_else(|| "Truncated u16 COLOR_0 buffer".to_string()),
+                5126 => read_f32_le(bin, coff)
+                    .ok_or_else(|| "Truncated f32 COLOR_0 buffer".to_string()),
+                _ => Ok(1.0),
+            }
+        };
+        out.push([read_chan(0)?, read_chan(1)?, read_chan(2)?]);
+    }
+    Ok(out)
+}
+
 fn read_accessor_indices(gltf: &Value, bin: &[u8], acc_idx: usize) -> Result<Vec<u32>, String> {
     let (count, comp_type, base_offset, _) = accessor_buffer_offset_and_stride(gltf, acc_idx, 1)?;
     let mut out = Vec::with_capacity(count);
@@ -297,6 +383,152 @@ fn node_local_matrix(node: &Value) -> [f32; 16] {
     let r = read_arr("rotation", [0.0, 0.0, 0.0, 1.0], 4);
     let s = read_arr("scale", [1.0; 4], 3);
     mat4_from_trs([t[0], t[1], t[2]], r, [s[0], s[1], s[2]])
+}
+
+fn wrap_uv01(u: f32) -> f32 {
+    if !u.is_finite() {
+        0.5
+    } else if (0.0..=1.0).contains(&u) {
+        u
+    } else {
+        u.rem_euclid(1.0)
+    }
+}
+
+fn extract_embedded_png_for_material(
+    gltf: &Value,
+    bin: &[u8],
+    mat: &Value,
+    image_cache: &mut HashMap<usize, Option<usize>>,
+    decoded_images: &mut Vec<DecodedPng>,
+) -> Option<usize> {
+    let tex_idx = mat
+        .get("pbrMetallicRoughness")?
+        .get("baseColorTexture")?
+        .get("index")?
+        .as_u64()? as usize;
+    let img_idx = gltf
+        .get("textures")?
+        .as_array()?
+        .get(tex_idx)?
+        .get("source")?
+        .as_u64()? as usize;
+    if let Some(&cached) = image_cache.get(&img_idx) {
+        return cached;
+    }
+
+    let decoded = (|| -> Option<DecodedPng> {
+        let img = gltf.get("images")?.as_array()?.get(img_idx)?;
+        if let Some(mime) = img.get("mimeType").and_then(Value::as_str)
+            && mime != "image/png"
+        {
+            return None;
+        }
+        let bv_idx = img.get("bufferView")?.as_u64()? as usize;
+        let bv = gltf.get("bufferViews")?.as_array()?.get(bv_idx)?;
+        let byte_off = bv.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let byte_len = bv.get("byteLength")?.as_u64()? as usize;
+        let slice = bin.get(byte_off..byte_off.saturating_add(byte_len))?;
+        decode_png_rgba8(slice).ok()
+    })();
+
+    let packed_idx = decoded.map(|png| {
+        let idx = decoded_images.len();
+        decoded_images.push(png);
+        idx
+    });
+    image_cache.insert(img_idx, packed_idx);
+    packed_idx
+}
+
+fn pack_texture_atlas(images: Vec<DecodedPng>) -> (Option<GlbTextureAtlas>, Vec<[f32; 4]>) {
+    if images.is_empty() {
+        return (None, Vec::new());
+    }
+    if images.len() == 1 {
+        let img = images.into_iter().next().expect("non-empty");
+        return (
+            Some(GlbTextureAtlas {
+                width: img.width,
+                height: img.height,
+                rgba8: img.rgba8,
+            }),
+            vec![[0.0, 0.0, 1.0, 1.0]],
+        );
+    }
+
+    const MAX_ATLAS: u32 = 2048;
+    const PAD: u32 = 2;
+    let mut order: Vec<usize> = (0..images.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(images[i].height));
+
+    let mut placements = vec![(0_u32, 0_u32); images.len()];
+    let mut cur_x = PAD;
+    let mut cur_y = PAD;
+    let mut row_h = 0_u32;
+    let mut atlas_w = 0_u32;
+    let mut atlas_h = 0_u32;
+
+    for &idx in &order {
+        let w = images[idx].width;
+        let h = images[idx].height;
+        if cur_x + w + PAD > MAX_ATLAS {
+            cur_x = PAD;
+            cur_y = cur_y.saturating_add(row_h + PAD);
+            row_h = 0;
+        }
+        if cur_y + h + PAD > MAX_ATLAS || w + PAD * 2 > MAX_ATLAS {
+            // Fallback to first image only if total textures exceed 2048x2048 budget
+            let first = images.into_iter().next().expect("non-empty");
+            let mut rects = vec![[0.0, 0.0, 1.0, 1.0]; order.len()];
+            rects.truncate(order.len());
+            return (
+                Some(GlbTextureAtlas {
+                    width: first.width,
+                    height: first.height,
+                    rgba8: first.rgba8,
+                }),
+                rects,
+            );
+        }
+        placements[idx] = (cur_x, cur_y);
+        atlas_w = atlas_w.max(cur_x + w + PAD);
+        atlas_h = atlas_h.max(cur_y + h + PAD);
+        cur_x += w + PAD;
+        row_h = row_h.max(h);
+    }
+
+    let aw = atlas_w.max(1);
+    let ah = atlas_h.max(1);
+    let mut buf = vec![0_u8; (aw as usize) * (ah as usize) * 4];
+    let mut rects = Vec::with_capacity(images.len());
+
+    for (idx, img) in images.iter().enumerate() {
+        let (px, py) = placements[idx];
+        for row in 0..img.height {
+            let src_off = (row as usize) * (img.width as usize) * 4;
+            let dst_off = (((py + row) as usize) * (aw as usize) + (px as usize)) * 4;
+            let len = (img.width as usize) * 4;
+            buf[dst_off..dst_off + len].copy_from_slice(&img.rgba8[src_off..src_off + len]);
+        }
+        let inv_w = 1.0 / (aw as f32);
+        let inv_h = 1.0 / (ah as f32);
+        rects.push([
+            (px as f32) * inv_w,
+            (py as f32) * inv_h,
+            ((px + img.width) as f32) * inv_w,
+            ((py + img.height) as f32) * inv_h,
+        ]);
+    }
+
+    (
+        Some(GlbTextureAtlas {
+            width: aw,
+            height: ah,
+            rgba8: buf,
+        }),
+        rects,
+    )
 }
 
 /// Parses a spec-compliant glTF 2.0 Binary (`.glb`) file into GPU-ready triangles and submeshes.
@@ -374,6 +606,8 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     };
 
     let mut submeshes: Vec<GlbSubmesh> = Vec::new();
+    let mut image_cache: HashMap<usize, Option<usize>> = HashMap::new();
+    let mut decoded_images: Vec<DecodedPng> = Vec::new();
     let mut stack: Vec<(usize, [f32; 16])> = root_indices
         .into_iter()
         .rev()
@@ -422,6 +656,24 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                         .and_then(|n_acc| {
                             read_accessor_vec3_f32(&gltf, bin_slice, n_acc as usize).ok()
                         });
+                    let raw_uvs = prim
+                        .get("attributes")
+                        .and_then(|a| a.get("TEXCOORD_0"))
+                        .and_then(Value::as_u64)
+                        .and_then(|uv_acc| {
+                            read_accessor_vec2_f32(&gltf, bin_slice, uv_acc as usize).ok()
+                        })
+                        .filter(|uvs| uvs.len() == raw_pos.len())
+                        .unwrap_or_default();
+                    let vertex_colors = prim
+                        .get("attributes")
+                        .and_then(|a| a.get("COLOR_0"))
+                        .and_then(Value::as_u64)
+                        .and_then(|c_acc| {
+                            read_accessor_color_rgb(&gltf, bin_slice, c_acc as usize).ok()
+                        })
+                        .filter(|cols| cols.len() == raw_pos.len())
+                        .unwrap_or_default();
                     let indices = if let Some(i_acc) = prim.get("indices").and_then(Value::as_u64) {
                         read_accessor_indices(&gltf, bin_slice, i_acc as usize)?
                     } else {
@@ -433,6 +685,7 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                     let mut roughness = 0.55_f32;
                     let mut tintable = false;
                     let mut mat_name = String::new();
+                    let mut texture_index = None;
 
                     if let Some(mat_idx) = prim.get("material").and_then(Value::as_u64)
                         && let Some(mat) = materials.get(mat_idx as usize)
@@ -459,6 +712,40 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                             }
                             if let Some(r) = pbr.get("roughnessFactor").and_then(Value::as_f64) {
                                 roughness = r as f32;
+                            }
+                            if pbr.get("baseColorTexture").is_some() {
+                                base_color = [
+                                    pbr.get("baseColorFactor")
+                                        .and_then(Value::as_array)
+                                        .and_then(|a| a.first())
+                                        .and_then(Value::as_f64)
+                                        .unwrap_or(1.0) as f32,
+                                    pbr.get("baseColorFactor")
+                                        .and_then(Value::as_array)
+                                        .and_then(|a| a.get(1))
+                                        .and_then(Value::as_f64)
+                                        .unwrap_or(1.0)
+                                        as f32,
+                                    pbr.get("baseColorFactor")
+                                        .and_then(Value::as_array)
+                                        .and_then(|a| a.get(2))
+                                        .and_then(Value::as_f64)
+                                        .unwrap_or(1.0)
+                                        as f32,
+                                    pbr.get("baseColorFactor")
+                                        .and_then(Value::as_array)
+                                        .and_then(|a| a.get(3))
+                                        .and_then(Value::as_f64)
+                                        .unwrap_or(1.0)
+                                        as f32,
+                                ];
+                                texture_index = extract_embedded_png_for_material(
+                                    &gltf,
+                                    bin_slice,
+                                    mat,
+                                    &mut image_cache,
+                                    &mut decoded_images,
+                                );
                             }
                         }
                     }
@@ -502,6 +789,9 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                         zone,
                         positions: world_pos,
                         normals: world_norm,
+                        uvs: raw_uvs,
+                        vertex_colors,
+                        texture_index,
                         indices,
                     });
                 }
@@ -521,12 +811,21 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
         return Err("No triangle meshes found in .glb asset".to_string());
     }
 
-    Ok(assemble_loaded_model(fallback_name, submeshes, true))
+    let (albedo_atlas, uv_rects) = pack_texture_atlas(decoded_images);
+    Ok(assemble_loaded_model(
+        fallback_name,
+        submeshes,
+        albedo_atlas,
+        &uv_rects,
+        true,
+    ))
 }
 
 fn assemble_loaded_model(
     name: &str,
     mut submeshes: Vec<GlbSubmesh>,
+    albedo_atlas: Option<GlbTextureAtlas>,
+    uv_rects: &[[f32; 4]],
     ground_and_center_xz: bool,
 ) -> LoadedGlbModel {
     let mut bmin = [f32::INFINITY; 3];
@@ -564,13 +863,15 @@ fn assemble_loaded_model(
     let bary = [[1.0_f32, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     let mut vertices = Vec::new();
     for sm in &submeshes {
-        let col = [
-            linear_to_srgb(sm.base_color[0]),
-            linear_to_srgb(sm.base_color[1]),
-            linear_to_srgb(sm.base_color[2]),
-            if sm.tintable { 1.0 } else { 0.0 },
-        ];
+        let base_lin = [sm.base_color[0], sm.base_color[1], sm.base_color[2]];
+        let tint_alpha = if sm.tintable { 1.0 } else { 0.0 };
         let zf = sm.zone.as_f32();
+        let has_vc = sm.vertex_colors.len() == sm.positions.len();
+        let tex_rect = sm
+            .texture_index
+            .and_then(|ti| uv_rects.get(ti).copied())
+            .filter(|_| sm.uvs.len() == sm.positions.len());
+
         for &[raw0, raw1, raw2] in sm.indices.as_chunks::<3>().0 {
             let (i0, i1, i2) = (raw0 as usize, raw1 as usize, raw2 as usize);
             if i0 >= sm.positions.len() || i1 >= sm.positions.len() || i2 >= sm.positions.len() {
@@ -578,11 +879,32 @@ fn assemble_loaded_model(
             }
             for (corner, &vi) in [i0, i1, i2].iter().enumerate() {
                 let b = bary[corner];
+                let vc = if has_vc {
+                    sm.vertex_colors[vi]
+                } else {
+                    [1.0, 1.0, 1.0]
+                };
+                let col = [
+                    linear_to_srgb(base_lin[0] * vc[0]),
+                    linear_to_srgb(base_lin[1] * vc[1]),
+                    linear_to_srgb(base_lin[2] * vc[2]),
+                    tint_alpha,
+                ];
+                let uv = if let Some([u0, v0, u1, v1]) = tex_rect {
+                    let [ru, rv] = sm.uvs[vi];
+                    [
+                        u0 + wrap_uv01(ru) * (u1 - u0),
+                        v0 + wrap_uv01(rv) * (v1 - v0),
+                    ]
+                } else {
+                    [-1.0, -1.0]
+                };
                 vertices.push(GlbVertex {
                     position: sm.positions[vi],
                     normal: sm.normals[vi],
                     color: col,
                     bary_zone: [b[0], b[1], b[2], zf],
+                    uv,
                 });
             }
         }
@@ -593,6 +915,7 @@ fn assemble_loaded_model(
         name: name.to_string(),
         vertices,
         submeshes,
+        albedo_atlas,
         bounds_min: bmin,
         bounds_max: bmax,
         triangle_count,
@@ -658,6 +981,20 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
         let norm_acc = accessors.len();
         accessors.push(json!({ "bufferView": norm_bv, "componentType": 5126, "count": sm.normals.len(), "type": "VEC3" }));
 
+        let mut attrs = json!({ "POSITION": pos_acc, "NORMAL": norm_acc });
+        if sm.uvs.len() == sm.positions.len() && !sm.uvs.is_empty() {
+            let uv_off = bin.len();
+            for &[u, v] in &sm.uvs {
+                bin.extend_from_slice(&u.to_le_bytes());
+                bin.extend_from_slice(&v.to_le_bytes());
+            }
+            let uv_bv = buffer_views.len();
+            buffer_views.push(json!({ "buffer": 0, "byteOffset": uv_off, "byteLength": bin.len() - uv_off, "target": 34962 }));
+            let uv_acc = accessors.len();
+            accessors.push(json!({ "bufferView": uv_bv, "componentType": 5126, "count": sm.uvs.len(), "type": "VEC2" }));
+            attrs["TEXCOORD_0"] = json!(uv_acc);
+        }
+
         let idx_off = bin.len();
         for &ix in &sm.indices {
             bin.extend_from_slice(&ix.to_le_bytes());
@@ -671,7 +1008,7 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
         meshes.push(json!({
             "name": format!("{}_mesh_{idx}", sm.name),
             "primitives": [{
-                "attributes": { "POSITION": pos_acc, "NORMAL": norm_acc },
+                "attributes": attrs,
                 "indices": idx_acc, "material": mat_idx, "mode": 4
             }]
         }));
@@ -826,6 +1163,9 @@ impl SubmeshBuilder {
             zone,
             positions: self.positions,
             normals: self.normals,
+            uvs: Vec::new(),
+            vertex_colors: Vec::new(),
+            texture_index: None,
             indices: self.indices,
         }
     }
@@ -1194,5 +1534,165 @@ mod tests {
             );
             assert!((parsed.bounds_min[1]).abs() < 1e-4);
         }
+    }
+
+    #[test]
+    fn test_parse_glb_with_embedded_png_uvs_and_vertex_colors() {
+        // Minimal 1x1 uncompressed RGBA PNG (red pixel: 255, 0, 0, 255)
+        let mut raw_scan = vec![0_u8, 255, 0, 0, 255];
+        let mut s1 = 1_u32;
+        let mut s2 = 0_u32;
+        for &b in &raw_scan {
+            s1 = (s1 + u32::from(b)) % 65521;
+            s2 = (s2 + s1) % 65521;
+        }
+        let adler = (s2 << 16) | s1;
+        let mut zlib = vec![0x78, 0x01, 0x01];
+        let len = raw_scan.len() as u16;
+        zlib.extend_from_slice(&len.to_le_bytes());
+        zlib.extend_from_slice(&(!len).to_le_bytes());
+        zlib.append(&mut raw_scan);
+        zlib.extend_from_slice(&adler.to_be_bytes());
+
+        fn crc32(data: &[u8]) -> u32 {
+            let mut crc = 0xFFFF_FFFF_u32;
+            for &b in data {
+                crc ^= u32::from(b);
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+                }
+            }
+            !crc
+        }
+        fn push_chunk(out: &mut Vec<u8>, tag: &[u8; 4], payload: &[u8]) {
+            out.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+            out.extend_from_slice(tag);
+            out.extend_from_slice(payload);
+            let mut c = Vec::from(*tag);
+            c.extend_from_slice(payload);
+            out.extend_from_slice(&crc32(&c).to_be_bytes());
+        }
+        let mut png = vec![137, 80, 78, 71, 13, 10, 26, 10];
+        let mut ihdr = Vec::new();
+        ihdr.extend_from_slice(&1_u32.to_be_bytes());
+        ihdr.extend_from_slice(&1_u32.to_be_bytes());
+        ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+        push_chunk(&mut png, b"IHDR", &ihdr);
+        push_chunk(&mut png, b"IDAT", &zlib);
+        push_chunk(&mut png, b"IEND", &[]);
+
+        let mut bin = Vec::new();
+        let positions: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 1.5, 0.0]];
+        let pos_off = bin.len();
+        for p in &positions {
+            for &c in p {
+                bin.extend_from_slice(&c.to_le_bytes());
+            }
+        }
+        let pos_len = bin.len() - pos_off;
+
+        let uvs: [[f32; 2]; 3] = [[0.1, 0.2], [0.9, 0.2], [0.5, 0.8]];
+        let uv_off = bin.len();
+        for uv in &uvs {
+            for &c in uv {
+                bin.extend_from_slice(&c.to_le_bytes());
+            }
+        }
+        let uv_len = bin.len() - uv_off;
+
+        let cols: [[u8; 4]; 3] = [[255, 255, 255, 255], [128, 255, 255, 255], [255, 128, 255, 255]];
+        let col_off = bin.len();
+        for c in &cols {
+            bin.extend_from_slice(c);
+        }
+        let col_len = bin.len() - col_off;
+
+        let img_off = bin.len();
+        bin.extend_from_slice(&png);
+        let img_len = bin.len() - img_off;
+        while !bin.len().is_multiple_of(4) {
+            bin.push(0);
+        }
+
+        let gltf = json!({
+            "asset": { "version": "2.0" },
+            "scene": 0,
+            "scenes": [{ "nodes": [0] }],
+            "nodes": [{ "name": "head_uv_test", "mesh": 0 }],
+            "meshes": [{
+                "name": "tri_mesh",
+                "primitives": [{
+                    "attributes": { "POSITION": 0, "TEXCOORD_0": 1, "COLOR_0": 2 },
+                    "material": 0
+                }]
+            }],
+            "materials": [{
+                "name": "textured_mat",
+                "pbrMetallicRoughness": {
+                    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                    "baseColorTexture": { "index": 0 }
+                }
+            }],
+            "textures": [{ "source": 0 }],
+            "images": [{ "bufferView": 3, "mimeType": "image/png" }],
+            "bufferViews": [
+                { "buffer": 0, "byteOffset": pos_off, "byteLength": pos_len },
+                { "buffer": 0, "byteOffset": uv_off, "byteLength": uv_len },
+                { "buffer": 0, "byteOffset": col_off, "byteLength": col_len },
+                { "buffer": 0, "byteOffset": img_off, "byteLength": img_len }
+            ],
+            "accessors": [
+                { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
+                { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC2" },
+                { "bufferView": 2, "componentType": 5121, "count": 3, "type": "VEC4" }
+            ],
+            "buffers": [{ "byteLength": bin.len() }]
+        });
+        let mut json_bytes = serde_json::to_vec(&gltf).unwrap();
+        while !json_bytes.len().is_multiple_of(4) {
+            json_bytes.push(b' ');
+        }
+        let total_len = (12 + 8 + json_bytes.len() + 8 + bin.len()) as u32;
+        let mut glb = Vec::with_capacity(total_len as usize);
+        glb.extend_from_slice(&GLB_MAGIC.to_le_bytes());
+        glb.extend_from_slice(&GLB_VERSION_2.to_le_bytes());
+        glb.extend_from_slice(&total_len.to_le_bytes());
+        glb.extend_from_slice(&(json_bytes.len() as u32).to_le_bytes());
+        glb.extend_from_slice(&CHUNK_JSON.to_le_bytes());
+        glb.extend_from_slice(&json_bytes);
+        glb.extend_from_slice(&(bin.len() as u32).to_le_bytes());
+        glb.extend_from_slice(&CHUNK_BIN.to_le_bytes());
+        glb.extend_from_slice(&bin);
+
+        let parsed = parse_glb_bytes(&glb, "uv_test").expect("UV GLB should parse");
+        let atlas = parsed.albedo_atlas.as_ref().expect("Atlas must be decoded");
+        assert_eq!((atlas.width, atlas.height), (1, 1));
+        assert_eq!(atlas.rgba8, vec![255, 0, 0, 255]);
+        assert!((parsed.vertices[0].uv[0] - 0.1).abs() < 1e-5);
+        assert!((parsed.vertices[1].uv[0] - 0.9).abs() < 1e-5);
+        assert!(parsed.vertices[1].color[0] < 0.8);
+    }
+
+    #[test]
+    fn test_parse_alex_wen_set01_v2_glb_asset() {
+        let glb_bytes =
+            include_bytes!("../../../../assets/models/characters/alex_wen/alex_wen_set01_v2.glb");
+        let parsed = parse_glb_bytes(glb_bytes, "alex_wen_set01_v2.glb")
+            .expect("alex_wen_set01_v2.glb must parse cleanly");
+        let atlas = parsed
+            .albedo_atlas
+            .as_ref()
+            .expect("alex_wen_set01_v2.glb must contain embedded PNG atlas");
+        assert_eq!((atlas.width, atlas.height), (1024, 1024));
+        assert!(parsed.triangle_count > 10_000);
+        assert!((parsed.height_m() - 1.78).abs() < 0.02);
+        assert!(parsed.bounds_min[1].abs() < 1e-4);
+        assert!(
+            parsed
+                .vertices
+                .iter()
+                .all(|v| (0.0..=1.0).contains(&v.uv[0]) && (0.0..=1.0).contains(&v.uv[1]))
+        );
     }
 }

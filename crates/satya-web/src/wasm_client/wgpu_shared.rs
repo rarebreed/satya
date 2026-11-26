@@ -18,6 +18,7 @@ use wasm_bindgen::JsCast;
 /// - `2.0`: Anatomical Hit Zones (`Head`, `Torso`, `Arms/Weapon`, `Legs`, `Pack`)
 /// - `3.0`: Thermal / FLIR Sensor
 /// - `4.0`: Cel-Shaded / Toon (Style C)
+/// - `5.0`: Cel-Shaded / Graphic Novel Ink
 pub const SHARED_GLB_DIORAMA_WGSL: &str = r#"
 struct DioramaUniforms {
     view_proj: mat4x4<f32>,
@@ -28,17 +29,22 @@ struct DioramaUniforms {
 
 @group(0) @binding(0)
 var<uniform> scene: DioramaUniforms;
+@group(0) @binding(1)
+var t_albedo: texture_2d<f32>;
+@group(0) @binding(2)
+var s_albedo: sampler;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
     @location(3) bary_zone: vec4<f32>,
-    @location(4) model_0: vec4<f32>,
-    @location(5) model_1: vec4<f32>,
-    @location(6) model_2: vec4<f32>,
-    @location(7) model_3: vec4<f32>,
-    @location(8) inst_tint: vec4<f32>,
+    @location(4) uv: vec2<f32>,
+    @location(5) model_0: vec4<f32>,
+    @location(6) model_1: vec4<f32>,
+    @location(7) model_2: vec4<f32>,
+    @location(8) model_3: vec4<f32>,
+    @location(9) inst_tint: vec4<f32>,
 };
 
 struct VertexOutput {
@@ -49,6 +55,7 @@ struct VertexOutput {
     @location(3) alpha: f32,
     @location(4) bary: vec3<f32>,
     @location(5) zone_id: f32,
+    @location(6) uv: vec2<f32>,
 };
 
 @vertex
@@ -68,6 +75,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.alpha = in.inst_tint.a;
     out.bary = in.bary_zone.xyz;
     out.zone_id = in.bary_zone.w;
+    out.uv = in.uv;
     return out;
 }
 
@@ -113,8 +121,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let v = normalize(scene.camera_pos.xyz - in.world_pos);
     let fw = fwidth(in.bary);
     let n_edge = length(fwidth(n));
+    let p_edge = max(length(fwidth(in.world_pos)), 1e-4);
+    let tex_rgba = textureSample(t_albedo, s_albedo, clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0)));
     let mode = i32(round(scene.mode_params.x));
-    var albedo = in.base_rgb;
+    var albedo = select(in.base_rgb, in.base_rgb * tex_rgba.rgb, in.uv.x >= -0.5);
     var spec_scale = 1.0;
     var out_alpha = in.alpha;
 
@@ -275,6 +285,45 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             }
         }
         rgb = toon + grid_boost;
+    } else if mode == 5 {
+        // Graphic-Novel Ink Cel Shading: 4-tier warm/cool ramp, shadow hatching, curvature crease ink, tight rim
+        let ndv = max(dot(n, v), 0.0);
+        let wrap_ndl = clamp(dot(n, key_l) * 0.5 + 0.5, 0.0, 1.0);
+        let lit = clamp(wrap_ndl * 0.86 + fill * 0.42 + (n.y * 0.5 + 0.5) * 0.12, 0.0, 1.0);
+
+        let b1 = smoothstep(0.30, 0.35, lit);
+        let b2 = smoothstep(0.50, 0.55, lit);
+        let b3 = smoothstep(0.80, 0.85, lit);
+
+        let deep_c = albedo * shadow_tint * vec3<f32>(0.76, 0.80, 0.92);
+        let mid_c = albedo * mix(shadow_tint, vec3<f32>(0.90, 0.91, 0.95), 0.52);
+        let lit_c = albedo * mix(vec3<f32>(1.0, 1.0, 1.0), key_tint, 0.60);
+        let high_c = albedo * key_tint * vec3<f32>(1.09, 1.07, 1.03);
+        var gn = mix(mix(mix(deep_c, mid_c, b1), lit_c, b2), high_c, b3);
+
+        // Subtle distance-attenuated diagonal ink hatching in deep shadow planes
+        let hatch_wave = smoothstep(0.55, 0.86, sin((in.world_pos.x + in.world_pos.y * 1.15 + in.world_pos.z) * 58.0));
+        let hatch_fade = clamp(1.0 - p_edge * 18.0, 0.0, 1.0);
+        let deep_mask = 1.0 - smoothstep(0.24, 0.38, lit);
+        gn = gn * (1.0 - deep_mask * hatch_wave * hatch_fade * 0.18);
+
+        // Subtle matte graphic highlight + stepped silhouette rim
+        let gn_spec = smoothstep(0.11, 0.16, spec) * 0.10 * gloss;
+        let gn_rim = smoothstep(0.68, 0.75, 1.0 - ndv) * smoothstep(0.08, 0.28, wrap_ndl) * (0.20 + rim_gain * 0.65);
+        gn = gn + key_tint * (gn_spec + gn_rim);
+
+        // Curvature-driven interior crease ink + tight grazing contour
+        let ink_col = vec3<f32>(0.065, 0.070, 0.095);
+        if in.zone_id >= -0.5 {
+            let is_head = abs(in.zone_id - 1.0) < 0.1;
+            let crease_thresh = select(0.14, 0.22, is_head);
+            let crease_hi = select(0.28, 0.44, is_head);
+            let crease_w = select(0.68, 0.48, is_head);
+            let crease_ink = smoothstep(crease_thresh, crease_hi, n_edge) * crease_w;
+            let contour_ink = select(1.0 - smoothstep(0.06, 0.13, ndv), 0.0, is_head) * 0.52;
+            gn = mix(gn, ink_col, clamp(max(crease_ink, contour_ink), 0.0, 0.82));
+        }
+        rgb = gn + grid_boost;
     }
 
     if mode == 1 || mode == 2 {
@@ -297,7 +346,10 @@ fn vs_outline(in: VertexInput) -> @builtin(position) vec4<f32> {
     let rot_m = mat3x3<f32>(in.model_0.xyz, in.model_1.xyz, in.model_2.xyz);
     let world_n = normalize(rot_m * in.normal);
     let is_head = abs(in.bary_zone.w - 1.0) < 0.1;
-    let width = select(0.0032, 0.0012, is_head);
+    let cam_dist = clamp(length(scene.camera_pos.xyz - world_p.xyz), 0.7, 24.0);
+    let gn_width = select(0.0014, 0.00068, is_head) * cam_dist;
+    let style_c_width = select(0.0032, 0.0012, is_head);
+    let width = select(style_c_width, gn_width, scene.mode_params.x > 4.5);
     let extruded = world_p.xyz + world_n * width;
     return scene.view_proj * vec4<f32>(extruded, 1.0);
 }
@@ -571,7 +623,8 @@ pub fn mul_mat4_cols(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
     out
 }
 
-/// Maps UI shader mode slugs (`"pbr"`, `"wireframe_pbr"`, `"hit_zones"`, `"thermal"`, `"cel"`) to `mode_params.x`.
+/// Maps UI shader mode slugs (`"pbr"`, `"wireframe_pbr"`, `"hit_zones"`, `"thermal"`, `"cel"`,
+/// `"cel_graphic_novel"`) to `mode_params.x`.
 #[must_use]
 pub fn shader_mode_code(mode_str: &str) -> f32 {
     match mode_str.trim() {
@@ -579,8 +632,15 @@ pub fn shader_mode_code(mode_str: &str) -> f32 {
         "hit_zones" => 2.0,
         "thermal" => 3.0,
         "cel" => 4.0,
+        "cel_graphic_novel" => 5.0,
         _ => 1.0, // "wireframe_pbr"
     }
+}
+
+/// Returns `true` when `mode_str` uses the inverted-hull comic ink outline pass.
+#[must_use]
+pub fn shader_mode_uses_outline(mode_str: &str) -> bool {
+    matches!(mode_str.trim(), "cel" | "cel_graphic_novel")
 }
 
 /// Maps UI lighting preset slugs (`"studio_matte"`, `"daylight"`, `"dramatic_rim"`, `"sunset"`,
@@ -757,7 +817,7 @@ pub fn resize_canvas_surface_if_needed(
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn shared_glb_vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 2] {
-    const V_ATTRS: [wgpu::VertexAttribute; 4] = [
+    const V_ATTRS: [wgpu::VertexAttribute; 5] = [
         wgpu::VertexAttribute {
             format: wgpu::VertexFormat::Float32x3,
             offset: 0,
@@ -778,32 +838,37 @@ pub fn shared_glb_vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>;
             offset: 40,
             shader_location: 3,
         },
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x2,
+            offset: 56,
+            shader_location: 4,
+        },
     ];
     const I_ATTRS: [wgpu::VertexAttribute; 5] = [
         wgpu::VertexAttribute {
             format: wgpu::VertexFormat::Float32x4,
             offset: 0,
-            shader_location: 4,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 16,
             shader_location: 5,
         },
         wgpu::VertexAttribute {
             format: wgpu::VertexFormat::Float32x4,
-            offset: 32,
+            offset: 16,
             shader_location: 6,
         },
         wgpu::VertexAttribute {
             format: wgpu::VertexFormat::Float32x4,
-            offset: 48,
+            offset: 32,
             shader_location: 7,
         },
         wgpu::VertexAttribute {
             format: wgpu::VertexFormat::Float32x4,
-            offset: 64,
+            offset: 48,
             shader_location: 8,
+        },
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x4,
+            offset: 64,
+            shader_location: 9,
         },
     ];
     [
@@ -820,67 +885,158 @@ pub fn shared_glb_vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>;
     ]
 }
 
-/// Builds the shared `(uniform_buffer, bind_group, render_pipeline)` for [`SHARED_GLB_DIORAMA_WGSL`].
+/// Shared WebGPU resources and pipelines for [`SHARED_GLB_DIORAMA_WGSL`].
 #[cfg(target_arch = "wasm32")]
-#[must_use]
-pub fn create_shared_diorama_pipeline(
-    device: &wgpu::Device,
-    surface_format: wgpu::TextureFormat,
-    label_prefix: &str,
-) -> (wgpu::Buffer, wgpu::BindGroup, wgpu::RenderPipeline) {
-    let (ub, bg, main_pipe, _outline_pipe) =
-        create_shared_diorama_pipelines(device, surface_format, label_prefix);
-    (ub, bg, main_pipe)
+pub struct SharedDioramaPipelines {
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub uniform_buffer: wgpu::Buffer,
+    pub sampler: wgpu::Sampler,
+    pub default_texture: wgpu::Texture,
+    pub default_bind_group: wgpu::BindGroup,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub outline_pipeline: wgpu::RenderPipeline,
 }
 
-/// Builds `(uniform_buffer, bind_group, main_pipeline, outline_pipeline)` for
-/// [`SHARED_GLB_DIORAMA_WGSL`], including the inverted-hull comic ink outline pass.
+/// Uploads an optional [`GlbTextureAtlas`] (or `1x1` white fallback) and returns `(texture, bind_group)`.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn create_diorama_albedo_bind_group(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    uniform_buffer: &wgpu::Buffer,
+    sampler: &wgpu::Sampler,
+    atlas: Option<&crate::wasm_client::glb_model::GlbTextureAtlas>,
+    label: &str,
+) -> (wgpu::Texture, wgpu::BindGroup) {
+    const FALLBACK_WHITE: [u8; 4] = [255, 255, 255, 255];
+    let (w, h, pixels): (u32, u32, &[u8]) = match atlas {
+        Some(a) if a.width > 0 && a.height > 0 => (a.width, a.height, &a.rgba8),
+        _ => (1, 1, &FALLBACK_WHITE),
+    };
+    let size = wgpu::Extent3d {
+        width: w,
+        height: h,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        pixels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * w),
+            rows_per_image: Some(h),
+        },
+        size,
+    );
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(label),
+        layout: bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+        ],
+    });
+    (texture, bind_group)
+}
+
+/// Builds [`SharedDioramaPipelines`] for [`SHARED_GLB_DIORAMA_WGSL`], including the
+/// inverted-hull comic ink outline pass and `1x1` fallback albedo texture binding.
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn create_shared_diorama_pipelines(
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
     surface_format: wgpu::TextureFormat,
     label_prefix: &str,
-) -> (
-    wgpu::Buffer,
-    wgpu::BindGroup,
-    wgpu::RenderPipeline,
-    wgpu::RenderPipeline,
-) {
+) -> SharedDioramaPipelines {
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label_prefix),
         size: std::mem::size_of::<DioramaUniforms>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some(label_prefix),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
     });
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some(label_prefix),
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: uniform_buffer.as_entire_binding(),
-        }],
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        ..Default::default()
     });
+    let (default_texture, default_bind_group) = create_diorama_albedo_bind_group(
+        device,
+        queue,
+        &bind_group_layout,
+        &uniform_buffer,
+        &sampler,
+        None,
+        label_prefix,
+    );
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label_prefix),
         source: wgpu::ShaderSource::Wgsl(SHARED_GLB_DIORAMA_WGSL.into()),
     });
     let playout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some(label_prefix),
-        bind_group_layouts: &[&bgl],
+        bind_group_layouts: &[&bind_group_layout],
         push_constant_ranges: &[],
     });
     let vbuffers = shared_glb_vertex_buffer_layouts();
@@ -924,12 +1080,15 @@ pub fn create_shared_diorama_pipelines(
     };
     let render_pipeline = build_pipe("vs_main", "fs_main", None);
     let outline_pipeline = build_pipe("vs_outline", "fs_outline", Some(wgpu::Face::Front));
-    (
+    SharedDioramaPipelines {
+        bind_group_layout,
         uniform_buffer,
-        bind_group,
+        sampler,
+        default_texture,
+        default_bind_group,
         render_pipeline,
         outline_pipeline,
-    )
+    }
 }
 
 #[cfg(test)]
@@ -974,6 +1133,10 @@ mod tests {
             );
         }
         assert!((shader_mode_code("cel") - 4.0).abs() < 1e-6);
+        assert!((shader_mode_code("cel_graphic_novel") - 5.0).abs() < 1e-6);
+        assert!(shader_mode_uses_outline("cel"));
+        assert!(shader_mode_uses_outline("cel_graphic_novel"));
+        assert!(!shader_mode_uses_outline("pbr"));
         for (slug, code, (gloss, rim)) in [
             ("studio_matte", 0.0_f32, (0.10_f32, 0.06_f32)),
             ("daylight", 1.0, (0.18, 0.08)),

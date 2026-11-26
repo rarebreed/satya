@@ -368,7 +368,7 @@ mod tests {
         assert!(!vector.contains("/assets/sprites/props/"));
         assert_eq!(vector.matches("<g ").count(), vector.matches("</g>").count());
 
-        let mut tinted_bed = bed.clone();
+        let mut tinted_bed = bed;
         tinted_bed.tint_rgb = Some([200, 120, 120]);
         assert!(prop_sprite_asset_for_placement(&tinted_bed).is_none());
     }

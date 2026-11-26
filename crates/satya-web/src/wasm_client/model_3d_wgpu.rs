@@ -85,6 +85,7 @@ pub fn build_pedestal_and_model_vertices(model: &LoadedGlbModel) -> Vec<GlbVerte
                 normal: n,
                 color: col,
                 bary_zone: [bary[ci][0], bary[ci][1], bary[ci][2], -1.0],
+                uv: [-1.0, -1.0],
             });
         }
     }
@@ -109,7 +110,10 @@ mod model_wgpu_runtime {
         surface: wgpu::Surface<'static>,
         surface_config: wgpu::SurfaceConfiguration,
         depth_view: wgpu::TextureView,
+        bind_group_layout: wgpu::BindGroupLayout,
         uniform_buffer: wgpu::Buffer,
+        sampler: wgpu::Sampler,
+        _active_texture: wgpu::Texture,
         bind_group: wgpu::BindGroup,
         render_pipeline: wgpu::RenderPipeline,
         outline_pipeline: wgpu::RenderPipeline,
@@ -169,12 +173,24 @@ mod model_wgpu_runtime {
         ctrl.camera.target_y = h * 0.48;
         ctrl.camera.base_distance = (model.max_extent_m() * 1.85).clamp(2.4, 9.0);
         let all_verts = build_pedestal_and_model_vertices(&model);
+        let albedo_atlas = model.albedo_atlas.clone();
         ctrl.loaded_model = Some(model);
         ctrl.mesh_dirty = false;
 
         let Some(pipe) = ctrl.pipeline.as_mut() else {
             return;
         };
+        let (tex, bg) = create_diorama_albedo_bind_group(
+            &pipe.device,
+            &pipe.queue,
+            &pipe.bind_group_layout,
+            &pipe.uniform_buffer,
+            &pipe.sampler,
+            albedo_atlas.as_ref(),
+            "satya-model-albedo",
+        );
+        pipe._active_texture = tex;
+        pipe.bind_group = bg;
         let byte_slice: &[u8] = bytemuck::cast_slice(&all_verts);
         let vb = pipe.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-model-vb"),
@@ -276,7 +292,7 @@ mod model_wgpu_runtime {
             rpass.set_vertex_buffer(0, pipe.vertex_buffer.slice(..));
             rpass.set_vertex_buffer(1, pipe.instance_buffer.slice(..));
             rpass.draw(0..pipe.vertex_count, 0..pipe.instance_count);
-            if ctrl.shader_mode == "cel" {
+            if shader_mode_uses_outline(&ctrl.shader_mode) {
                 rpass.set_pipeline(&pipe.outline_pipeline);
                 rpass.set_bind_group(0, &pipe.bind_group, &[]);
                 rpass.set_vertex_buffer(0, pipe.vertex_buffer.slice(..));
@@ -424,8 +440,12 @@ mod model_wgpu_runtime {
             surface_config.height,
             "satya-model-depth",
         );
-        let (uniform_buffer, bind_group, render_pipeline, outline_pipeline) =
-            create_shared_diorama_pipelines(&device, surface_config.format, "satya-model");
+        let shared = create_shared_diorama_pipelines(
+            &device,
+            &queue,
+            surface_config.format,
+            "satya-model",
+        );
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-model-empty-vb"),
@@ -446,10 +466,13 @@ mod model_wgpu_runtime {
             surface,
             surface_config,
             depth_view,
-            uniform_buffer,
-            bind_group,
-            render_pipeline,
-            outline_pipeline,
+            bind_group_layout: shared.bind_group_layout,
+            uniform_buffer: shared.uniform_buffer,
+            sampler: shared.sampler,
+            _active_texture: shared.default_texture,
+            bind_group: shared.default_bind_group,
+            render_pipeline: shared.render_pipeline,
+            outline_pipeline: shared.outline_pipeline,
             vertex_buffer,
             vertex_count: 0,
             instance_buffer,

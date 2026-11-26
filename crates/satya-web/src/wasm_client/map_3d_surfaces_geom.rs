@@ -47,6 +47,7 @@ pub(crate) fn push_tri_up(
             normal: [0.0, 1.0, 0.0],
             color: col,
             bary_zone: [bary[ci][0], bary[ci][1], bary[ci][2], zone_id],
+            uv: [-1.0, -1.0],
         });
     }
 }

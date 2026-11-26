@@ -37,6 +37,7 @@ pub mod dom_tooltip;
 #[cfg(feature = "e2e-hooks")]
 pub mod e2e_hooks;
 pub mod glb_model;
+pub mod glb_png;
 pub mod gm_docs;
 pub mod gm_docs_google;
 pub mod gm_memories_and_director;

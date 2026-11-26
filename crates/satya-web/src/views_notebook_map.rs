@@ -139,6 +139,7 @@ pub fn NotebookMapPane() -> impl IntoView {
                             on:change=move |_| wasm_client::satya_update_3d_map_style()
                         >
                             <option value="cel">"Cel-Shaded (Style C)"</option>
+                            <option value="cel_graphic_novel">"Cel-Shaded (Graphic Novel Ink)"</option>
                             <option value="pbr">"Clean PBR"</option>
                             <option value="wireframe_pbr">"Wireframe + PBR"</option>
                             <option value="hit_zones">"Hit Zones"</option>

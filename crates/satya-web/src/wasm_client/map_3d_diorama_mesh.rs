@@ -19,6 +19,7 @@ pub fn push_quad(verts: &mut Vec<GlbVertex>, p: [[f32; 3]; 4], col: [f32; 4], zo
                 normal: n,
                 color: col,
                 bary_zone: [bary[ci][0], bary[ci][1], bary[ci][2], zone_id],
+                uv: [-1.0, -1.0],
             });
         }
     }

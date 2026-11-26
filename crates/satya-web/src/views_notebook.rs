@@ -424,6 +424,7 @@ fn NotebookModelAndCharacterPanes() -> impl IntoView {
                             <option value="wireframe_pbr">"Wireframe + PBR"</option>
                             <option value="pbr">"Clean PBR Armor"</option>
                             <option value="cel">"Cel-Shaded (Style C)"</option>
+                            <option value="cel_graphic_novel">"Cel-Shaded (Graphic Novel Ink)"</option>
                             <option value="hit_zones">"Anatomical Hit Zones"</option>
                             <option value="thermal">"Thermal / IR Sensor"</option>
                         </select>
