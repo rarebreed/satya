@@ -1695,4 +1695,26 @@ mod tests {
                 .all(|v| (0.0..=1.0).contains(&v.uv[0]) && (0.0..=1.0).contains(&v.uv[1]))
         );
     }
+
+    #[test]
+    fn test_parse_alex_wen_set01_v3_glb_asset() {
+        let glb_bytes =
+            include_bytes!("../../../../assets/models/characters/alex_wen/alex_wen_set01_v3.glb");
+        let parsed = parse_glb_bytes(glb_bytes, "alex_wen_set01_v3.glb")
+            .expect("alex_wen_set01_v3.glb must parse cleanly");
+        let atlas = parsed
+            .albedo_atlas
+            .as_ref()
+            .expect("alex_wen_set01_v3.glb must contain embedded PNG atlas");
+        assert_eq!((atlas.width, atlas.height), (1024, 1024));
+        assert!(parsed.triangle_count > 10_000);
+        assert!((parsed.height_m() - 1.78).abs() < 0.02);
+        assert!(parsed.bounds_min[1].abs() < 1e-4);
+        assert!(
+            parsed
+                .vertices
+                .iter()
+                .all(|v| (0.0..=1.0).contains(&v.uv[0]) && (0.0..=1.0).contains(&v.uv[1]))
+        );
+    }
 }

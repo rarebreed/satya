@@ -1293,38 +1293,74 @@ def build_eyes_brows_hair_and_skin(
     h_ys = [v.co.y for v in hair_cap.data.vertices]
     cx = (min(h_xs) + max(h_xs)) * 0.5
     cy = (min(h_ys) + max(h_ys)) * 0.5
-    crown_z = head_top_z + 0.015
+    front_verts = [v.co for v in hair_cap.data.vertices if v.co.y < cy - 0.005]
+
+    def sample_front_cap_y(rel_x: float, abs_z: float) -> float:
+        """Return front surface Y of Head_Hair_Cap near `(cx + rel_x, abs_z)`."""
+        wx = cx + rel_x
+        wz = max(abs_z, hairline_z + 0.003)
+        near = sorted(
+            front_verts,
+            key=lambda co: (co.x - wx) ** 2 + ((co.z - wz) * 1.15) ** 2,
+        )[:6]
+        base_y = min(co.y for co in near)
+        # Tuck tips below hairline gently backward toward the forehead skin so they never float
+        if abs_z < hairline_z + 0.003:
+            base_y += min(0.0045, (hairline_z + 0.003 - abs_z) * 0.35)
+        return base_y
+
+    # Front tousled hair ruffles sculpted along the curved front forehead surface:
+    # roots sink smoothly into Head_Hair_Cap (y0_off=+0.008) with overlapping, slightly parted sweep angles
+    front_ruffle_specs = (
+        (-0.056, 0.044, 0.009, -0.059, 0.017, -0.002, -0.057, -0.002, 0.002, 0.011, 0.0042),
+        (-0.044, 0.049, 0.008, -0.048, 0.020, -0.003, -0.047, -0.006, 0.000, 0.014, 0.0046),
+        (-0.032, 0.052, 0.008, -0.035, 0.021, -0.004, -0.033, -0.003, 0.001, 0.013, 0.0044),
+        (-0.021, 0.054, 0.008, -0.019, 0.022, -0.005, -0.011, -0.009, -0.001, 0.015, 0.0050),
+        (-0.010, 0.055, 0.008, -0.006, 0.024, -0.004, 0.004, -0.004, 0.000, 0.015, 0.0048),
+        (0.002, 0.055, 0.008, 0.006, 0.021, -0.005, 0.016, -0.010, -0.001, 0.016, 0.0052),
+        (0.016, 0.053, 0.008, 0.020, 0.022, -0.004, 0.029, -0.003, 0.000, 0.014, 0.0046),
+        (0.029, 0.051, 0.008, 0.033, 0.019, -0.005, 0.041, -0.008, 0.000, 0.014, 0.0048),
+        (0.043, 0.047, 0.008, 0.046, 0.018, -0.004, 0.052, -0.002, 0.001, 0.013, 0.0044),
+        (0.055, 0.042, 0.009, 0.057, 0.016, -0.002, 0.059, 0.001, 0.002, 0.010, 0.0040),
+        # Upper overlapping secondary layer for tousled thickness across the upper fringe
+        (-0.027, 0.053, 0.008, -0.025, 0.026, -0.006, -0.019, 0.001, -0.001, 0.013, 0.0046),
+        (-0.003, 0.056, 0.008, 0.001, 0.028, -0.006, 0.009, 0.000, -0.001, 0.014, 0.0048),
+        (0.023, 0.052, 0.008, 0.026, 0.026, -0.006, 0.034, 0.001, -0.001, 0.013, 0.0046),
+    )
+    for idx, (dx0, z0_o, y0_o, dx1, z1_o, y1_o, dx2, z2_o, y2_o, w, d) in enumerate(front_ruffle_specs):
+        z0 = hairline_z + z0_o
+        z1 = hairline_z + z1_o
+        z2 = hairline_z + z2_o
+        pts = [
+            (Vector((cx + dx0, sample_front_cap_y(dx0, z0) + y0_o, z0)), w * 0.65, d * 0.35),
+            (Vector((cx + dx1, sample_front_cap_y(dx1, z1) + y1_o, z1)), w * 1.05, d * 1.00),
+            (Vector((cx + dx2, sample_front_cap_y(dx2, z2) + y2_o, z2)), w * 0.22, d * 0.32),
+        ]
+        grouped["hair"].append(
+            loft_tube_along_points(
+                f"Head_Hair_Ruffle_{idx}",
+                pts,
+                segments=10,
+                collection=collection,
+                mat=atlas_mat,
+                subdiv=1,
+            )
+        )
 
     tuft_specs = (
-        # Low-profile fuller front fringe covering forehead hairline cleanly without notches
-        ((-0.058, -0.054, hairline_z - 0.004), (-0.052, -0.068, hairline_z + 0.014), (-0.036, -0.044, crown_z - 0.002), 0.020),
-        ((-0.036, -0.068, hairline_z - 0.005), (-0.026, -0.078, hairline_z + 0.016), (-0.012, -0.044, crown_z + 0.003), 0.023),
-        ((-0.012, -0.074, hairline_z - 0.006), (-0.002, -0.084, hairline_z + 0.016), (0.010, -0.042, crown_z + 0.004), 0.024),
-        ((0.012, -0.074, hairline_z - 0.005), (0.020, -0.082, hairline_z + 0.016), (0.026, -0.040, crown_z + 0.004), 0.024),
-        ((0.036, -0.066, hairline_z - 0.003), (0.042, -0.074, hairline_z + 0.015), (0.040, -0.036, crown_z + 0.001), 0.022),
-        ((0.056, -0.054, hairline_z - 0.002), (0.056, -0.062, hairline_z + 0.012), (0.048, -0.024, crown_z - 0.003), 0.019),
-        # Upper-left & upper-right boxy parietal corner locks
-        ((-0.064, -0.040, crown_z - 0.008), (-0.062, -0.004, crown_z - 0.001), (-0.050, 0.036, head_top_z - 0.004), 0.022),
-        ((0.064, -0.040, crown_z - 0.008), (0.062, -0.004, crown_z - 0.001), (0.050, 0.036, head_top_z - 0.004), 0.022),
-        # Broad swept crown layers forming a square-cornered, tousled top plane
-        ((-0.048, -0.042, crown_z - 0.003), (-0.042, -0.002, crown_z + 0.004), (-0.032, 0.044, head_top_z + 0.001), 0.026),
-        ((-0.024, -0.046, crown_z - 0.001), (-0.014, -0.002, crown_z + 0.006), (-0.006, 0.048, head_top_z + 0.003), 0.027),
-        ((0.002, -0.048, crown_z - 0.001), (0.012, -0.004, crown_z + 0.006), (0.016, 0.048, head_top_z + 0.003), 0.028),
-        ((0.028, -0.044, crown_z - 0.002), (0.038, -0.002, crown_z + 0.005), (0.036, 0.046, head_top_z + 0.001), 0.026),
-        ((0.050, -0.036, crown_z - 0.004), (0.052, 0.004, crown_z + 0.002), (0.044, 0.044, head_top_z - 0.004), 0.023),
-        # Rear crown / nape transition layers
-        ((-0.042, 0.028, head_top_z - 0.003), (-0.036, 0.064, head_top_z - 0.016), (-0.028, 0.080, head_top_z - 0.046), 0.023),
-        ((-0.012, 0.034, head_top_z + 0.001), (-0.010, 0.068, head_top_z - 0.012), (-0.008, 0.086, head_top_z - 0.044), 0.025),
-        ((0.016, 0.034, head_top_z + 0.001), (0.016, 0.068, head_top_z - 0.012), (0.012, 0.086, head_top_z - 0.044), 0.025),
-        ((0.042, 0.028, head_top_z - 0.003), (0.040, 0.064, head_top_z - 0.016), (0.030, 0.080, head_top_z - 0.046), 0.023),
+        # Rear crown / nape transition layers (top-middle crown kept clean & boxy via Head_Hair_Cap)
+        ((-0.042, 0.028, head_top_z - 0.005), (-0.036, 0.064, head_top_z - 0.016), (-0.028, 0.080, head_top_z - 0.046), 0.022),
+        ((-0.012, 0.034, head_top_z - 0.002), (-0.010, 0.068, head_top_z - 0.013), (-0.008, 0.086, head_top_z - 0.044), 0.024),
+        ((0.016, 0.034, head_top_z - 0.002), (0.016, 0.068, head_top_z - 0.013), (0.012, 0.086, head_top_z - 0.044), 0.024),
+        ((0.042, 0.028, head_top_z - 0.005), (0.040, 0.064, head_top_z - 0.016), (0.030, 0.080, head_top_z - 0.046), 0.022),
         # Clean sideburns tapering down in front of ears
         ((-0.065, -0.034, head_top_z - 0.048), (-0.069, -0.016, head_top_z - 0.068), (-0.067, -0.008, head_top_z - 0.094), 0.012),
         ((0.065, -0.034, head_top_z - 0.048), (0.069, -0.016, head_top_z - 0.068), (0.067, -0.008, head_top_z - 0.094), 0.012),
     )
     for idx, (p0, p1, p2, r) in enumerate(tuft_specs):
         pts = [
-            (Vector((cx + p0[0], cy + p0[1], p0[2])), r * 0.85, r * 0.26),
-            (Vector((cx + p1[0], cy + p1[1], p1[2])), r * 1.10, r * 0.32),
+            (Vector((cx + p0[0], cy + p0[1], p0[2])), r * 0.85, r * 0.24),
+            (Vector((cx + p1[0], cy + p1[1], p1[2])), r * 1.05, r * 0.28),
             (Vector((cx + p2[0], cy + p2[1], p2[2])), r * 0.40, r * 0.14),
         ]
         grouped["hair"].append(
