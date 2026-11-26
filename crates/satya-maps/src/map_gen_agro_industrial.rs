@@ -620,7 +620,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
                 PropKind::PlanterTable,
                 OutdoorBuilder::cm(px),
                 OutdoorBuilder::cm(cy0 as f32 + 1.3),
-                12,
+                0,
                 None,
                 true,
             );
@@ -629,7 +629,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
                     PropKind::PlanterTable,
                     OutdoorBuilder::cm(px),
                     OutdoorBuilder::cm(cy1 as f32 - 1.3),
-                    348,
+                    0,
                     None,
                     true,
                 );
@@ -655,7 +655,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::PatioUmbrellaTable,
             OutdoorBuilder::cm(cx0 as f32 + 2.2),
             OutdoorBuilder::cm(mid_y as f32),
-            12,
+            0,
             None,
             true,
         );
@@ -663,7 +663,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::PatioUmbrellaTable,
             OutdoorBuilder::cm(cx1 as f32 - 2.2),
             OutdoorBuilder::cm(mid_y as f32),
-            28,
+            0,
             None,
             true,
         );
@@ -807,7 +807,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     b.scatter_turf_prop_rot(
         PropKind::ConservatorySpecimenIsland,
         area_scale.clamp(1, 2),
-        15,
+        90,
         RectM {
             x0: 2.0,
             y0: cy1 as f32 + 1.5,
@@ -818,7 +818,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     b.scatter_turf_prop_rot(
         PropKind::PatioUmbrellaTable,
         area_scale.clamp(1, 2),
-        15,
+        90,
         RectM {
             x0: 2.0,
             y0: cy1 as f32 + 1.5,
@@ -829,7 +829,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     b.scatter_turf_prop_rot(
         PropKind::PlanterTable,
         3 * area_scale,
-        18,
+        90,
         RectM {
             x0: 1.2,
             y0: 1.2,
@@ -851,7 +851,7 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     b.scatter_turf_prop_rot(
         PropKind::ParkBench,
         2 * area_scale,
-        15,
+        90,
         RectM {
             x0: 1.2,
             y0: cy1 as f32 + 0.6,
@@ -1115,7 +1115,7 @@ fn generate_manufacturing_plant(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::DrumCluster,
         OutdoorBuilder::cm(office.x1 as f32 + 0.8),
         OutdoorBuilder::cm(lot.y0 as f32 + 0.7),
-        22,
+        0,
         None,
         true,
     );
@@ -1125,7 +1125,7 @@ fn generate_manufacturing_plant(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::ShippingContainer,
         OutdoorBuilder::cm(1.85),
         OutdoorBuilder::cm(3.6),
-        87,
+        90,
         None,
         true,
     );
@@ -1150,7 +1150,7 @@ fn generate_manufacturing_plant(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::ShippingContainer,
             OutdoorBuilder::cm(w as f32 - 1.85),
             OutdoorBuilder::cm(4.2),
-            273,
+            270,
             None,
             true,
         );
@@ -1161,7 +1161,7 @@ fn generate_manufacturing_plant(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::Forklift,
         OutdoorBuilder::cm(w as f32 * 0.5 + 1.5),
         OutdoorBuilder::cm(lot.y1 as f32 + 0.65),
-        14,
+        0,
         None,
         true,
     );
@@ -1264,7 +1264,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::Forklift,
         OutdoorBuilder::cm((lot.x0 + lot.x1) as f32 * 0.5),
         OutdoorBuilder::cm(lot.y1 as f32 - 1.6),
-        19,
+        0,
         None,
         true,
     );
@@ -1272,7 +1272,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::WoodCrate,
         OutdoorBuilder::cm(lot.x0 as f32 + 1.2),
         OutdoorBuilder::cm(lot.y1 as f32 - 2.6),
-        27,
+        0,
         None,
         true,
     );
@@ -1288,7 +1288,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::CargoPallet,
         OutdoorBuilder::cm(lot.x1 as f32 - 4.0),
         OutdoorBuilder::cm(lot.y1 as f32 - 1.5),
-        14,
+        0,
         None,
         true,
     );
@@ -1296,7 +1296,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::DrumCluster,
         OutdoorBuilder::cm(lot.x1 as f32 - 1.2),
         OutdoorBuilder::cm(lot.y0 as f32 + 1.2),
-        11,
+        0,
         None,
         true,
     );
@@ -1306,7 +1306,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::ShippingContainer,
         OutdoorBuilder::cm(1.85),
         OutdoorBuilder::cm(3.8),
-        88,
+        90,
         None,
         true,
     );
@@ -1315,7 +1315,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::ShippingContainer,
             OutdoorBuilder::cm(1.85),
             OutdoorBuilder::cm(9.2),
-            266,
+            270,
             None,
             true,
         );
@@ -1325,7 +1325,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::ShippingContainer,
             OutdoorBuilder::cm(w as f32 - 1.85),
             OutdoorBuilder::cm(4.2),
-            274,
+            270,
             None,
             true,
         );
@@ -1343,7 +1343,7 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::Forklift,
         OutdoorBuilder::cm(w as f32 * 0.55),
         OutdoorBuilder::cm(lot.y1 as f32 + 0.65),
-        344,
+        0,
         None,
         true,
     );

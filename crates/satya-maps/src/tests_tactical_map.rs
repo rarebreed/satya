@@ -2725,3 +2725,54 @@ fn enriched_sectors_use_new_prop_packs_and_are_valid() {
         }
     }
 }
+
+#[test]
+fn formal_commercial_and_civic_props_align_orthogonally() {
+    let presets = [
+        (SectorPreset::ShoppingMall, 36, 28),
+        (SectorPreset::ShoppingPlaza, 32, 24),
+        (SectorPreset::DowntownCommercial, 24, 18),
+        (SectorPreset::UrbanCrossroads, 26, 20),
+        (SectorPreset::BotanicalGarden, 28, 22),
+        (SectorPreset::ManufacturingPlant, 28, 22),
+        (SectorPreset::Warehouse, 28, 22),
+        (SectorPreset::DockingBay, 28, 22),
+    ];
+    for &(preset, w, h) in &presets {
+        for seed in [7_i64, 42, 101] {
+            let sec = generate_procedural_sector(preset, w, h, seed);
+            for p in sec
+                .props
+                .iter()
+                .chain(sec.floors.iter().flat_map(|f| f.props.iter()))
+            {
+                if matches!(
+                    p.kind,
+                    PropKind::DisplayRack
+                        | PropKind::ClothingRack
+                        | PropKind::MallKiosk
+                        | PropKind::EspressoCounter
+                        | PropKind::CheckoutCounter
+                        | PropKind::PharmacyCounter
+                        | PropKind::PatioUmbrellaTable
+                        | PropKind::BusShelter
+                        | PropKind::AtmKiosk
+                        | PropKind::VendingMachine
+                        | PropKind::RoundTable
+                        | PropKind::PlanterTable
+                        | PropKind::ConservatorySpecimenIsland
+                        | PropKind::PalletRack
+                        | PropKind::ShippingContainer
+                        | PropKind::PoolTable
+                ) {
+                    assert!(
+                        p.rotation_deg.rem_euclid(90) == 0,
+                        "{preset:?} ({w}x{h}, seed={seed}) emitted off-axis {:?} at {}°",
+                        p.kind,
+                        p.rotation_deg
+                    );
+                }
+            }
+        }
+    }
+}

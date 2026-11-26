@@ -509,7 +509,21 @@ impl SectorBuilder {
                 break;
             }
             let base_rot = self.rng.range(0, 4) * 90;
-            let jitter = if clear_ring {
+            let allow_jitter = matches!(
+                kind,
+                PropKind::HullDebris
+                    | PropKind::Boulder
+                    | PropKind::StreetDebris
+                    | PropKind::GarbagePile
+                    | PropKind::MediumTree
+                    | PropKind::WoodCrate
+                    | PropKind::DrumCluster
+                    | PropKind::SciFiCargoPod
+                    | PropKind::JerseyBarrier
+            );
+            let jitter = if !allow_jitter {
+                0
+            } else if clear_ring {
                 self.rng.range(-14, 15)
             } else {
                 self.rng.range(-6, 7)

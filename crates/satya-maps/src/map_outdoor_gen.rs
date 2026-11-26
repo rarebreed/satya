@@ -629,7 +629,7 @@ impl OutdoorBuilder {
         }
     }
 
-    /// Scatters natural/turf props across `bounds` with continuous `rot_step_deg` resolution (supports `1°`).
+    /// Scatters natural/turf props across `bounds` with continuous `rot_step_deg` resolution (`<= 0` locks to `0°`).
     pub(crate) fn scatter_turf_prop_rot(
         &mut self,
         kind: PropKind,
@@ -637,15 +637,18 @@ impl OutdoorBuilder {
         rot_step_deg: i32,
         bounds: RectM,
     ) {
-        let step = rot_step_deg.max(1);
-        let buckets = (360 / step).max(1);
         let mut placed = 0;
         let mut tries = 0;
         while placed < count && tries < count * 22 {
             tries += 1;
             let cx_m = self.rng.f32_range(bounds.x0, bounds.x1);
             let cy_m = self.rng.f32_range(bounds.y0, bounds.y1);
-            let rot = (self.rng.range(0, buckets) * step) % 360;
+            let rot = if rot_step_deg <= 0 {
+                0
+            } else {
+                let buckets = (360 / rot_step_deg).max(1);
+                (self.rng.range(0, buckets) * rot_step_deg) % 360
+            };
             if self.try_place_cm(kind, Self::cm(cx_m), Self::cm(cy_m), rot, None, false) {
                 placed += 1;
             }

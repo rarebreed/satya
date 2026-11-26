@@ -96,10 +96,7 @@ pub(crate) fn build_docking_bay(b: &mut SectorBuilder) {
         let _ = b.against_wall(PropKind::SteelShelving, off, Side::South, None);
     }
     if w >= 16 && h >= 14 {
-        let van_rot = 90 + b.rng.range(-3, 4);
-        let _ = b
-            .try_place(PropKind::UtilityVan, (w - 6, 4), van_rot, None, whole)
-            .or_else(|| b.try_place(PropKind::UtilityVan, (w - 6, 4), 90, None, whole));
+        let _ = b.try_place(PropKind::UtilityVan, (w - 6, 4), 90, None, whole);
     }
     let _ = b
         .try_place(PropKind::SteelShelving, (mid_x - 1, 4), 0, None, whole)
@@ -232,10 +229,8 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     let area = w * h;
     let van_y0 = 4;
     let van_y1 = (h - 6).max(van_y0 + 3);
-    let r0 = 90 + b.rng.range(-4, 5);
-    let r1 = 90 + b.rng.range(-4, 5);
-    let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y0), r0, None, whole);
-    let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y1), r1, None, whole);
+    let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y0), 90, None, whole);
+    let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y1), 90, None, whole);
     b.scatter_in(
         PropKind::RoboticAssemblyArm,
         Rect {

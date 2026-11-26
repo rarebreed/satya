@@ -599,7 +599,7 @@ pub fn generate_store_unit(
             let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(3));
             let _ = furn.against_any_wall(PropKind::ClothingRack, sales, Some(2));
             let _ = furn.against_any_wall(PropKind::Armchair, sales, None);
-            place_display_aisles(&mut furn, sales, along_x, 2, 3, 12, seed);
+            place_display_aisles(&mut furn, sales, along_x, 2, 3, 0, seed);
         }
         StoreArchetype::CafeRestaurant => {
             place_checkout_bank(&mut furn, sales, front_side, 1, 2, true);
@@ -628,7 +628,7 @@ pub fn generate_store_unit(
             place_checkout_bank(&mut furn, sales, front_side, 1, 2, false);
             let _ = furn.against_any_wall(PropKind::RefrigeratedDisplayCase, sales, Some(2));
             let _ = furn.against_any_wall(PropKind::VendingMachine, sales, None);
-            place_display_aisles(&mut furn, sales, along_x, 2, 2, 6, seed);
+            place_display_aisles(&mut furn, sales, along_x, 2, 2, 0, seed);
         }
         StoreArchetype::DepartmentAnchor => {
             place_anchor_pillars(&mut furn, sales);

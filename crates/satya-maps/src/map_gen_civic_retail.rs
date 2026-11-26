@@ -1339,7 +1339,7 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
     );
 
     // Curving parking drive aisle across the South lot with generous landscaped islands left clear.
-    let lot_y = (by1 as f32 + 3.45).min(h as f32 - 1.45);
+    let lot_y = (by1 as f32 + 3.70).min(h as f32 - 1.45);
     let wob = b.rng.f32_range(-0.35, 0.35);
     let park_ctrl = [
         (-0.5, lot_y - wob),
@@ -1390,23 +1390,23 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
 
     // Promenade furniture: cafe patio tables, benches, kiosks, transit shelter, and lamps strictly off road.
     let kiosk_cx = OutdoorBuilder::cm(w as f32 * 0.5 + b.rng.f32_range(-1.5, 1.5));
-    let kiosk_rot = b.rng.range(-12, 13);
     let prom_cy = OutdoorBuilder::cm(prom_y - 0.15);
-    let _ = b.try_place_off_road_cm(PropKind::MallKiosk, kiosk_cx, prom_cy, kiosk_rot, None);
+    let patio_cy = OutdoorBuilder::cm(prom_y + 0.05);
+    let _ = b.try_place_off_road_cm(PropKind::MallKiosk, kiosk_cx, prom_cy, 0, None);
     let patio_x = OutdoorBuilder::cm(bx0 as f32 + 2.5);
-    let _ = b.try_place_off_road_cm(PropKind::RoundTable, patio_x, prom_cy, 15, None);
+    let _ = b.try_place_off_road_cm(PropKind::RoundTable, patio_x, prom_cy, 0, None);
     let _ = b.try_place_off_road_cm(
         PropKind::PatioUmbrellaTable,
         OutdoorBuilder::cm(bx0 as f32 + 5.5),
-        prom_cy,
-        8,
+        patio_cy,
+        0,
         None,
     );
     let _ = b.try_place_off_road_cm(
         PropKind::PatioUmbrellaTable,
         OutdoorBuilder::cm(bx1 as f32 - 5.5),
-        prom_cy,
-        24,
+        patio_cy,
+        0,
         None,
     );
     let _ = b.try_place_off_road_cm(
@@ -1646,7 +1646,7 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         PropKind::MallKiosk,
         OutdoorBuilder::cm((cx0 + cx1) as f32 * 0.5 + 1.5),
         cy_mid_cm,
-        12,
+        0,
         None,
         true,
     );
@@ -1663,7 +1663,7 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::MallKiosk,
             OutdoorBuilder::cm(w as f32 * 0.28),
             cy_mid_cm,
-            348,
+            0,
             None,
             true,
         );
@@ -1671,7 +1671,7 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::MallKiosk,
             OutdoorBuilder::cm(w as f32 * 0.72),
             cy_mid_cm,
-            15,
+            0,
             None,
             true,
         );
@@ -1695,7 +1695,7 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             PropKind::PatioUmbrellaTable,
             OutdoorBuilder::cm(w as f32 * 0.66),
             cy_mid_cm,
-            15,
+            0,
             None,
             true,
         );

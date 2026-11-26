@@ -412,14 +412,11 @@ impl Furnisher {
         }
     }
 
-    /// Scatters up to `count` props with a one-cell clearance ring inside `r` and natural `1°` jitter.
+    /// Scatters up to `count` props with a one-cell clearance ring inside `r`.
+    /// Structured room furniture stays cardinally aligned; only loose storage crates take mild jitter.
     pub(crate) fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
         let jitter_range = match kind {
-            PropKind::RoundTable
-            | PropKind::Armchair
-            | PropKind::CoffeeTable
-            | PropKind::WoodCrate => 8,
-            PropKind::PoolTable => 2,
+            PropKind::WoodCrate => 8,
             _ => 0,
         };
         let mut placed = 0;

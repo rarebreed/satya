@@ -666,26 +666,14 @@ fn dress_urban_street_props(b: &mut SectorBuilder, bw: i32, bh: i32, cx: i32, cy
 
     if w >= 16 && h >= 12 {
         let lane_x = (cx - 3).clamp(2, w - 5);
-        let car_rot = 180 + b.rng.range(-4, 5);
-        let van_rot = 90 + b.rng.range(-4, 5);
         if b.try_place_filtered(
             PropKind::Car,
             (lane_x, bh.clamp(2, h - 4)),
-            car_rot,
+            180,
             None,
             whole,
             road_ok,
         )
-        .or_else(|| {
-            b.try_place_filtered(
-                PropKind::Car,
-                (lane_x, bh.clamp(2, h - 4)),
-                180,
-                None,
-                whole,
-                road_ok,
-            )
-        })
         .is_none()
         {
             b.scatter_filtered(PropKind::Car, whole, 1, false, road_ok);
@@ -693,21 +681,11 @@ fn dress_urban_street_props(b: &mut SectorBuilder, bw: i32, bh: i32, cx: i32, cy
         if b.try_place_filtered(
             PropKind::UtilityVan,
             (w - bw - 5, (cy + 1).min(h - 4)),
-            van_rot,
+            90,
             None,
             whole,
             road_ok,
         )
-        .or_else(|| {
-            b.try_place_filtered(
-                PropKind::UtilityVan,
-                (w - bw - 5, (cy + 1).min(h - 4)),
-                90,
-                None,
-                whole,
-                road_ok,
-            )
-        })
         .is_none()
         {
             b.scatter_filtered(PropKind::UtilityVan, whole, 1, false, road_ok);
