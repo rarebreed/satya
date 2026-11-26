@@ -8,8 +8,9 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use satya_schema::{
     AccountQuotaUsage, AccountWsPacket, CampaignListResponse, CampaignSummary,
-    DirectoryMembershipStatus, DirectorySearchResponse, JoinRequestRecord, JoinRequestStatus,
-    JoinRequestsListResponse, SessionEnterResponse, SessionMode, SessionRole, topics,
+    DirectoryMembershipStatus, DirectorySearchResponse, JoinRequestKind, JoinRequestRecord,
+    JoinRequestStatus, JoinRequestsListResponse, SavedSessionsListResponse, SessionEnterResponse,
+    SessionMode, SessionRole, topics,
 };
 use satya_storage::StorageConfig;
 use serde_json::json;
@@ -44,7 +45,8 @@ async fn test_gm_rbac_quotas_and_reclamation() {
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let app = build_router(state.clone());
 
-    // 1. Self-registered user defaults to USER and is blocked (403) from creating campaigns or sessions
+    // 1. Self-registered user defaults to USER, can own campaigns & sessions up to quota,
+    //    and remains blocked (403) from admin RBAC routes
     let reg_res = app
         .clone()
         .oneshot(
@@ -71,24 +73,51 @@ async fn test_gm_rbac_quotas_and_reclamation() {
     let user_tok = reg_body["auth_token"].as_str().unwrap().to_string();
     assert_eq!(reg_body["account_role"], "USER");
 
-    let user_camp_res = app
+    let non_admin_role_res = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/campaigns")
+                .uri("/api/admin/users/role")
                 .header("Authorization", format!("Bearer {user_tok}"))
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    json!({ "title": "Unauthorized Camp", "description": "blocked" }).to_string(),
+                    json!({ "username": "new_bot_user", "account_role": "ADMIN" }).to_string(),
                 ))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(user_camp_res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(non_admin_role_res.status(), StatusCode::FORBIDDEN);
 
-    let user_sess_res = app
+    // 2. Admin can still manage account roles via POST /api/admin/users/role
+    let admin_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let admin_camp_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/campaigns")
+                .header("Authorization", format!("Bearer {}", admin_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({ "title": "Admin Camp", "description": "owner isolation" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(admin_camp_res.status(), StatusCode::OK);
+    let admin_camp: CampaignSummary =
+        serde_json::from_slice(&to_bytes(admin_camp_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+
+    // Non-owner USER cannot create a session directly inside another user's campaign or delete it
+    let hijack_sess_res = app
         .clone()
         .oneshot(
             Request::builder()
@@ -98,11 +127,12 @@ async fn test_gm_rbac_quotas_and_reclamation() {
                 .header("Content-Type", "application/json")
                 .body(Body::from(
                     json!({
-                        "session_id": "spam-room-1",
+                        "session_id": "hijack-room",
                         "session_password": "pw",
                         "session_mode": "TTRPG",
                         "role": "GM",
-                        "enable_ai_gm": false
+                        "enable_ai_gm": false,
+                        "campaign_id": admin_camp.campaign_id
                     })
                     .to_string(),
                 ))
@@ -110,32 +140,23 @@ async fn test_gm_rbac_quotas_and_reclamation() {
         )
         .await
         .unwrap();
-    assert_eq!(user_sess_res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(hijack_sess_res.status(), StatusCode::BAD_REQUEST);
 
-    // 2. Admin promotes the user to GM via POST /api/admin/users/role
-    let admin_auth = state
-        .auth
-        .authenticate_user("gm_sean", "satya-truth-2026")
-        .await
-        .unwrap();
-    let promote_res = app
+    let hijack_del_res = app
         .clone()
         .oneshot(
             Request::builder()
-                .method("POST")
-                .uri("/api/admin/users/role")
-                .header("Authorization", format!("Bearer {}", admin_auth.auth_token))
-                .header("Content-Type", "application/json")
-                .body(Body::from(
-                    json!({ "username": "new_bot_user", "account_role": "GM" }).to_string(),
-                ))
+                .method("DELETE")
+                .uri(format!("/api/campaigns/{}", admin_camp.campaign_id))
+                .header("Authorization", format!("Bearer {user_tok}"))
+                .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(promote_res.status(), StatusCode::OK);
+    assert_eq!(hijack_del_res.status(), StatusCode::FORBIDDEN);
 
-    // 3. Promoted GM can create up to quota (2 campaigns), 3rd is rejected (429)
+    // 3. Regular USER can create up to quota (2 campaigns), 3rd is rejected (429)
     let mut created_camp_ids = Vec::new();
     for title in ["Satyang", "DAISE"] {
         let res = app
@@ -266,7 +287,7 @@ async fn test_gm_rbac_quotas_and_reclamation() {
         .iter()
         .find(|m| m.topic == topics::SESSION_ACCESS)
         .unwrap();
-    assert!(access_m.total_messages_ingested >= 4);
+    assert!(access_m.total_messages_ingested >= 2);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
@@ -675,6 +696,233 @@ async fn test_directory_search_join_requests_offline_email_live_ws_and_passwordl
     )
     .unwrap();
     assert_eq!(my_camps.campaigns.len(), 2);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_request_new_session_in_other_users_campaign_and_approve() {
+    let temp_dir = std::env::temp_dir().join(format!("satya_camp_sess_req_{}", Uuid::new_v4()));
+    let state = SignalingAppState::new(test_storage_config(&temp_dir), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let marcus_auth = state
+        .auth
+        .authenticate_user("marcus_recon", "satya-truth-2026")
+        .await
+        .unwrap();
+
+    // 1. Standard USER account (Sara) creates a discoverable campaign
+    let camp_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/campaigns")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "title": "Valkyrie Ops",
+                        "description": "Orbital insertion",
+                        "is_discoverable": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(camp_res.status(), StatusCode::OK);
+    let camp: CampaignSummary =
+        serde_json::from_slice(&to_bytes(camp_res.into_body(), 64 * 1024).await.unwrap()).unwrap();
+
+    // 2. Owner cannot request a new session in their own campaign (400)
+    let self_req = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/campaigns/{}/session-requests", camp.campaign_id))
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "session_title": "Self Request",
+                        "session_mode": "TTRPG",
+                        "requested_role": "PLAYER"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(self_req.status(), StatusCode::BAD_REQUEST);
+
+    // 3. Marcus searches for Sara via directory and requests a new session in her campaign (Row 4)
+    let search_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/directory/search?q=@sara_valkyrie")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(search_res.status(), StatusCode::OK);
+    let dir: DirectorySearchResponse =
+        serde_json::from_slice(&to_bytes(search_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(dir.gms.len(), 1);
+    assert_eq!(dir.gms[0].campaigns[0].campaign_id.as_deref(), Some(camp.campaign_id.as_str()));
+
+    let req_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/campaigns/{}/session-requests", camp.campaign_id))
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "session_title": "Night Watch",
+                        "session_mode": "TTRPG",
+                        "enable_ai_gm": true,
+                        "requested_role": "PLAYER",
+                        "message": "Can we run a recon session?"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(req_res.status(), StatusCode::OK);
+    let created_req: JoinRequestRecord =
+        serde_json::from_slice(&to_bytes(req_res.into_body(), 64 * 1024).await.unwrap()).unwrap();
+    assert_eq!(created_req.request_kind, JoinRequestKind::CreateSession);
+    assert_eq!(created_req.session_title.as_deref(), Some("Night Watch"));
+    assert_eq!(created_req.proposed_session_mode, Some(SessionMode::Ttrpg));
+    assert!(created_req.proposed_enable_ai_gm);
+    assert_eq!(created_req.status, JoinRequestStatus::Pending);
+
+    // 4. Sara sees incoming CREATE_SESSION request and approves it
+    let incoming_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/join-requests/incoming")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let incoming: JoinRequestsListResponse =
+        serde_json::from_slice(&to_bytes(incoming_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(incoming.requests.len(), 1);
+    assert_eq!(incoming.requests[0].request_kind, JoinRequestKind::CreateSession);
+    assert_eq!(incoming.requests[0].session_title.as_deref(), Some("Night Watch"));
+
+    let approve_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/join-requests/{}/decide", created_req.request_id))
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({ "approve": true }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(approve_res.status(), StatusCode::OK);
+
+    // 5. The new session now exists in Sara's saved sessions under Valkyrie Ops
+    let saved_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/saved")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let saved: SavedSessionsListResponse =
+        serde_json::from_slice(&to_bytes(saved_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    let created_sess = saved
+        .sessions
+        .iter()
+        .find(|s| s.session_id == created_req.session_id)
+        .expect("approved session should be provisioned in saved_sessions");
+    assert_eq!(created_sess.campaign_id.as_deref(), Some(camp.campaign_id.as_str()));
+    assert_eq!(created_sess.title.as_deref(), Some("Night Watch"));
+    assert!(created_sess.has_ai_gm);
+
+    // 6. Marcus fetches /api/join-requests/mine, gets approval_token, and enters passwordlessly
+    let mine_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/join-requests/mine")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let mine: JoinRequestsListResponse =
+        serde_json::from_slice(&to_bytes(mine_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(mine.requests[0].status, JoinRequestStatus::Approved);
+    let tok = mine.requests[0].approval_token.clone().unwrap();
+
+    let join_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/join")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "session_id": created_req.session_id,
+                        "approval_token": tok,
+                        "role": "PLAYER"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(join_res.status(), StatusCode::OK);
+    let entered: SessionEnterResponse =
+        serde_json::from_slice(&to_bytes(join_res.into_body(), 128 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(entered.session_id, created_req.session_id);
+    assert_eq!(entered.self_participant.role, SessionRole::Player);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -8,20 +8,19 @@ use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event_bubble_only,
 };
 use crate::wasm_client::dom::{
-    escape_html, fetch_json, fetch_text, get_element, input_value, local_storage_get,
-    local_storage_remove, prompt_save_bytes, read_first_file_bytes, select_value, set_feedback,
-    set_html, set_input_value, set_text,
+    fetch_json, fetch_text, get_element, input_value, local_storage_get, local_storage_remove,
+    prompt_save_bytes, read_first_file_bytes, select_value, set_feedback, set_html,
+    set_input_value, set_text,
 };
 use crate::wasm_client::gm_docs::{satya_refresh_gm_documents, satya_refresh_gm_memories};
 use crate::wasm_client::notebook::{render_combat_tracker, render_map_updated};
 use crate::wasm_client::npcs::satya_refresh_npcs_tab;
 use crate::wasm_client::options::parse_session_role;
-use crate::wasm_client::state::{SECONDS_PER_TICK, with_state, with_state_mut};
+use crate::wasm_client::state::{SECONDS_PER_TICK, SessionSelectionKey, with_state, with_state_mut};
 use satya_schema::{
     AuthSuccessResponse, ChatMessageEvent, ImportSessionSnapshotRequest, ResumeSessionRequest,
-    SavedSessionSummary, SavedSessionsListResponse, SessionEnterResponse, SessionHistorySnapshot,
-    SessionMode, SessionRole, SessionSnapshotBundle, SessionTranscriptResponse,
-    TtrpgMechanicsEvent,
+    SavedSessionsListResponse, SessionEnterResponse, SessionHistorySnapshot, SessionRole,
+    SessionSnapshotBundle, SessionTranscriptResponse, TtrpgMechanicsEvent,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -82,45 +81,6 @@ pub fn merge_history_events_by_sequence(
     }
     merged.sort_by_key(HistoryReplayItem::sequence_num);
     merged
-}
-
-/// Formats `<option>` elements for `#saved-sessions-select` from a slice of [`SavedSessionSummary`] records.
-#[must_use]
-pub fn format_saved_sessions_options_html(
-    sessions: &[SavedSessionSummary],
-    selected_id: Option<&str>,
-) -> String {
-    if sessions.is_empty() {
-        return r#"<option value="">No saved sessions yet — Create or Join a session below</option>"#
-            .to_string();
-    }
-    let mut out = String::with_capacity(sessions.len() * 180);
-    for (idx, s) in sessions.iter().enumerate() {
-        let is_selected = match selected_id.filter(|v| !v.is_empty()) {
-            Some(sel) => sel == s.session_id,
-            None => idx == 0,
-        };
-        let sel_attr = if is_selected { " selected" } else { "" };
-        let mode_label = match s.session_mode {
-            SessionMode::Ttrpg => {
-                if s.has_ai_gm {
-                    "TTRPG + AI GM"
-                } else {
-                    "TTRPG"
-                }
-            }
-            SessionMode::Meeting => "Meeting",
-        };
-        out.push_str(&format!(
-            r#"<option value="{sid}"{sel_attr}>{sid} [{mode_label} · {role:?}] — {chats} msgs, {rolls} rolls ({active} live)</option>"#,
-            sid = escape_html(&s.session_id),
-            role = s.role,
-            chats = s.chat_event_count,
-            rolls = s.mechanics_event_count,
-            active = s.active_human_count,
-        ));
-    }
-    out
 }
 
 /// Restores any saved bearer token and active session from `localStorage` when the Wasm client boots.
@@ -241,8 +201,8 @@ pub(crate) fn replay_session_history_snapshot(history: Option<SessionHistorySnap
     satya_refresh_npcs_tab();
 }
 
-/// Fetches the authenticated user's saved sessions from `GET /api/sessions/saved`
-/// and populates `#saved-sessions-select`.
+/// Fetches the authenticated user's saved sessions from `GET /api/sessions/saved`,
+/// stores them in client state, and refreshes the Campaign & Session lobby UI.
 #[wasm_bindgen]
 pub fn satya_refresh_saved_sessions() {
     spawn_local(async move {
@@ -257,36 +217,30 @@ pub fn satya_refresh_saved_sessions() {
         )
         .await
         {
-            let current_sel = select_value("saved-sessions-select");
-            let html = format_saved_sessions_options_html(&resp.sessions, Some(current_sel.trim()));
-            set_html("saved-sessions-select", &html);
+            with_state_mut(|st| st.saved_sessions = resp.sessions);
+            crate::wasm_client::campaigns_directory::render_session_lobby_ui();
         }
     });
 }
 
-/// Syncs `#session-id-input` when the user chooses a saved session in `#saved-sessions-select`.
-#[wasm_bindgen]
-pub fn satya_select_saved_session() {
-    let selected_sid = select_value("saved-sessions-select");
-    if !selected_sid.trim().is_empty() {
-        set_input_value("session-id-input", selected_sid.trim());
-    }
+fn resolve_target_session_id() -> String {
+    let from_state = with_state(|st| {
+        st.session_id.clone().or_else(|| match &st.selected_session_key {
+            SessionSelectionKey::Existing(sid) => Some(sid.clone()),
+            _ => None,
+        })
+    });
+    from_state
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| input_value("session-id-input").trim().to_string())
 }
 
-/// Resumes the selected saved session (from `#saved-sessions-select` or `#session-id-input`)
-/// via `POST /api/sessions/resume`.
-#[wasm_bindgen]
-pub fn satya_resume_saved_session() {
-    spawn_resume_saved_session(None);
+/// Resumes a saved session by `session_id` (from the lobby UI) via `POST /api/sessions/resume`.
+pub(crate) fn resume_session_by_id(session_id: String, role_override: Option<SessionRole>) {
+    spawn_resume_saved_session(session_id, role_override);
 }
 
-/// Resumes a saved solo AI-GM session with `SessionRole::SoloGm` (`SOLO_GM`) via `POST /api/sessions/resume`.
-#[wasm_bindgen]
-pub fn satya_resume_as_solo_gm() {
-    spawn_resume_saved_session(Some(SessionRole::SoloGm));
-}
-
-fn spawn_resume_saved_session(role_override: Option<SessionRole>) {
+fn spawn_resume_saved_session(session_id: String, role_override: Option<SessionRole>) {
     spawn_local(async move {
         let has_token = with_state(|st| st.auth_token.is_some());
         if !has_token && !perform_login().await {
@@ -296,17 +250,11 @@ fn spawn_resume_saved_session(role_override: Option<SessionRole>) {
             return;
         };
 
-        let dropdown_sid = select_value("saved-sessions-select").trim().to_string();
-        let input_sid = input_value("session-id-input").trim().to_string();
-        let session_id = if !dropdown_sid.is_empty() {
-            dropdown_sid
-        } else {
-            input_sid
-        };
+        let session_id = session_id.trim().to_string();
         if session_id.is_empty() {
             set_feedback(
                 "session-feedback",
-                "Select a saved session or enter a Session ID to resume.",
+                "Select a saved session to resume.",
                 true,
             );
             return;
@@ -352,7 +300,6 @@ fn spawn_resume_saved_session(role_override: Option<SessionRole>) {
                     .as_ref()
                     .map(|h| h.mechanics_events.len())
                     .unwrap_or(0);
-                set_input_value("session-id-input", &data.session_id);
                 set_feedback(
                     "session-feedback",
                     &format!(
@@ -380,16 +327,7 @@ pub fn satya_export_session_snapshot() {
             );
             return;
         };
-        let active_sid = with_state(|st| st.session_id.clone()).unwrap_or_default();
-        let dropdown_sid = select_value("saved-sessions-select").trim().to_string();
-        let input_sid = input_value("session-id-input").trim().to_string();
-        let session_id = if !active_sid.is_empty() {
-            active_sid
-        } else if !dropdown_sid.is_empty() {
-            dropdown_sid
-        } else {
-            input_sid
-        };
+        let session_id = resolve_target_session_id();
         if session_id.is_empty() {
             set_feedback(
                 "session-feedback",
@@ -507,18 +445,13 @@ pub fn satya_export_chat_transcript(format: String) {
             "json"
         };
 
-        let (auth_token, active_sid) =
-            with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
-        let session_id = active_sid
-            .or_else(|| {
-                let s = select_value("saved-sessions-select").trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
-            })
-            .or_else(|| {
-                let s = input_value("session-id-input").trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
-            })
-            .unwrap_or_else(|| "satya-session".to_string());
+        let auth_token = with_state(|st| st.auth_token.clone());
+        let resolved_sid = resolve_target_session_id();
+        let session_id = if resolved_sid.is_empty() {
+            "satya-session".to_string()
+        } else {
+            resolved_sid
+        };
 
         if let Some(tok) = auth_token {
             let url = format!("/api/sessions/{session_id}/transcript?format={fmt}");
@@ -572,7 +505,7 @@ pub fn satya_export_chat_transcript(format: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_schema::{ChannelContext, EventMetadata, MessageVisibility, Participant};
+    use satya_schema::{ChannelContext, EventMetadata, MessageVisibility, Participant, SessionMode};
 
     fn dummy_meta(seq: i64) -> EventMetadata {
         EventMetadata {

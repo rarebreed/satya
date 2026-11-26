@@ -127,7 +127,15 @@ pub fn HeaderBar() -> impl IntoView {
             <div class="top-bar-right">
                 <div class="status-pills">
                     <span id="auth-status-pill" class="pill pill-muted">"Not Logged In"</span>
-                    <span id="session-status-pill" class="pill pill-muted">"No Active Session"</span>
+                    <span
+                        id="session-status-pill"
+                        class="pill pill-muted pill-clickable"
+                        role="button"
+                        tabindex="0"
+                        title="Open Campaigns & Sessions"
+                        onclick="window.satyaToggleSessionPane()"
+                        on:click=move |_| wasm_client::satya_toggle_session_pane()
+                    >"No Active Session"</span>
                     <button
                         type="button"
                         id="btn-solo-spoiler-shield"
@@ -140,6 +148,17 @@ pub fn HeaderBar() -> impl IntoView {
                         "Spoiler Shield: OFF"
                     </button>
                 </div>
+                <button
+                    type="button"
+                    id="btn-open-campaigns-modal"
+                    class="btn btn-sm btn-primary"
+                    style="display: none;"
+                    title="Open Campaigns & Sessions"
+                    onclick="window.satyaToggleSessionPane()"
+                    on:click=move |_| wasm_client::satya_toggle_session_pane()
+                >
+                    "Campaigns"
+                </button>
                 <div id="notifications-bell-wrap" class="notifications-bell-wrap" style="display: none;">
                     <button
                         type="button"
@@ -218,7 +237,7 @@ pub fn HeaderBar() -> impl IntoView {
                                 onclick="window.satyaToggleSessionPane()"
                                 on:click=move |_| wasm_client::satya_toggle_session_pane()
                             >
-                                "Show Session Pane"
+                                "Campaigns & Sessions"
                             </button>
                             <button
                                 type="button"

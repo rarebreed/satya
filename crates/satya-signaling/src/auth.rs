@@ -187,6 +187,23 @@ pub struct CreateSessionParams<'a> {
     pub allow_join_requests: bool,
 }
 
+/// Typed parameters for [`AuthAndSessionManager::provision_approved_campaign_session`].
+#[derive(Debug, Clone, Copy)]
+pub struct ProvisionCampaignSessionParams<'a> {
+    /// Target parent campaign ID (`camp_<uuid>`).
+    pub campaign_id: &'a str,
+    /// Campaign slug (`campaign_tag`).
+    pub campaign_slug: &'a str,
+    /// Unique identifier for the newly provisioned session room.
+    pub session_id: &'a str,
+    /// Human-readable session title.
+    pub title: &'a str,
+    /// Operating mode (`TTRPG` or `MEETING`).
+    pub session_mode: SessionMode,
+    /// Whether an autonomous AI Game Master is enabled.
+    pub enable_ai_gm: bool,
+}
+
 impl AuthAndSessionManager {
     /// Initializes the SQLx SQLite authentication and session manager with default [`QuotaConfig`].
     pub async fn new(base_dir: impl AsRef<Path>, auth_config: &AuthConfig) -> anyhow::Result<Self> {
@@ -318,7 +335,11 @@ impl AuthAndSessionManager {
             );
             CREATE TABLE IF NOT EXISTS session_join_requests (
                 request_id             TEXT PRIMARY KEY NOT NULL,
+                request_kind           TEXT NOT NULL DEFAULT 'JOIN_SESSION',
                 session_id             TEXT NOT NULL,
+                proposed_session_title TEXT,
+                proposed_session_mode  TEXT,
+                proposed_enable_ai_gm  INTEGER NOT NULL DEFAULT 0,
                 campaign_id            TEXT,
                 owner_user_id          TEXT NOT NULL,
                 requester_user_id      TEXT NOT NULL,
@@ -423,6 +444,10 @@ impl AuthAndSessionManager {
             "ALTER TABLE saved_sessions ADD COLUMN title TEXT",
             "ALTER TABLE saved_sessions ADD COLUMN is_discoverable INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE saved_sessions ADD COLUMN allow_join_requests INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE session_join_requests ADD COLUMN request_kind TEXT NOT NULL DEFAULT 'JOIN_SESSION'",
+            "ALTER TABLE session_join_requests ADD COLUMN proposed_session_title TEXT",
+            "ALTER TABLE session_join_requests ADD COLUMN proposed_session_mode TEXT",
+            "ALTER TABLE session_join_requests ADD COLUMN proposed_enable_ai_gm INTEGER NOT NULL DEFAULT 0",
         ] {
             let _ = sqlx::query(alter_sql).execute(&db_pool).await;
         }
@@ -947,6 +972,106 @@ impl AuthAndSessionManager {
             pending_requests_used: pending_requests_used.max(0) as usize,
             pending_requests_limit: self.quotas.max_pending_join_requests_per_user,
         }
+    }
+
+    /// Looks up a persistent [`UserAccount`] by `user_id`.
+    pub async fn get_user_by_id(&self, user_id: &str) -> Option<UserAccount> {
+        let guard = self.users_by_username.read().await;
+        guard.values().find(|u| u.user_id == user_id).cloned()
+    }
+
+    /// Provisions a newly approved campaign session in SQLite (`saved_sessions` + owner `session_participants`)
+    /// without placing an offline owner into the active live WebSocket roster.
+    pub async fn provision_approved_campaign_session(
+        &self,
+        owner: &UserAccount,
+        params: ProvisionCampaignSessionParams<'_>,
+    ) -> anyhow::Result<()> {
+        let sid = params.session_id.trim();
+        if sid.is_empty() {
+            anyhow::bail!("session_id cannot be empty");
+        }
+        if self.sessions.read().await.contains_key(sid)
+            || self.load_saved_session_meta_from_db(sid).await.is_some()
+        {
+            anyhow::bail!("Session '{sid}' already exists");
+        }
+
+        let mult = if owner.account_role == AccountRole::Admin {
+            10
+        } else {
+            1
+        };
+        let total_limit = self.quotas.max_total_sessions_per_gm.saturating_mul(mult);
+        let total_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM saved_sessions WHERE COALESCE(NULLIF(owner_user_id, ''), host_user_id) = ?1",
+        )
+        .bind(&owner.user_id)
+        .fetch_one(&self.db_pool)
+        .await
+        .unwrap_or(0);
+        if (total_used.max(0) as usize) >= total_limit {
+            anyhow::bail!(
+                "Quota exceeded: maximum {total_limit} sessions reached (delete old sessions to reclaim quota)"
+            );
+        }
+        let per_camp_limit = self.quotas.max_sessions_per_campaign.saturating_mul(mult);
+        let camp_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM saved_sessions WHERE campaign_id = ?1",
+        )
+        .bind(params.campaign_id)
+        .fetch_one(&self.db_pool)
+        .await
+        .unwrap_or(0);
+        if (camp_used.max(0) as usize) >= per_camp_limit {
+            anyhow::bail!(
+                "Quota exceeded: campaign '{}' reached the limit of {per_camp_limit} sessions",
+                params.campaign_id
+            );
+        }
+
+        let random_pw = format!("satya-aprv-{}", Uuid::new_v4());
+        let password_hash = Self::hash_secret(&random_pw)?;
+        let now_us = Utc::now().timestamp_micros();
+        let owner_role = match params.session_mode {
+            SessionMode::Ttrpg => SessionRole::Gm,
+            SessionMode::Meeting => SessionRole::Host,
+        };
+        let owner_part = Participant::human(
+            &owner.user_id,
+            &owner.username,
+            &owner.display_name,
+            owner_role,
+        );
+        let clean_title = params.title.trim();
+        let session_obj = ProtectedSession {
+            session_id: sid.to_string(),
+            password_hash,
+            session_mode: params.session_mode,
+            host_user_id: owner.user_id.clone(),
+            owner_user_id: owner.user_id.clone(),
+            campaign_id: Some(params.campaign_id.to_string()),
+            title: if clean_title.is_empty() {
+                None
+            } else {
+                Some(clean_title.to_string())
+            },
+            is_discoverable: true,
+            allow_join_requests: true,
+            roster: HashMap::new(),
+            ai_gm_vault: None,
+            active_map: None,
+            gm_documents: Vec::new(),
+            campaign_tag: params.campaign_slug.to_string(),
+            gm_memories: Vec::new(),
+            combat_tracker: CombatTrackerState::default(),
+            created_at_us: now_us,
+        };
+        self.persist_session_metadata_to_db(&session_obj, params.enable_ai_gm)
+            .await;
+        self.persist_session_participant_to_db(sid, &owner_part)
+            .await;
+        Ok(())
     }
 
     /// Creates a password-protected session with `session_id` and `session_password` using default metadata.

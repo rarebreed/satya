@@ -17,16 +17,17 @@ use crate::wasm_client::session_persistence::{
     ACTIVE_SESSION_STORAGE_KEY, AUTH_TOKEN_STORAGE_KEY, PersistedActiveSessionRef,
     replay_session_history_snapshot, satya_refresh_saved_sessions,
 };
-use crate::wasm_client::state::{with_state, with_state_mut};
+use crate::wasm_client::state::{
+    CampaignSelectionKey, LobbyScope, SessionSelectionKey, with_state, with_state_mut,
+};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
 use crate::wasm_client::webrtc::{
     connect_signaling_websocket, send_ws_packet, teardown_prosody_monitor,
 };
 use satya_schema::{
     AccountRole, AiGmProviderConfig, AuthSuccessResponse, ClientWsPacket, CreateSessionRequest,
-    JoinSessionRequest, LeaveSessionRequest, LoginRequest, LogoutRequest, Participant,
-    ParticipantKind, RegisterRequest, SessionEnterResponse, SessionMode, SessionRole,
-    WebRtcEventKind,
+    LeaveSessionRequest, LoginRequest, LogoutRequest, Participant, ParticipantKind,
+    RegisterRequest, SessionEnterResponse, SessionMode, SessionRole, WebRtcEventKind,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -201,7 +202,6 @@ pub(crate) async fn perform_login() -> bool {
 pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     let short_id: String = data.user_id.chars().take(8).collect();
     let is_admin = data.account_role == AccountRole::Admin;
-    let can_host = data.account_role.can_host_sessions();
     let role_badge = data.account_role.as_db_str();
     set_text(
         "auth-status-pill",
@@ -210,17 +210,14 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     set_class("auth-status-pill", "pill pill-active");
     set_button_disabled("btn-logout", false);
     set_button_disabled("btn-menu-logout", false);
+    set_display("btn-open-campaigns-modal", "inline-flex");
     set_display("notifications-bell-wrap", "inline-flex");
-    set_display("gm-campaigns-section", if can_host { "block" } else { "none" });
-    set_display("non-gm-host-notice", if can_host { "none" } else { "block" });
 
-    // Hide the Authentication pane once logged in and reveal the Session & Workspace panes
+    // Hide the Authentication pane once logged in and open the guided Campaign & Session modal
     set_display("auth-card", "none");
-    set_display("session-card", "block");
     set_display("workspace-panel", "grid");
     set_display("hamburger-menu-dropdown", "none");
     set_text("btn-menu-toggle-auth-pane", "Show Auth Pane");
-    set_text("btn-menu-toggle-session-pane", "Hide Session Pane");
 
     if let Some(details) = get_element("menu-user-details") {
         details.set_inner_html(&format!(
@@ -237,7 +234,15 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
     with_state_mut(|st| {
         st.auth_token = Some(data.auth_token.clone());
         st.user = Some(data);
+        st.lobby_scope = LobbyScope::Mine;
+        st.lobby_step = crate::wasm_client::state::LobbyStep::ChooseCampaign;
+        st.selected_directory_user_id = None;
+        st.selected_campaign_key = CampaignSelectionKey::None;
+        st.selected_session_key = SessionSelectionKey::None;
+        st.requests_tray_open = false;
+        st.show_join_password_box = false;
     });
+    crate::wasm_client::menu::open_session_modal();
     sync_google_auth_status_from_server();
     satya_refresh_saved_sessions();
     crate::wasm_client::campaigns_directory::satya_refresh_my_campaigns();
@@ -261,174 +266,138 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
 
 pub(crate) fn set_session_buttons_enabled(in_session: bool) {
     set_button_disabled("btn-leave-session", !in_session);
+    set_display(
+        "btn-leave-session",
+        if in_session { "inline-flex" } else { "none" },
+    );
     set_button_disabled("btn-workspace-disconnect", !in_session);
 }
 
-/// Creates a new password-protected session via `POST /api/sessions/create` and opens `/ws/session`.
-#[wasm_bindgen]
-pub fn satya_create_session() {
-    spawn_local(async move {
-        let has_token = with_state(|st| st.auth_token.is_some());
-        if !has_token && !perform_login().await {
-            return;
-        }
-        let Some(token) = with_state(|st| st.auth_token.clone()) else {
-            return;
-        };
+/// Creates a new password-protected session inside `campaign_id` from the compact lobby inputs
+/// via `POST /api/sessions/create` and enters `/ws/session`.
+pub(crate) async fn create_session_in_campaign(
+    campaign_id: Option<String>,
+    campaign_slug: Option<String>,
+) -> bool {
+    let has_token = with_state(|st| st.auth_token.is_some());
+    if !has_token && !perform_login().await {
+        return false;
+    }
+    let Some(token) = with_state(|st| st.auth_token.clone()) else {
+        return false;
+    };
 
-        let session_id = input_value("session-id-input").trim().to_string();
-        let session_password = input_value("session-password-input");
-        let mode_raw = select_value("session-mode-select");
-        let session_mode = parse_session_mode(&mode_raw);
-        let role = parse_session_role(&select_value("session-role-select"));
-        let enable_ai_gm = is_ai_gm_mode(&mode_raw) || input_checked("enable-ai-gm");
-        let display_raw = input_value("auth-display-name").trim().to_string();
-        let display_name = if display_raw.is_empty() {
-            None
+    let title_raw = input_value("session-title-input").trim().to_string();
+    let title = if title_raw.is_empty() {
+        None
+    } else {
+        Some(title_raw.clone())
+    };
+    let explicit_sid = input_value("session-id-input").trim().to_string();
+    let session_id = if explicit_sid.is_empty() {
+        let base_title = if title_raw.is_empty() {
+            "session"
         } else {
-            Some(display_raw)
+            &title_raw
         };
-
-        let ai_gm_config = if enable_ai_gm {
-            let provider = select_value("ai-gm-provider-select");
-            let provider = if provider.is_empty() {
-                "ollama".to_string()
-            } else {
-                provider
-            };
-            let model_raw = input_value("ai-gm-model-input").trim().to_string();
-            let model_id = if model_raw.is_empty() {
-                default_model_for_provider(&provider).to_string()
-            } else {
-                model_raw
-            };
-            let key_raw = input_value("ai-gm-api-key-input").trim().to_string();
-            // Scrub ephemeral BYOK password field from DOM immediately after reading
-            set_input_value("ai-gm-api-key-input", "");
-            let api_key = if key_raw.is_empty() {
-                None
-            } else {
-                Some(key_raw)
-            };
-            Some(AiGmProviderConfig {
-                provider,
-                model_id,
-                vision_model_id: None,
-                temperature: 0.35,
-                persona_id: "harsh-reality-arbiter".to_string(),
-                api_key,
-                base_url: None,
-                clear_api_key: false,
-            })
-        } else {
-            None
-        };
-
-        let campaign_raw = select_value("session-campaign-select").trim().to_string();
-        let campaign_id = if campaign_raw.is_empty() {
-            None
-        } else {
-            Some(campaign_raw)
-        };
-        let title_raw = input_value("session-title-input").trim().to_string();
-        let title = if title_raw.is_empty() {
-            None
-        } else {
-            Some(title_raw)
-        };
-        let is_discoverable = input_checked("session-discoverable-checkbox");
-        let allow_join_requests = input_checked("session-allow-requests-checkbox");
-
-        let req = CreateSessionRequest {
-            session_id,
-            session_password,
-            session_mode,
-            role,
-            display_name,
-            enable_ai_gm,
-            ai_gm_config,
-            campaign_id,
-            title,
-            is_discoverable,
-            allow_join_requests,
-        };
-
-        match fetch_json::<_, SessionEnterResponse>(
-            "POST",
-            "/api/sessions/create",
-            Some(&token),
-            Some(&req),
+        crate::wasm_client::campaigns_directory::derive_session_id_slug(
+            campaign_slug.as_deref(),
+            base_title,
         )
-        .await
-        {
-            Ok(data) => {
-                set_feedback(
-                    "session-feedback",
-                    &format!(
-                        "Created session '{}' ({:?})",
-                        data.session_id, data.session_mode
-                    ),
-                    false,
-                );
-                enter_session(data);
-            }
-            Err(err) => set_feedback("session-feedback", &err, true),
-        }
-    });
-}
+    } else {
+        explicit_sid
+    };
+    let session_password = input_value("session-password-input");
+    let mode_raw = select_value("session-mode-select");
+    let session_mode = parse_session_mode(&mode_raw);
+    let role = parse_session_role(&select_value("session-role-select"));
+    let enable_ai_gm = is_ai_gm_mode(&mode_raw) || input_checked("enable-ai-gm");
+    let display_raw = input_value("auth-display-name").trim().to_string();
+    let display_name = if display_raw.is_empty() {
+        None
+    } else {
+        Some(display_raw)
+    };
 
-/// Joins an existing password-protected session via `POST /api/sessions/join` and opens `/ws/session`.
-#[wasm_bindgen]
-pub fn satya_join_session() {
-    spawn_local(async move {
-        let has_token = with_state(|st| st.auth_token.is_some());
-        if !has_token && !perform_login().await {
-            return;
-        }
-        let Some(token) = with_state(|st| st.auth_token.clone()) else {
-            return;
+    let ai_gm_config = if enable_ai_gm {
+        let provider = select_value("ai-gm-provider-select");
+        let provider = if provider.is_empty() {
+            "ollama".to_string()
+        } else {
+            provider
         };
-
-        let session_id = input_value("session-id-input").trim().to_string();
-        let session_password = input_value("session-password-input");
-        let role = parse_session_role(&select_value("session-role-select"));
-        let display_raw = input_value("auth-display-name").trim().to_string();
-        let display_name = if display_raw.is_empty() {
+        let model_raw = input_value("ai-gm-model-input").trim().to_string();
+        let model_id = if model_raw.is_empty() {
+            default_model_for_provider(&provider).to_string()
+        } else {
+            model_raw
+        };
+        let key_raw = input_value("ai-gm-api-key-input").trim().to_string();
+        // Scrub ephemeral BYOK password field from DOM immediately after reading
+        set_input_value("ai-gm-api-key-input", "");
+        let api_key = if key_raw.is_empty() {
             None
         } else {
-            Some(display_raw)
+            Some(key_raw)
         };
+        Some(AiGmProviderConfig {
+            provider,
+            model_id,
+            vision_model_id: None,
+            temperature: 0.35,
+            persona_id: "harsh-reality-arbiter".to_string(),
+            api_key,
+            base_url: None,
+            clear_api_key: false,
+        })
+    } else {
+        None
+    };
 
-        let req = JoinSessionRequest {
-            session_id,
-            session_password,
-            approval_token: None,
-            role,
-            display_name,
-        };
+    let is_discoverable = input_checked("session-discoverable-checkbox");
+    let allow_join_requests = input_checked("session-allow-requests-checkbox");
 
-        match fetch_json::<_, SessionEnterResponse>(
-            "POST",
-            "/api/sessions/join",
-            Some(&token),
-            Some(&req),
-        )
-        .await
-        {
-            Ok(data) => {
-                set_feedback(
-                    "session-feedback",
-                    &format!(
-                        "Joined session '{}' as {:?}",
-                        data.session_id, data.self_participant.role
-                    ),
-                    false,
-                );
-                enter_session(data);
-            }
-            Err(err) => set_feedback("session-feedback", &err, true),
+    let req = CreateSessionRequest {
+        session_id,
+        session_password,
+        session_mode,
+        role,
+        display_name,
+        enable_ai_gm,
+        ai_gm_config,
+        campaign_id,
+        title,
+        is_discoverable,
+        allow_join_requests,
+    };
+
+    match fetch_json::<_, SessionEnterResponse>(
+        "POST",
+        "/api/sessions/create",
+        Some(&token),
+        Some(&req),
+    )
+    .await
+    {
+        Ok(data) => {
+            set_input_value("session-title-input", "");
+            set_input_value("session-id-input", "");
+            set_feedback(
+                "session-feedback",
+                &format!(
+                    "Created session '{}' ({:?})",
+                    data.session_id, data.session_mode
+                ),
+                false,
+            );
+            enter_session(data);
+            true
         }
-    });
+        Err(err) => {
+            set_feedback("session-feedback", &err, true);
+            false
+        }
+    }
 }
 
 pub(crate) fn enter_session(data: SessionEnterResponse) {
@@ -439,7 +408,7 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
             data.session_id, data.session_mode, data.self_participant.role
         ),
     );
-    set_class("session-status-pill", "pill pill-active");
+    set_class("session-status-pill", "pill pill-active pill-clickable");
     set_text(
         "local-participant-label",
         &format!(
@@ -487,9 +456,8 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     sync_gm_context_button_visibility(is_gm);
     crate::wasm_client::notebook::sync_iggy_tab_visibility(is_gm);
     sync_chat_options_for_mode(session_mode);
-    set_display("session-card", "none");
+    crate::wasm_client::menu::satya_close_session_pane();
     set_display("hamburger-menu-dropdown", "none");
-    set_text("btn-menu-toggle-session-pane", "Show Session Pane");
     crate::wasm_client::workspace_drawers::sync_workspace_drawers_dom();
     set_display(
         "tabletop-canvas-card",
@@ -505,6 +473,8 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     crate::wasm_client::notebook::refresh_campaign_lore_catalog();
     connect_signaling_websocket();
     satya_refresh_saved_sessions();
+    crate::wasm_client::campaigns_directory::satya_refresh_my_campaigns();
+    crate::wasm_client::campaigns_directory::refresh_account_quotas();
     satya_refresh_metrics();
 }
 
@@ -665,7 +635,7 @@ pub fn cleanup_client_session_state() {
     render_roster();
     set_session_buttons_enabled(false);
     set_text("session-status-pill", "No Active Session");
-    set_class("session-status-pill", "pill pill-muted");
+    set_class("session-status-pill", "pill pill-muted pill-clickable");
 }
 
 /// Disconnects the current user from the active session, emitting `LEAVE_SESSION` and calling `POST /api/sessions/leave`.
@@ -722,8 +692,13 @@ pub fn satya_leave_session() {
         local_storage_remove(ACTIVE_SESSION_STORAGE_KEY);
         cleanup_client_session_state();
         satya_refresh_saved_sessions();
-        set_display("session-card", "block");
-        set_text("btn-menu-toggle-session-pane", "Hide Session Pane");
+        crate::wasm_client::campaigns_directory::satya_refresh_my_campaigns();
+        crate::wasm_client::campaigns_directory::refresh_account_quotas();
+        with_state_mut(|st| {
+            st.lobby_step = crate::wasm_client::state::LobbyStep::ChooseCampaign;
+            st.show_join_password_box = false;
+        });
+        crate::wasm_client::menu::open_session_modal();
         set_feedback(
             "session-feedback",
             &format!("Disconnected from session '{departing_sid}'"),
@@ -789,6 +764,14 @@ pub fn satya_logout() {
             st.google_access_token = None;
             st.google_linked = false;
             st.my_campaigns.clear();
+            st.saved_sessions.clear();
+            st.lobby_scope = LobbyScope::Mine;
+            st.lobby_step = crate::wasm_client::state::LobbyStep::ChooseCampaign;
+            st.selected_directory_user_id = None;
+            st.selected_campaign_key = CampaignSelectionKey::None;
+            st.selected_session_key = SessionSelectionKey::None;
+            st.requests_tray_open = false;
+            st.show_join_password_box = false;
             st.directory_results = None;
             st.incoming_join_requests.clear();
             st.my_join_requests.clear();
@@ -814,16 +797,18 @@ pub fn satya_logout() {
         set_button_disabled("btn-logout", true);
         set_button_disabled("btn-menu-logout", true);
         set_display("auth-card", "block");
-        set_display("session-card", "none");
+        crate::wasm_client::menu::satya_close_session_pane();
         set_display("workspace-panel", "none");
         set_display("hamburger-menu-dropdown", "none");
+        set_display("btn-open-campaigns-modal", "none");
         set_display("notifications-bell-wrap", "none");
         set_display("notifications-popover", "none");
         set_display("live-notification-toast", "none");
-        set_display("gm-campaigns-section", "none");
-        set_display("non-gm-host-notice", "none");
-        set_html("directory-results-list", "");
-        set_html("gm-campaigns-list", "");
+        set_display("session-requests-tray", "none");
+        set_html("directory-user-chips", "");
+        set_html("campaign-list-pane", "");
+        set_html("session-list-pane", "");
+        set_html("lobby-dynamic-action-body", "");
         set_html("gm-join-requests-list", "");
         set_html("my-join-requests-list", "");
         set_text("btn-menu-toggle-auth-pane", "Hide Auth Pane");

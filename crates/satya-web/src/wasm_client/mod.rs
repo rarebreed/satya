@@ -127,20 +127,28 @@ macro_rules! for_all_window_callbacks {
             "satyaRegister" => satya_register(),
             "satyaLogin" => satya_login(),
             "satyaLogout" => satya_logout(),
-            "satyaCreateSession" => satya_create_session(),
-            "satyaJoinSession" => satya_join_session(),
             "satyaLeaveSession" => satya_leave_session(),
             "satyaRefreshSavedSessions" => satya_refresh_saved_sessions(),
-            "satyaSelectSavedSession" => satya_select_saved_session(),
-            "satyaResumeSavedSession" => satya_resume_saved_session(),
-            "satyaResumeAsSoloGm" => satya_resume_as_solo_gm(),
-            "satyaDeleteSavedSession" => satya_delete_saved_session(),
+            "satyaSetLobbyScope" => satya_set_lobby_scope(String),
+            "satyaSelectDirectoryUser" => satya_select_directory_user(String),
+            "satyaSelectLobbyCampaign" => satya_select_lobby_campaign(String, String),
+            "satyaSelectLobbySession" => satya_select_lobby_session(String, String),
+            "satyaLobbyGoBack" => satya_lobby_go_back(),
+            "satyaLobbyGoStep" => satya_lobby_go_step(u8),
+            "satyaCreateCampaignStep" => satya_create_campaign_step(bool),
+            "satyaToggleDirPasswordJoin" => satya_toggle_dir_password_join(),
+            "satyaToggleRequestsTray" => satya_toggle_requests_tray(),
+            "satyaSubmitLobbyCreate" => satya_submit_lobby_create(),
+            "satyaResumeSelectedSession" => satya_resume_selected_session(String, bool),
+            "satyaDeleteSelectedSession" => satya_delete_selected_session(String),
+            "satyaJoinDirectorySessionWithPassword" => satya_join_directory_session_with_password(String),
+            "satyaRequestCampaignSession" => satya_request_campaign_session(String),
+            "satyaDirectorySearchKeydown" => satya_directory_search_keydown(KeyboardEvent),
             "satyaSearchGmDirectory" => satya_search_gm_directory(),
             "satyaRequestJoinSession" => satya_request_join_session(String),
             "satyaJoinApprovedSession" => satya_join_approved_session(String, String),
             "satyaCancelJoinRequest" => satya_cancel_join_request(String),
             "satyaRefreshMyCampaigns" => satya_refresh_my_campaigns(),
-            "satyaCreateCampaign" => satya_create_campaign(),
             "satyaDeleteCampaign" => satya_delete_campaign(String),
             "satyaRefreshJoinRequests" => satya_refresh_join_requests(),
             "satyaDecideJoinRequest" => satya_decide_join_request(String, bool),
@@ -153,6 +161,7 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleHamburgerMenu" => satya_toggle_hamburger_menu(),
             "satyaToggleAuthPane" => satya_toggle_auth_pane(),
             "satyaToggleSessionPane" => satya_toggle_session_pane(),
+            "satyaCloseSessionPane" => satya_close_session_pane(),
             "satyaToggleSettingsMenu" => satya_toggle_settings_menu(),
             "satyaToggleChatSettings" => satya_toggle_chat_settings(),
             "satyaToggleAiGmSettings" => satya_toggle_ai_gm_settings(),
@@ -450,6 +459,13 @@ pub fn register_window_bindings() {
     on_up.forget();
 
     let on_keydown = Closure::<dyn FnMut(KeyboardEvent)>::new(move |ev: KeyboardEvent| {
+        if ev.key() == "Escape"
+            && let Some(el) = crate::wasm_client::dom::get_element("session-card")
+                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+            && el.style().get_property_value("display").unwrap_or_default() != "none"
+        {
+            satya_close_session_pane();
+        }
         handle_map_global_keydown(&ev);
     });
     let _ = win.add_event_listener_with_callback("keydown", on_keydown.as_ref().unchecked_ref());

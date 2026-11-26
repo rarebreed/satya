@@ -111,6 +111,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             "/api/campaigns/:campaign_id",
             patch(update_campaign_handler).delete(delete_campaign_handler),
         )
+        .route(
+            "/api/campaigns/:campaign_id/session-requests",
+            post(create_campaign_session_request_handler),
+        )
         .route("/api/directory/search", get(search_gm_directory_handler))
         .route(
             "/api/sessions/:session_id",

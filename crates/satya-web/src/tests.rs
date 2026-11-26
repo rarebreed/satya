@@ -864,8 +864,22 @@ fn test_appearance_normalizers_and_saved_sessions() {
         "menu-font-select",
         "menu-font-size-select",
         "btn-reset-appearance-defaults",
-        "saved-sessions-select",
-        "btn-resume-saved-session",
+        "btn-open-campaigns-modal",
+        "session-modal-backdrop",
+        "btn-lobby-back",
+        "lobby-step-breadcrumb",
+        "lobby-step-1",
+        "lobby-step-2",
+        "lobby-step-3",
+        "btn-scope-my-campaigns",
+        "btn-scope-search-campaigns",
+        "campaign-list-pane",
+        "session-list-pane",
+        "lobby-new-campaign-fields",
+        "lobby-new-session-panel",
+        "btn-toggle-requests-tray",
+        "btn-close-session-pane",
+        "btn-lobby-create-submit",
         "btn-refresh-saved-sessions",
         "btn-export-session-snapshot",
         "session-import-file-input",
@@ -875,6 +889,15 @@ fn test_appearance_normalizers_and_saved_sessions() {
     ] {
         assert!(html.contains(&format!(r#"id="{id}""#)));
     }
+    let gate_idx = html.find(r#"id="gate-panel""#).unwrap();
+    let gate_end_rel = html[gate_idx..].find("</section>").unwrap();
+    let gate_end = gate_idx + gate_end_rel;
+    let backdrop_idx = html.find(r#"id="session-modal-backdrop""#).unwrap();
+    let session_card_idx = html.find(r#"id="session-card""#).unwrap();
+    assert!(
+        gate_end < backdrop_idx && gate_end < session_card_idx,
+        "session modal must live outside #gate-panel so hiding #auth-card does not hide the modal"
+    );
     assert!(html.contains(r#"[data-style="mil-spec"]"#));
     assert!(html.contains(r#"[data-style="lcars"]"#));
     assert!(html.contains(r#"html[data-density="compact"]"#));
@@ -886,30 +909,4 @@ fn test_appearance_normalizers_and_saved_sessions() {
     assert!(html.contains(r#"html[data-font="pulp"]"#));
     assert!(html.contains(r#"html[data-font-size="lg"]"#));
     assert!(html.contains(r#"html[data-font-size="xl"]"#));
-
-    let opts_html = wasm_client::format_saved_sessions_options_html(
-        &[satya_schema::SavedSessionSummary {
-            session_id: "harsh-reality-ep1".to_string(),
-            session_mode: satya_schema::SessionMode::Ttrpg,
-            role: satya_schema::SessionRole::Gm,
-            display_name: "Sean (GM)".to_string(),
-            host_user_id: "u-demo-gm-sean".to_string(),
-            owner_user_id: "u-demo-gm-sean".to_string(),
-            campaign_id: None,
-            campaign_title: None,
-            title: None,
-            is_discoverable: true,
-            campaign_tag: "harsh-reality-ep1".to_string(),
-            has_ai_gm: true,
-            character_id: None,
-            chat_event_count: 12,
-            mechanics_event_count: 4,
-            active_human_count: 2,
-            created_at_us: 1_700_000_000_000_000,
-            updated_at_us: 1_700_000_100_000_000,
-        }],
-        Some("harsh-reality-ep1"),
-    );
-    assert!(opts_html.contains(r#"value="harsh-reality-ep1" selected"#));
-    assert!(opts_html.contains("12 msgs, 4 rolls (2 live)"));
 }

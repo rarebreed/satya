@@ -2,10 +2,12 @@
 //! Request-to-Join lifecycle (live WebSocket + offline email + user-bound approval grants),
 //! quota endpoints, and account-level `/ws/notifications`.
 
-use crate::auth::UserAccount;
+use crate::auth::{ProvisionCampaignSessionParams, UserAccount};
 use crate::characters::sha256_digest;
 use crate::email_notifier::OutboundEmail;
-use crate::session_persistence::{session_mode_from_db, session_role_from_db, session_role_to_db};
+use crate::session_persistence::{
+    session_mode_from_db, session_mode_to_db, session_role_from_db, session_role_to_db,
+};
 use crate::state::SignalingAppState;
 use axum::{
     Json,
@@ -20,11 +22,12 @@ use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use satya_schema::{
     AccountRole, AccountWsPacket, CampaignDirectoryEvent, CampaignDirectoryEventType,
-    CampaignListResponse, CampaignSummary, CreateCampaignRequest, CreateJoinRequestBody,
-    DecideJoinRequestBody, DirectoryCampaignEntry, DirectoryGmEntry, DirectoryMembershipStatus,
-    DirectorySearchResponse, DirectorySessionEntry, JoinRequestRecord, JoinRequestStatus,
-    JoinRequestsListResponse, Participant, ServerWsPacket, SessionAccessEvent,
-    SessionAccessEventType, SessionMode, SessionRole, UpdateCampaignRequest, subjects,
+    CampaignListResponse, CampaignSummary, CreateCampaignRequest, CreateCampaignSessionRequestBody,
+    CreateJoinRequestBody, DecideJoinRequestBody, DirectoryCampaignEntry, DirectoryGmEntry,
+    DirectoryMembershipStatus, DirectorySearchResponse, DirectorySessionEntry, JoinRequestKind,
+    JoinRequestRecord, JoinRequestStatus, JoinRequestsListResponse, Participant, ServerWsPacket,
+    SessionAccessEvent, SessionAccessEventType, SessionMode, SessionRole, UpdateCampaignRequest,
+    subjects,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -798,10 +801,10 @@ pub struct DirectorySearchQuery {
     pub q: String,
 }
 
-/// Privacy-preserving GM directory search at `GET /api/directory/search?q=...`.
+/// Privacy-preserving user/campaign directory search at `GET /api/directory/search?q=...`.
 ///
-/// Matches `GM`/`ADMIN` accounts by exact email (`COLLATE NOCASE`) or `@username` handle,
-/// returning only discoverable campaigns and sessions **without ever leaking the GM's email**.
+/// Matches any user account by exact email (`COLLATE NOCASE`) or `@username` handle,
+/// returning only discoverable campaigns and sessions **without ever leaking the owner's email**.
 pub async fn search_gm_directory_handler(
     State(state): State<Arc<SignalingAppState>>,
     Query(params): Query<DirectorySearchQuery>,
@@ -874,7 +877,7 @@ pub async fn search_gm_directory_handler(
             r#"
             SELECT user_id, username, display_name
             FROM users
-            WHERE email = ?1 COLLATE NOCASE AND account_role IN ('GM', 'ADMIN')
+            WHERE email = ?1 COLLATE NOCASE
             LIMIT 5
             "#,
         )
@@ -892,8 +895,7 @@ pub async fn search_gm_directory_handler(
                 r#"
                 SELECT user_id, username, display_name
                 FROM users
-                WHERE account_role IN ('GM', 'ADMIN')
-                  AND (username = ?1 COLLATE NOCASE OR username LIKE ?2 COLLATE NOCASE)
+                WHERE username = ?1 COLLATE NOCASE OR username LIKE ?2 COLLATE NOCASE
                 ORDER BY CASE WHEN username = ?1 COLLATE NOCASE THEN 0 ELSE 1 END, username ASC
                 LIMIT 10
                 "#,
@@ -1151,36 +1153,49 @@ pub async fn search_gm_directory_handler(
         .into_response()
 }
 
-/// Submits a Request-to-Join for `session_id` at `POST /api/sessions/:session_id/join-requests`.
-///
-/// - If the owning GM is online (`/ws/notifications` or `/ws/session`), pushes a live alert.
-/// - If the owning GM is offline and has an email configured, dispatches an email via [`EmailNotifier`].
-pub async fn create_join_request_handler(
-    State(state): State<Arc<SignalingAppState>>,
-    Path(session_id): Path<String>,
-    headers: HeaderMap,
-    Json(req): Json<CreateJoinRequestBody>,
-) -> impl IntoResponse {
-    let user = match verify_bearer_user(&state, &headers).await {
-        Ok(u) => u,
-        Err(resp) => return resp.into_response(),
-    };
-    let sid = session_id.trim().to_string();
-    let actor = actor_from_user(&user, req.requested_role);
+struct AccessRequestDraft {
+    request_kind: JoinRequestKind,
+    session_id: String,
+    session_title: Option<String>,
+    proposed_session_mode: Option<SessionMode>,
+    proposed_enable_ai_gm: bool,
+    session_mode: SessionMode,
+    campaign_id: Option<String>,
+    campaign_title: Option<String>,
+    owner_user_id: String,
+    owner_username: String,
+    owner_display_name: String,
+    owner_email: Option<String>,
+    requested_role: SessionRole,
+    clean_message: Option<String>,
+}
 
+fn validate_requested_member_role(
+    role: SessionRole,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
     if matches!(
-        req.requested_role,
+        role,
         SessionRole::Gm | SessionRole::Host | SessionRole::AiGm | SessionRole::SoloGm
     ) {
-        return (
+        return Err((
             StatusCode::BAD_REQUEST,
             Json(json!({
-                "error": "Join requests may only request PLAYER, PARTICIPANT, or OBSERVER roles"
+                "error": "Requests may only request PLAYER, PARTICIPANT, or OBSERVER roles"
             })),
-        )
-            .into_response();
+        ));
     }
+    Ok(())
+}
 
+async fn check_join_request_rate_and_quota(
+    state: &SignalingAppState,
+    user: &UserAccount,
+    actor: &Participant,
+    sid: &str,
+    session_mode: SessionMode,
+    campaign_id: Option<String>,
+    requested_role: SessionRole,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
     let jr_rate = state
         .storage
         .config()
@@ -1197,30 +1212,293 @@ pub async fn create_join_request_handler(
         .await
     {
         emit_session_access_event(
-            &state,
+            state,
             SessionAccessAudit {
                 event_type: SessionAccessEventType::RateLimitRejected,
-                actor,
+                actor: actor.clone(),
                 target_participant: None,
-                session_id: &sid,
-                session_mode: SessionMode::Ttrpg,
+                session_id: sid,
+                session_mode,
                 request_id: None,
-                campaign_id: None,
-                requested_role: Some(req.requested_role),
+                campaign_id: campaign_id.clone(),
+                requested_role: Some(requested_role),
                 delivery_channel: None,
                 reason: Some(format!("Join request rate limit (retry_after={retry_secs}s)")),
             },
         )
         .await;
-        return (
+        return Err((
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({
                 "error": format!("Join request rate limit exceeded; retry in {retry_secs}s"),
                 "retry_after_secs": retry_secs
             })),
+        ));
+    }
+
+    let quota = state.auth.compute_account_quota_usage(user).await;
+    if quota.pending_requests_used >= quota.pending_requests_limit {
+        let msg = format!(
+            "Quota exceeded: maximum {} pending join requests allowed",
+            quota.pending_requests_limit
+        );
+        emit_session_access_event(
+            state,
+            SessionAccessAudit {
+                event_type: SessionAccessEventType::QuotaRejected,
+                actor: actor.clone(),
+                target_participant: None,
+                session_id: sid,
+                session_mode,
+                request_id: None,
+                campaign_id,
+                requested_role: Some(requested_role),
+                delivery_channel: None,
+                reason: Some(msg.clone()),
+            },
+        )
+        .await;
+        return Err((StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": msg }))));
+    }
+    Ok(())
+}
+
+async fn persist_and_notify_access_request(
+    state: &SignalingAppState,
+    user: &UserAccount,
+    actor: Participant,
+    draft: AccessRequestDraft,
+) -> axum::response::Response {
+    let now_us = Utc::now().timestamp_micros();
+    let request_id = format!("jreq_{}", Uuid::now_v7());
+    let ttl_us = (state.storage.config().quotas.join_request_ttl_hours as i64) * 3_600_000_000;
+    let expires_at_us = now_us + ttl_us;
+
+    let gm_online = state.is_user_online(&draft.owner_user_id).await;
+    let mut emailed_offline = false;
+    let proposed_mode_db = draft.proposed_session_mode.map(session_mode_to_db);
+
+    if let Err(e) = sqlx::query(
+        r#"
+        INSERT INTO session_join_requests (
+            request_id, request_kind, session_id, proposed_session_title,
+            proposed_session_mode, proposed_enable_ai_gm, campaign_id, owner_user_id,
+            requester_user_id, requester_username, requester_display_name,
+            requested_role, message, status, approval_token, decision_note,
+            emailed_offline, created_at_us, updated_at_us, expires_at_us
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'PENDING', NULL, NULL, 0, ?14, ?15, ?16)
+        "#,
+    )
+    .bind(&request_id)
+    .bind(draft.request_kind.as_str())
+    .bind(&draft.session_id)
+    .bind(&draft.session_title)
+    .bind(proposed_mode_db)
+    .bind(if draft.proposed_enable_ai_gm { 1_i64 } else { 0_i64 })
+    .bind(&draft.campaign_id)
+    .bind(&draft.owner_user_id)
+    .bind(&user.user_id)
+    .bind(&user.username)
+    .bind(&user.display_name)
+    .bind(session_role_to_db(draft.requested_role))
+    .bind(&draft.clean_message)
+    .bind(now_us)
+    .bind(now_us)
+    .bind(expires_at_us)
+    .execute(state.auth.db_pool())
+    .await
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to persist request: {e}") })),
         )
             .into_response();
     }
+
+    let target_gm = Participant::human(
+        &draft.owner_user_id,
+        &draft.owner_username,
+        &draft.owner_display_name,
+        SessionRole::Gm,
+    );
+    let delivery_channel = if gm_online {
+        "LIVE_WS".to_string()
+    } else if draft.owner_email.is_some() {
+        "EMAIL".to_string()
+    } else {
+        "INBOX_ONLY".to_string()
+    };
+
+    emit_session_access_event(
+        state,
+        SessionAccessAudit {
+            event_type: SessionAccessEventType::JoinRequestCreated,
+            actor,
+            target_participant: Some(target_gm.clone()),
+            session_id: &draft.session_id,
+            session_mode: draft.session_mode,
+            request_id: Some(request_id.clone()),
+            campaign_id: draft.campaign_id.clone(),
+            requested_role: Some(draft.requested_role),
+            delivery_channel: Some(delivery_channel),
+            reason: draft.clean_message.clone(),
+        },
+    )
+    .await;
+
+    let record_for_gm = JoinRequestRecord {
+        request_id: request_id.clone(),
+        request_kind: draft.request_kind,
+        session_id: draft.session_id.clone(),
+        session_title: draft.session_title.clone(),
+        proposed_session_mode: draft.proposed_session_mode,
+        proposed_enable_ai_gm: draft.proposed_enable_ai_gm,
+        campaign_id: draft.campaign_id.clone(),
+        campaign_title: draft.campaign_title.clone(),
+        owner_user_id: draft.owner_user_id.clone(),
+        owner_username: draft.owner_username.clone(),
+        owner_display_name: draft.owner_display_name.clone(),
+        requester_user_id: user.user_id.clone(),
+        requester_username: user.username.clone(),
+        requester_display_name: user.display_name.clone(),
+        requested_role: draft.requested_role,
+        message: draft.clean_message.clone(),
+        status: JoinRequestStatus::Pending,
+        approval_token: None,
+        decision_note: None,
+        emailed_offline: false,
+        created_at_us: now_us,
+        updated_at_us: now_us,
+        expires_at_us,
+    };
+
+    if gm_online {
+        state
+            .send_account_notification(
+                &draft.owner_user_id,
+                &AccountWsPacket::JoinRequestReceived {
+                    request: Box::new(record_for_gm.clone()),
+                },
+            )
+            .await;
+        state
+            .send_user_live_session_packet(
+                &draft.owner_user_id,
+                &ServerWsPacket::JoinRequestNotification {
+                    request: Box::new(record_for_gm.clone()),
+                },
+            )
+            .await;
+        let pending_count = count_pending_incoming(state, &draft.owner_user_id).await;
+        state
+            .send_account_notification(
+                &draft.owner_user_id,
+                &AccountWsPacket::PendingCountSync {
+                    pending_incoming_count: pending_count,
+                },
+            )
+            .await;
+    } else if let Some(to_email) = draft.owner_email {
+        let app_url = state.storage.config().email.public_app_url.trim_end_matches('/');
+        let camp_label = draft
+            .campaign_title
+            .as_deref()
+            .unwrap_or("Standalone Session");
+        let note_line = draft
+            .clean_message
+            .as_deref()
+            .map(|m| format!("\nMessage: {m}"))
+            .unwrap_or_default();
+        let (subject, action_desc) = match draft.request_kind {
+            JoinRequestKind::CreateSession => {
+                let title_disp = draft.session_title.as_deref().unwrap_or(&draft.session_id);
+                (
+                    format!(
+                        "[Satya] New session request '{}' from {} (@{})",
+                        title_disp, user.display_name, user.username
+                    ),
+                    format!(
+                        "requested a new session '{}' ({}) in your campaign '{}'",
+                        title_disp, draft.session_id, camp_label
+                    ),
+                )
+            }
+            JoinRequestKind::JoinSession => (
+                format!(
+                    "[Satya] Join request from {} (@{}) for {}",
+                    user.display_name, user.username, draft.session_id
+                ),
+                format!(
+                    "requested to join your session '{}' (Campaign: {})",
+                    draft.session_id, camp_label
+                ),
+            ),
+        };
+        let email_msg = OutboundEmail {
+            to_email,
+            subject,
+            body_text: format!(
+                "Hello {},\n\n{} (@{}) {action_desc} as {:?}.{}\n\nLog in to Satya to approve or deny: {app_url}\n",
+                draft.owner_display_name,
+                user.display_name,
+                user.username,
+                draft.requested_role,
+                note_line
+            ),
+            request_id: request_id.clone(),
+        };
+        if state.email_notifier.send_email(&email_msg).await.is_ok() {
+            emailed_offline = true;
+            let _ = sqlx::query(
+                "UPDATE session_join_requests SET emailed_offline = 1 WHERE request_id = ?1",
+            )
+            .bind(&request_id)
+            .execute(state.auth.db_pool())
+            .await;
+            emit_session_access_event(
+                state,
+                SessionAccessAudit {
+                    event_type: SessionAccessEventType::JoinRequestEmailed,
+                    actor: actor_from_user(user, draft.requested_role),
+                    target_participant: Some(target_gm),
+                    session_id: &draft.session_id,
+                    session_mode: draft.session_mode,
+                    request_id: Some(request_id),
+                    campaign_id: draft.campaign_id,
+                    requested_role: Some(draft.requested_role),
+                    delivery_channel: Some("EMAIL".to_string()),
+                    reason: Some("Dispatched offline owner notification".to_string()),
+                },
+            )
+            .await;
+        }
+    }
+
+    let mut resp_record = record_for_gm;
+    resp_record.emailed_offline = emailed_offline;
+    (StatusCode::OK, Json(json!(resp_record))).into_response()
+}
+
+/// Submits a Request-to-Join for `session_id` at `POST /api/sessions/:session_id/join-requests`.
+///
+/// - If the owning user is online (`/ws/notifications` or `/ws/session`), pushes a live alert.
+/// - If offline and email is configured, dispatches an email via [`EmailNotifier`].
+pub async fn create_join_request_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+    Json(req): Json<CreateJoinRequestBody>,
+) -> impl IntoResponse {
+    let user = match verify_bearer_user(&state, &headers).await {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
+    if let Err(resp) = validate_requested_member_role(req.requested_role) {
+        return resp.into_response();
+    }
+    let sid = session_id.trim().to_string();
+    let actor = actor_from_user(&user, req.requested_role);
 
     let now_us = Utc::now().timestamp_micros();
     expire_stale_join_requests(&state, now_us).await;
@@ -1254,7 +1532,8 @@ pub async fn create_join_request_handler(
             .into_response();
     };
 
-    let session_mode = session_mode_from_db(&sess_row.try_get::<String, _>("session_mode").unwrap_or_default());
+    let session_mode =
+        session_mode_from_db(&sess_row.try_get::<String, _>("session_mode").unwrap_or_default());
     let owner_user_id: String = sess_row.try_get("owner_user_id").unwrap_or_default();
     let owner_username: String = sess_row.try_get("owner_username").unwrap_or_default();
     let owner_display_name: String = sess_row.try_get("owner_display_name").unwrap_or_default();
@@ -1299,34 +1578,20 @@ pub async fn create_join_request_handler(
             .into_response();
     }
 
-    let quota = state.auth.compute_account_quota_usage(&user).await;
-    if quota.pending_requests_used >= quota.pending_requests_limit {
-        let msg = format!(
-            "Quota exceeded: maximum {} pending join requests allowed",
-            quota.pending_requests_limit
-        );
-        emit_session_access_event(
-            &state,
-            SessionAccessAudit {
-                event_type: SessionAccessEventType::QuotaRejected,
-                actor,
-                target_participant: None,
-                session_id: &sid,
-                session_mode,
-                request_id: None,
-                campaign_id,
-                requested_role: Some(req.requested_role),
-                delivery_channel: None,
-                reason: Some(msg.clone()),
-            },
-        )
-        .await;
-        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": msg }))).into_response();
+    if let Err(resp) = check_join_request_rate_and_quota(
+        &state,
+        &user,
+        &actor,
+        &sid,
+        session_mode,
+        campaign_id.clone(),
+        req.requested_role,
+    )
+    .await
+    {
+        return resp.into_response();
     }
 
-    let request_id = format!("jreq_{}", Uuid::now_v7());
-    let ttl_us = (state.storage.config().quotas.join_request_ttl_hours as i64) * 3_600_000_000;
-    let expires_at_us = now_us + ttl_us;
     let clean_msg = req
         .message
         .as_deref()
@@ -1334,174 +1599,208 @@ pub async fn create_join_request_handler(
         .filter(|s| !s.is_empty())
         .map(|s| s.chars().take(280).collect::<String>());
 
-    let gm_online = state.is_user_online(&owner_user_id).await;
-    let mut emailed_offline = false;
+    persist_and_notify_access_request(
+        &state,
+        &user,
+        actor,
+        AccessRequestDraft {
+            request_kind: JoinRequestKind::JoinSession,
+            session_id: sid,
+            session_title,
+            proposed_session_mode: None,
+            proposed_enable_ai_gm: false,
+            session_mode,
+            campaign_id,
+            campaign_title,
+            owner_user_id,
+            owner_username,
+            owner_display_name,
+            owner_email,
+            requested_role: req.requested_role,
+            clean_message: clean_msg,
+        },
+    )
+    .await
+}
 
-    if let Err(e) = sqlx::query(
-        r#"
-        INSERT INTO session_join_requests (
-            request_id, session_id, campaign_id, owner_user_id,
-            requester_user_id, requester_username, requester_display_name,
-            requested_role, message, status, approval_token, decision_note,
-            emailed_offline, created_at_us, updated_at_us, expires_at_us
+/// Submits a request for a campaign owner to create a new session in their campaign
+/// at `POST /api/campaigns/:campaign_id/session-requests`.
+pub async fn create_campaign_session_request_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+    Json(req): Json<CreateCampaignSessionRequestBody>,
+) -> impl IntoResponse {
+    let user = match verify_bearer_user(&state, &headers).await {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
+    if let Err(resp) = validate_requested_member_role(req.requested_role) {
+        return resp.into_response();
+    }
+    let session_title = req.session_title.trim().to_string();
+    if session_title.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Proposed session title cannot be empty" })),
         )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'PENDING', NULL, NULL, 0, ?10, ?11, ?12)
+            .into_response();
+    }
+    let cid = campaign_id.trim().to_string();
+    let actor = actor_from_user(&user, req.requested_role);
+
+    let now_us = Utc::now().timestamp_micros();
+    expire_stale_join_requests(&state, now_us).await;
+
+    let Some(camp_row) = sqlx::query(
+        r#"
+        SELECT c.campaign_id, c.slug, c.title AS campaign_title,
+               c.is_discoverable, c.is_archived, c.owner_user_id,
+               u.username AS owner_username,
+               u.display_name AS owner_display_name,
+               u.email AS owner_email
+        FROM campaigns c
+        JOIN users u ON u.user_id = c.owner_user_id
+        WHERE c.campaign_id = ?1
         "#,
     )
-    .bind(&request_id)
-    .bind(&sid)
-    .bind(&campaign_id)
-    .bind(&owner_user_id)
-    .bind(&user.user_id)
-    .bind(&user.username)
-    .bind(&user.display_name)
-    .bind(session_role_to_db(req.requested_role))
-    .bind(&clean_msg)
-    .bind(now_us)
-    .bind(now_us)
-    .bind(expires_at_us)
-    .execute(state.auth.db_pool())
+    .bind(&cid)
+    .fetch_optional(state.auth.db_pool())
     .await
-    {
+    .ok()
+    .flatten() else {
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": format!("Failed to persist join request: {e}") })),
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": format!("Campaign '{cid}' not found") })),
+        )
+            .into_response();
+    };
+
+    let owner_user_id: String = camp_row.try_get("owner_user_id").unwrap_or_default();
+    if owner_user_id == user.user_id {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "You own this campaign; create the session directly" })),
+        )
+            .into_response();
+    }
+    let is_archived = camp_row.try_get::<i64, _>("is_archived").unwrap_or(0) != 0;
+    if is_archived {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Cannot request a new session in an archived campaign" })),
+        )
+            .into_response();
+    }
+    let is_discoverable = camp_row.try_get::<i64, _>("is_discoverable").unwrap_or(1) != 0;
+    if !is_discoverable {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "This campaign is private and does not accept session requests" })),
         )
             .into_response();
     }
 
-    let target_gm = Participant::human(&owner_user_id, &owner_username, &owner_display_name, SessionRole::Gm);
-    let delivery_channel = if gm_online {
-        "LIVE_WS".to_string()
-    } else if owner_email.is_some() {
-        "EMAIL".to_string()
-    } else {
-        "INBOX_ONLY".to_string()
-    };
+    let slug: String = camp_row.try_get("slug").unwrap_or_default();
+    let campaign_title: String = camp_row.try_get("campaign_title").unwrap_or_default();
+    let owner_username: String = camp_row.try_get("owner_username").unwrap_or_default();
+    let owner_display_name: String = camp_row.try_get("owner_display_name").unwrap_or_default();
+    let owner_email: Option<String> = camp_row
+        .try_get::<Option<String>, _>("owner_email")
+        .ok()
+        .flatten()
+        .filter(|s| !s.trim().is_empty());
 
-    emit_session_access_event(
-        &state,
-        SessionAccessAudit {
-            event_type: SessionAccessEventType::JoinRequestCreated,
-            actor: actor.clone(),
-            target_participant: Some(target_gm.clone()),
-            session_id: &sid,
-            session_mode,
-            request_id: Some(request_id.clone()),
-            campaign_id: campaign_id.clone(),
-            requested_role: Some(req.requested_role),
-            delivery_channel: Some(delivery_channel.clone()),
-            reason: clean_msg.clone(),
-        },
-    )
-    .await;
-
-    let record_for_gm = JoinRequestRecord {
-        request_id: request_id.clone(),
-        session_id: sid.clone(),
-        session_title: session_title.clone(),
-        campaign_id: campaign_id.clone(),
-        campaign_title: campaign_title.clone(),
-        owner_user_id: owner_user_id.clone(),
-        owner_username: owner_username.clone(),
-        owner_display_name: owner_display_name.clone(),
-        requester_user_id: user.user_id.clone(),
-        requester_username: user.username.clone(),
-        requester_display_name: user.display_name.clone(),
-        requested_role: req.requested_role,
-        message: clean_msg.clone(),
-        status: JoinRequestStatus::Pending,
-        approval_token: None,
-        decision_note: None,
-        emailed_offline: false,
-        created_at_us: now_us,
-        updated_at_us: now_us,
-        expires_at_us,
-    };
-
-    if gm_online {
-        state
-            .send_account_notification(
-                &owner_user_id,
-                &AccountWsPacket::JoinRequestReceived {
-                    request: Box::new(record_for_gm.clone()),
-                },
-            )
-            .await;
-        state
-            .send_user_live_session_packet(
-                &owner_user_id,
-                &ServerWsPacket::JoinRequestNotification {
-                    request: Box::new(record_for_gm.clone()),
-                },
-            )
-            .await;
-        let pending_count = count_pending_incoming(&state, &owner_user_id).await;
-        state
-            .send_account_notification(
-                &owner_user_id,
-                &AccountWsPacket::PendingCountSync {
-                    pending_incoming_count: pending_count,
-                },
-            )
-            .await;
-    } else if let Some(to_email) = owner_email {
-        let app_url = state.storage.config().email.public_app_url.trim_end_matches('/');
-        let camp_label = campaign_title
-            .as_deref()
-            .unwrap_or("Standalone Session");
-        let note_line = clean_msg
-            .as_deref()
-            .map(|m| format!("\nMessage: {m}"))
-            .unwrap_or_default();
-        let email_msg = OutboundEmail {
-            to_email,
-            subject: format!(
-                "[Satya] Join request from {} (@{}) for {}",
-                user.display_name, user.username, sid
-            ),
-            body_text: format!(
-                "Hello {owner_display_name},\n\n{} (@{}) requested to join your session '{}' (Campaign: {}) as {:?}.{}\n\nLog in to Satya to approve or deny: {app_url}\n",
-                user.display_name, user.username, sid, camp_label, req.requested_role, note_line
-            ),
-            request_id: request_id.clone(),
-        };
-        if state.email_notifier.send_email(&email_msg).await.is_ok() {
-            emailed_offline = true;
-            let _ = sqlx::query(
-                "UPDATE session_join_requests SET emailed_offline = 1 WHERE request_id = ?1",
-            )
-            .bind(&request_id)
-            .execute(state.auth.db_pool())
-            .await;
-            emit_session_access_event(
-                &state,
-                SessionAccessAudit {
-                    event_type: SessionAccessEventType::JoinRequestEmailed,
-                    actor,
-                    target_participant: Some(target_gm),
-                    session_id: &sid,
-                    session_mode,
-                    request_id: Some(request_id.clone()),
-                    campaign_id: campaign_id.clone(),
-                    requested_role: Some(req.requested_role),
-                    delivery_channel: Some("EMAIL".to_string()),
-                    reason: Some("Dispatched offline GM notification".to_string()),
-                },
-            )
-            .await;
+    let base_sid = req
+        .session_id
+        .as_deref()
+        .map(slugify_campaign_title)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("{slug}-{}", slugify_campaign_title(&session_title)));
+    let mut proposed_sid = base_sid.clone();
+    for suffix in 2..=50 {
+        let sess_exists: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM saved_sessions WHERE session_id = ?1")
+                .bind(&proposed_sid)
+                .fetch_one(state.auth.db_pool())
+                .await
+                .unwrap_or(0);
+        let req_exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM session_join_requests WHERE session_id = ?1 AND status IN ('PENDING', 'APPROVED')",
+        )
+        .bind(&proposed_sid)
+        .fetch_one(state.auth.db_pool())
+        .await
+        .unwrap_or(0);
+        if sess_exists == 0 && req_exists == 0 {
+            break;
         }
+        proposed_sid = format!("{base_sid}-{suffix}");
     }
 
-    let mut resp_record = record_for_gm;
-    resp_record.emailed_offline = emailed_offline;
+    if let Err(resp) = check_join_request_rate_and_quota(
+        &state,
+        &user,
+        &actor,
+        &proposed_sid,
+        req.session_mode,
+        Some(cid.clone()),
+        req.requested_role,
+    )
+    .await
+    {
+        return resp.into_response();
+    }
 
-    (StatusCode::OK, Json(json!(resp_record))).into_response()
+    let clean_msg = req
+        .message
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().take(280).collect::<String>());
+
+    persist_and_notify_access_request(
+        &state,
+        &user,
+        actor,
+        AccessRequestDraft {
+            request_kind: JoinRequestKind::CreateSession,
+            session_id: proposed_sid,
+            session_title: Some(session_title),
+            proposed_session_mode: Some(req.session_mode),
+            proposed_enable_ai_gm: req.enable_ai_gm,
+            session_mode: req.session_mode,
+            campaign_id: Some(cid),
+            campaign_title: Some(campaign_title),
+            owner_user_id,
+            owner_username,
+            owner_display_name,
+            owner_email,
+            requested_role: req.requested_role,
+            clean_message: clean_msg,
+        },
+    )
+    .await
 }
 
-fn row_to_join_request_record(row: &sqlx::sqlite::SqliteRow, include_token: bool) -> Option<JoinRequestRecord> {
+fn row_to_join_request_record(
+    row: &sqlx::sqlite::SqliteRow,
+    include_token: bool,
+) -> Option<JoinRequestRecord> {
     let status_str: String = row.try_get("status").ok()?;
     let status = join_request_status_from_db(&status_str);
+    let kind_str: String = row
+        .try_get("request_kind")
+        .unwrap_or_else(|_| "JOIN_SESSION".to_string());
+    let request_kind =
+        JoinRequestKind::from_code_str(&kind_str).unwrap_or(JoinRequestKind::JoinSession);
+    let proposed_session_mode = row
+        .try_get::<Option<String>, _>("proposed_session_mode")
+        .ok()
+        .flatten()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| session_mode_from_db(&s));
+    let proposed_enable_ai_gm = row.try_get::<i64, _>("proposed_enable_ai_gm").unwrap_or(0) != 0;
     let approval_token = if include_token && status == JoinRequestStatus::Approved {
         row.try_get::<Option<String>, _>("approval_token")
             .ok()
@@ -1511,8 +1810,11 @@ fn row_to_join_request_record(row: &sqlx::sqlite::SqliteRow, include_token: bool
     };
     Some(JoinRequestRecord {
         request_id: row.try_get("request_id").ok()?,
+        request_kind,
         session_id: row.try_get("session_id").ok()?,
         session_title: row.try_get("session_title").ok().flatten(),
+        proposed_session_mode,
+        proposed_enable_ai_gm,
         campaign_id: row.try_get("campaign_id").ok().flatten(),
         campaign_title: row.try_get("campaign_title").ok().flatten(),
         owner_user_id: row.try_get("owner_user_id").ok()?,
@@ -1521,7 +1823,9 @@ fn row_to_join_request_record(row: &sqlx::sqlite::SqliteRow, include_token: bool
         requester_user_id: row.try_get("requester_user_id").ok()?,
         requester_username: row.try_get("requester_username").unwrap_or_default(),
         requester_display_name: row.try_get("requester_display_name").unwrap_or_default(),
-        requested_role: session_role_from_db(&row.try_get::<String, _>("requested_role").unwrap_or_default()),
+        requested_role: session_role_from_db(
+            &row.try_get::<String, _>("requested_role").unwrap_or_default(),
+        ),
         message: row.try_get("message").ok().flatten(),
         status,
         approval_token,
@@ -1548,7 +1852,7 @@ pub async fn list_my_join_requests_handler(
     let rows = sqlx::query(
         r#"
         SELECT r.*,
-               s.title AS session_title,
+               COALESCE(s.title, r.proposed_session_title) AS session_title,
                c.title AS campaign_title,
                u.username AS owner_username,
                u.display_name AS owner_display_name
@@ -1592,7 +1896,7 @@ pub async fn list_incoming_join_requests_handler(
     let rows = sqlx::query(
         r#"
         SELECT r.*,
-               s.title AS session_title,
+               COALESCE(s.title, r.proposed_session_title) AS session_title,
                c.title AS campaign_title,
                u.username AS owner_username,
                u.display_name AS owner_display_name
@@ -1621,7 +1925,7 @@ pub async fn list_incoming_join_requests_handler(
         .into_response()
 }
 
-/// Approves or denies a `PENDING` join request at `POST /api/join-requests/:request_id/decide`.
+/// Approves or denies a `PENDING` join or new-session request at `POST /api/join-requests/:request_id/decide`.
 pub async fn decide_join_request_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(request_id): Path<String>,
@@ -1639,8 +1943,8 @@ pub async fn decide_join_request_handler(
     let Some(row) = sqlx::query(
         r#"
         SELECT r.*,
+               COALESCE(s.title, r.proposed_session_title) AS session_title,
                s.session_mode,
-               s.title AS session_title,
                c.title AS campaign_title,
                u.username AS owner_username,
                u.display_name AS owner_display_name
@@ -1667,7 +1971,7 @@ pub async fn decide_join_request_handler(
     if owner_user_id != user.user_id && user.account_role != AccountRole::Admin {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({ "error": "Only the owning GM or Admin can decide this join request" })),
+            Json(json!({ "error": "Only the owning user or Admin can decide this request" })),
         )
             .into_response();
     }
@@ -1678,10 +1982,107 @@ pub async fn decide_join_request_handler(
         return (
             StatusCode::CONFLICT,
             Json(json!({
-                "error": format!("Join request is already {}", current_status.as_str())
+                "error": format!("Request is already {}", current_status.as_str())
             })),
         )
             .into_response();
+    }
+
+    let mut updated_record = row_to_join_request_record(&row, false).unwrap();
+    let session_id = updated_record.session_id.clone();
+    let campaign_id = updated_record.campaign_id.clone();
+    let session_mode = row
+        .try_get::<Option<String>, _>("session_mode")
+        .ok()
+        .flatten()
+        .or_else(|| {
+            updated_record
+                .proposed_session_mode
+                .map(|m| session_mode_to_db(m).to_string())
+        })
+        .map(|s| session_mode_from_db(&s))
+        .unwrap_or(SessionMode::Ttrpg);
+
+    if req.approve && updated_record.request_kind == JoinRequestKind::CreateSession {
+        let Some(ref cid) = campaign_id else {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Session creation request is missing campaign_id" })),
+            )
+                .into_response();
+        };
+        let Some(camp_row) = sqlx::query(
+            "SELECT slug, is_archived FROM campaigns WHERE campaign_id = ?1",
+        )
+        .bind(cid)
+        .fetch_optional(state.auth.db_pool())
+        .await
+        .ok()
+        .flatten() else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("Campaign '{cid}' no longer exists") })),
+            )
+                .into_response();
+        };
+        if camp_row.try_get::<i64, _>("is_archived").unwrap_or(0) != 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Cannot create a session in an archived campaign" })),
+            )
+                .into_response();
+        }
+        let campaign_slug: String = camp_row.try_get("slug").unwrap_or_default();
+        let Some(owner_acct) = state.auth.get_user_by_id(&owner_user_id).await else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Campaign owner account not found" })),
+            )
+                .into_response();
+        };
+        let title_str = updated_record
+            .session_title
+            .as_deref()
+            .unwrap_or(&session_id);
+        if let Err(err) = state
+            .auth
+            .provision_approved_campaign_session(
+                &owner_acct,
+                ProvisionCampaignSessionParams {
+                    campaign_id: cid,
+                    campaign_slug: &campaign_slug,
+                    session_id: &session_id,
+                    title: title_str,
+                    session_mode,
+                    enable_ai_gm: updated_record.proposed_enable_ai_gm,
+                },
+            )
+            .await
+        {
+            let msg = err.to_string();
+            let status = if msg.starts_with("Quota exceeded:") {
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            return (status, Json(json!({ "error": msg }))).into_response();
+        }
+        emit_campaign_directory_event(
+            &state,
+            CampaignDirAudit {
+                event_type: CampaignDirectoryEventType::SessionAssignedToCampaign,
+                actor: actor_from_user(&user, SessionRole::Gm),
+                owner_user_id: Some(owner_user_id.clone()),
+                campaign_id: Some(cid.clone()),
+                campaign_title: updated_record.session_title.clone(),
+                campaign_slug: Some(campaign_slug),
+                search_query_sha256: None,
+                result_count: 1,
+                discoverable: true,
+                scope_session_id: &session_id,
+            },
+        )
+        .await;
     }
 
     let next_status = if req.approve {
@@ -1723,17 +2124,11 @@ pub async fn decide_join_request_handler(
     .execute(state.auth.db_pool())
     .await;
 
-    let session_id: String = row.try_get("session_id").unwrap_or_default();
-    let session_mode =
-        session_mode_from_db(&row.try_get::<String, _>("session_mode").unwrap_or_default());
-    let campaign_id: Option<String> = row.try_get("campaign_id").ok().flatten();
-    let requester_user_id: String = row.try_get("requester_user_id").unwrap_or_default();
-    let requester_username: String = row.try_get("requester_username").unwrap_or_default();
-    let requester_display_name: String = row.try_get("requester_display_name").unwrap_or_default();
-    let requested_role =
-        session_role_from_db(&row.try_get::<String, _>("requested_role").unwrap_or_default());
+    let requester_user_id = updated_record.requester_user_id.clone();
+    let requester_username = updated_record.requester_username.clone();
+    let requester_display_name = updated_record.requester_display_name.clone();
+    let requested_role = updated_record.requested_role;
 
-    let mut updated_record = row_to_join_request_record(&row, false).unwrap();
     updated_record.status = next_status;
     updated_record.decision_note = decision_note.clone();
     updated_record.updated_at_us = now_us;
@@ -1785,7 +2180,7 @@ pub async fn decide_join_request_handler(
         )
         .await;
 
-    // Never return another user's approval token in the GM's HTTP response
+    // Never return another user's approval token in the owner's HTTP response
     let mut gm_resp = updated_record;
     gm_resp.approval_token = None;
     (StatusCode::OK, Json(json!(gm_resp))).into_response()

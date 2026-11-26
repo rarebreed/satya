@@ -3,9 +3,9 @@
 
 use crate::wasm_client::dom::{
     EYE_OFF_SVG, EYE_OPEN_SVG, active_session_and_token_or_feedback, fetch_json, get_element,
-    input_checked, input_value, local_storage_get, local_storage_set, select_value, set_display,
-    set_feedback, set_input_checked, set_input_value, set_root_data_attribute, set_select_value,
-    set_text, toggle_element_display,
+    input_checked, input_value, local_storage_get, local_storage_set, select_value, set_class,
+    set_display, set_feedback, set_input_checked, set_input_value, set_root_data_attribute,
+    set_select_value, set_text, toggle_element_display,
 };
 use crate::wasm_client::options::{
     APPEARANCE_THEME_OPTIONS, default_model_for_provider, normalize_corners_id,
@@ -83,20 +83,36 @@ pub fn satya_toggle_auth_pane() {
     close_hamburger_dropdown();
 }
 
-/// Toggles the `2. Create or Join Password-Protected Session` pane (`#session-card`) visible or hidden.
+/// Opens the Campaign & Session guided modal (`#session-card` + `#session-modal-backdrop`).
+pub(crate) fn open_session_modal() {
+    set_class("session-card", "card session-card session-modal");
+    set_display("session-modal-backdrop", "block");
+    set_display("session-card", "flex");
+    crate::wasm_client::campaigns_directory::render_session_lobby_ui();
+    set_text("btn-menu-toggle-session-pane", "Hide Campaigns & Sessions");
+}
+
+/// Closes the Campaign & Session guided modal (`#session-card` + `#session-modal-backdrop`).
+#[wasm_bindgen]
+pub fn satya_close_session_pane() {
+    set_display("session-card", "none");
+    set_display("session-modal-backdrop", "none");
+    set_class("session-card", "card session-card session-modal");
+    set_text("btn-menu-toggle-session-pane", "Campaigns & Sessions");
+}
+
+/// Toggles the Campaign & Session guided modal (`#session-card`) visible or hidden.
 #[wasm_bindgen]
 pub fn satya_toggle_session_pane() {
-    let Some(is_opening) = toggle_element_display("session-card", "block") else {
-        return;
-    };
-    set_text(
-        "btn-menu-toggle-session-pane",
-        if is_opening {
-            "Hide Session Pane"
-        } else {
-            "Show Session Pane"
-        },
-    );
+    let is_opening = get_element("session-card")
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+        .map(|el| el.style().get_property_value("display").unwrap_or_default() == "none")
+        .unwrap_or(false);
+    if is_opening {
+        open_session_modal();
+    } else {
+        satya_close_session_pane();
+    }
     close_hamburger_dropdown();
 }
 

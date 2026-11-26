@@ -17,12 +17,70 @@ use crate::wasm_client::workspace_drawers::FloatingPaneKind;
 use satya_schema::{
     AccountQuotaUsage, AuthSuccessResponse, CampaignLoreChapterSummary, CampaignSummary,
     ChannelContext, DirectorySearchResponse, GmDocumentRecord, GmLookupHit, GmMemoryNoteRecord,
-    JoinRequestRecord, Participant, SessionMode, SessionNpcEntry,
+    JoinRequestRecord, Participant, SavedSessionSummary, SessionMode, SessionNpcEntry,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use web_sys::{AudioContext, MediaStream, RtcDataChannel, RtcPeerConnection, WebSocket};
+
+/// Scope toggle in the Campaign & Session lobby (`My Campaigns` vs `Find Another User`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LobbyScope {
+    /// Caller's own campaigns, standalone sessions, and joined sessions.
+    #[default]
+    Mine,
+    /// Directory search for another user's discoverable campaigns and sessions.
+    Search,
+}
+
+/// Current step in the progressive-disclosure Campaign & Session modal wizard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LobbyStep {
+    /// Step 1: Choose an owned campaign, '+ Create New Campaign', or search another user's campaigns.
+    #[default]
+    ChooseCampaign,
+    /// Step 2: Choose a session in the selected campaign, '+ New Session' / '+ Request New Session',
+    /// or configure the new campaign (Row 5).
+    ChooseSession,
+    /// Step 3: Focused action card or compact form for the chosen session (Rows 1-4).
+    TakeAction,
+}
+
+/// Active campaign-column selection in the Campaign & Session lobby.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum CampaignSelectionKey {
+    /// Nothing explicitly selected yet (triggers auto-selection on refresh).
+    #[default]
+    None,
+    /// `+ New Campaign` selected (Row 5: `New | Self | New`).
+    NewCampaign,
+    /// Existing owned campaign (`campaign_id`).
+    OwnedCampaign(String),
+    /// Legacy standalone sessions owned by the caller (`campaign_id == None`).
+    StandaloneOwned,
+    /// Sessions owned by other users that the caller has already joined.
+    JoinedOther,
+    /// Another user's discoverable campaign (`owner_user_id`, `Option<campaign_id>`).
+    OtherCampaign {
+        /// Owning user's persistent `user_id`.
+        owner_user_id: String,
+        /// Campaign ID (`None` for uncategorized standalone bucket).
+        campaign_id: Option<String>,
+    },
+}
+
+/// Active session-column selection in the Campaign & Session lobby.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum SessionSelectionKey {
+    /// Nothing selected in the session column.
+    #[default]
+    None,
+    /// Existing session (`session_id`).
+    Existing(String),
+    /// `+ New Session` (Row 3) or `+ Request New Session` (Row 4).
+    NewSession,
+}
 
 /// Canonical temporal granularity across the UI and engine (`1 Tick = 0.25s`, `20 Ticks = 5.0s`).
 pub const SECONDS_PER_TICK: f64 = 0.25;
@@ -209,8 +267,24 @@ pub struct SatyaWasmState {
     pub last_omnisearch_hits: Vec<GmLookupHit>,
     /// Item ID currently displayed inside `#gm-archivist-modal`, if open.
     pub archivist_modal_item_id: Option<String>,
-    /// Campaigns owned by the authenticated GM (`GET /api/campaigns`).
+    /// Campaigns owned by the authenticated caller (`GET /api/campaigns`).
     pub my_campaigns: Vec<CampaignSummary>,
+    /// Saved sessions in which the caller has participated or hosted (`GET /api/sessions/saved`).
+    pub saved_sessions: Vec<SavedSessionSummary>,
+    /// Active lobby scope toggle (`Mine` vs `Search`).
+    pub lobby_scope: LobbyScope,
+    /// Current progressive-disclosure wizard step (`ChooseCampaign` -> `ChooseSession` -> `TakeAction`).
+    pub lobby_step: LobbyStep,
+    /// Selected user ID when viewing directory search results.
+    pub selected_directory_user_id: Option<String>,
+    /// Active campaign-column selection in the lobby.
+    pub selected_campaign_key: CampaignSelectionKey,
+    /// Active session-column selection in the lobby.
+    pub selected_session_key: SessionSelectionKey,
+    /// Whether the collapsible Requests tray in the lobby is currently open.
+    pub requests_tray_open: bool,
+    /// Whether the optional invite-password input is expanded in Row 2 (`Request to Join` view).
+    pub show_join_password_box: bool,
     /// Most recent GM directory search response (`GET /api/directory/search`).
     pub directory_results: Option<DirectorySearchResponse>,
     /// Incoming join requests awaiting this GM's decision (`GET /api/join-requests/incoming`).
@@ -297,6 +371,14 @@ impl Default for SatyaWasmState {
             last_omnisearch_hits: Vec::new(),
             archivist_modal_item_id: None,
             my_campaigns: Vec::new(),
+            saved_sessions: Vec::new(),
+            lobby_scope: LobbyScope::Mine,
+            lobby_step: LobbyStep::ChooseCampaign,
+            selected_directory_user_id: None,
+            selected_campaign_key: CampaignSelectionKey::None,
+            selected_session_key: SessionSelectionKey::None,
+            requests_tray_open: false,
+            show_join_password_box: false,
             directory_results: None,
             incoming_join_requests: Vec::new(),
             my_join_requests: Vec::new(),

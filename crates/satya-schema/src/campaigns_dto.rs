@@ -8,6 +8,26 @@ fn default_true() -> bool {
     true
 }
 
+fn default_requested_player_role() -> SessionRole {
+    SessionRole::Player
+}
+
+fn default_ttrpg_mode() -> SessionMode {
+    SessionMode::Ttrpg
+}
+
+crate::define_wire_enum! {
+    /// Distinguishes joining an existing session vs. requesting creation of a new session in another user's campaign.
+    #[derive(Default)]
+    pub enum JoinRequestKind [count = 2] {
+        /// Request to join an existing session.
+        #[default]
+        JoinSession => ("JOIN_SESSION", "Join Session"),
+        /// Request for the campaign owner to create a new session in their campaign.
+        CreateSession => ("CREATE_SESSION", "New Session"),
+    }
+}
+
 crate::define_wire_enum! {
     /// Lifecycle status of a player's request to join a GM-owned session.
     #[derive(Default)]
@@ -215,16 +235,47 @@ pub struct CreateJoinRequestBody {
     pub message: Option<String>,
 }
 
-/// Persistent join-request record visible to the requesting player and the owning GM.
+/// HTTP request body for `POST /api/campaigns/:campaign_id/session-requests`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateCampaignSessionRequestBody {
+    /// Proposed human-readable session title.
+    pub session_title: String,
+    /// Optional preferred session room ID slug (derived from campaign + title when omitted).
+    #[serde(default)]
+    pub session_id: Option<String>,
+    /// Operating mode (`TTRPG` or `MEETING`).
+    #[serde(default = "default_ttrpg_mode")]
+    pub session_mode: SessionMode,
+    /// Whether the requested session should enable an autonomous AI GM.
+    #[serde(default)]
+    pub enable_ai_gm: bool,
+    /// Role requested by the requester (`PLAYER`, `PARTICIPANT`, or `OBSERVER`).
+    #[serde(default = "default_requested_player_role")]
+    pub requested_role: SessionRole,
+    /// Optional short note to the campaign owner.
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+/// Persistent join-request or new-session request record visible to the requester and campaign owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JoinRequestRecord {
     /// Unique join request identifier (`jreq_<uuid>`).
     pub request_id: String,
-    /// Target session ID.
+    /// Distinguishes joining an existing session vs. creating a new session in a campaign.
+    #[serde(default)]
+    pub request_kind: JoinRequestKind,
+    /// Target or proposed session ID.
     pub session_id: String,
-    /// Optional target session title.
+    /// Optional target or proposed session title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_title: Option<String>,
+    /// Proposed operating mode when `request_kind == CREATE_SESSION`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposed_session_mode: Option<SessionMode>,
+    /// Whether AI GM is requested when `request_kind == CREATE_SESSION`.
+    #[serde(default)]
+    pub proposed_enable_ai_gm: bool,
     /// Optional parent campaign ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub campaign_id: Option<String>,

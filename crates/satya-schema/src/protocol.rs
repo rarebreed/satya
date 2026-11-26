@@ -44,16 +44,17 @@ pub struct LogoutRequest {
     pub reason: Option<String>,
 }
 
-/// Platform-wide account role controlling campaign/session hosting and administrative APIs.
+/// Platform-wide account role controlling administrative APIs while preserving universal
+/// quota-governed campaign and session ownership.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AccountRole {
-    /// Standard platform user who can search directories, request to join, and play in sessions.
+    /// Standard authenticated user who owns campaigns/sessions (subject to quotas) and can search/join others.
     #[default]
     User,
-    /// Game Master / Host account authorized to create campaigns and sessions.
+    /// Game Master / Host account authorized to create campaigns and sessions (subject to quotas).
     Gm,
-    /// Platform administrator with full GM privileges plus Apache Iggy Inspector and RBAC administration.
+    /// Platform administrator with expanded quotas plus Apache Iggy Inspector and RBAC administration.
     Admin,
 }
 
@@ -77,9 +78,12 @@ impl AccountRole {
     }
 
     /// Returns `true` when this account role is authorized to create campaigns and host sessions.
+    ///
+    /// All authenticated account roles (`USER`, `GM`, `ADMIN`) can own campaigns and sessions,
+    /// governed by per-user quotas and rate limits; `ADMIN` remains reserved for Iggy/RBAC tools.
     #[must_use]
     pub const fn can_host_sessions(self) -> bool {
-        matches!(self, Self::Gm | Self::Admin)
+        matches!(self, Self::User | Self::Gm | Self::Admin)
     }
 }
 
