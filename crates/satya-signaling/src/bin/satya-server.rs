@@ -16,9 +16,20 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let storage_config_path = base_dir.join("config").join("storage.toml");
-    let ai_config_path = base_dir.join("config").join("ai.toml");
+    let repo_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let data_base_dir = std::env::var("SATYA_DATA_DIR")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_dir.clone());
+    let storage_config_path = std::env::var("SATYA_STORAGE_CONFIG")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_dir.join("config").join("storage.toml"));
+    let ai_config_path = repo_dir.join("config").join("ai.toml");
     let mut storage_cfg = if storage_config_path.exists() {
         StorageConfig::load_from_file(&storage_config_path)?
     } else {
@@ -28,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         storage_cfg.ai_gm = AiGmConfig::load_from_file(&ai_config_path)?;
     }
 
-    let state = SignalingAppState::new(storage_cfg, &base_dir).await?;
+    let state = SignalingAppState::new(storage_cfg, &data_base_dir).await?;
     let app = build_router(state);
 
     let port: u16 = std::env::var("PORT")

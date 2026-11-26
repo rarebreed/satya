@@ -920,14 +920,19 @@ impl AuthAndSessionManager {
                 || saved_part_row.is_some()
                 || session.roster.contains_key(&user.user_id);
 
-            if let Some(pwd) = req.session_password.as_deref().filter(|s| !s.is_empty()) {
-                if !Self::verify_secret(pwd, &session.password_hash) {
-                    anyhow::bail!("Invalid session password for session '{sid}'");
+            if !has_valid_join_token && !is_known_member {
+                match req.session_password.as_deref().filter(|s| !s.is_empty()) {
+                    Some(pwd) => {
+                        if !Self::verify_secret(pwd, &session.password_hash) {
+                            anyhow::bail!("Invalid session password for session '{sid}'");
+                        }
+                    }
+                    None => {
+                        anyhow::bail!(
+                            "Session password is required to join session '{sid}' for the first time"
+                        );
+                    }
                 }
-            } else if !has_valid_join_token && !is_known_member {
-                anyhow::bail!(
-                    "Session password is required to join session '{sid}' for the first time"
-                );
             }
 
             let resolved_role = req.role.or(saved_role).unwrap_or_else(|| {

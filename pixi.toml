@@ -36,6 +36,7 @@ pillow = ">=11.0.0"
 # --- Build & Quality ---
 check = { cmd = "cargo check --workspace", description = "Type-check all Rust crates in the workspace" }
 check-wasm = { cmd = "cargo clippy -p satya-web --target wasm32-unknown-unknown -- -D warnings", description = "Type-check + lint satya-web wasm32-only code (cfg(target_arch = \"wasm32\")) skipped by host builds" }
+check-wasm-e2e = { cmd = "cargo clippy -p satya-web --features e2e-hooks --target wasm32-unknown-unknown -- -D warnings", description = "Type-check + lint satya-web wasm32 with e2e-hooks enabled" }
 fmt = { cmd = "cargo fmt --all", description = "Format all Rust code in the workspace" }
 lint = { cmd = "cargo clippy --workspace --all-targets", description = "Run Clippy lints across all Rust crates" }
 prep = { depends-on = ["fmt", "lint", "check-wasm"] }
@@ -90,3 +91,18 @@ gen-textures = { cmd = "python -m satya_ml.texture_gen", env = { PYTHONPATH = "s
 verify-textures = { cmd = "python -m satya_ml.texture_gen --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP tiles exist and pass seamless wrap checks" }
 gen-prop-sprites = { cmd = "python -m satya_ml.texture_gen.prop_cli --batch all --variants 3 --skip-existing", env = { PYTHONPATH = "src" }, description = "Generate and alpha-matte top-down 2D battlemap prop sprites (3 variants each) via Gemini Nano Banana" }
 verify-prop-sprites = { cmd = "python -m satya_ml.texture_gen.prop_cli --batch all --variants 3 --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP prop sprites (all variants) exist and pass alpha/despill checks" }
+
+[feature.e2e.pypi-dependencies]
+playwright = ">=1.50.0"
+hypothesis = ">=6.120.0"
+
+[feature.e2e.tasks]
+build-wasm-e2e = { cmd = "wasm-pack build crates/satya-web --target web --no-opt --out-dir ../../pkg-e2e -- --features e2e-hooks", description = "Compile satya-web to WebAssembly in pkg-e2e/ with read-only e2e-hooks enabled" }
+build-server-e2e = { cmd = "cargo build --profile e2e -p satya-signaling --bin satya-server", description = "Compile satya-server into target/e2e/ so E2E runs never collide with a running debug server" }
+e2e-install = { cmd = "playwright install chromium", description = "Install Playwright Chromium browser binary for E2E tests" }
+test-e2e = { cmd = "python -m pytest e2e -v", depends-on = ["build-wasm-e2e", "build-server-e2e"], env = { PYTHONPATH = "src" }, description = "Build e2e-hooks Wasm bundle + e2e server and run Playwright grey-box E2E tests" }
+test-e2e-fast = { cmd = "python -m pytest e2e -v", env = { PYTHONPATH = "src" }, description = "Run Playwright E2E tests reusing existing pkg-e2e/ and target/e2e/satya-server" }
+
+[environments]
+default = { solve-group = "default" }
+e2e = { features = ["e2e"], solve-group = "default" }

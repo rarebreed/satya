@@ -34,6 +34,8 @@ pub mod dice_3d;
 pub mod dice_3d_wgpu;
 pub mod dom;
 pub mod dom_tooltip;
+#[cfg(feature = "e2e-hooks")]
+pub mod e2e_hooks;
 pub mod glb_model;
 pub mod gm_docs;
 pub mod gm_docs_google;
@@ -431,6 +433,9 @@ pub fn start_satya_wasm_client() {
     crate::wasm_client::notebook::sync_iggy_tab_visibility(false);
     refresh_map_dom_and_wgpu();
     restore_saved_auth_and_session();
+    if let Some(win) = window() {
+        let _ = Reflect::set(&win, &JsValue::from_str("__satyaWasmReady"), &JsValue::TRUE);
+    }
 }
 
 /// Binds the Rust Wasm handlers onto `window` so both SSR HTML attributes and dynamic
@@ -444,6 +449,8 @@ pub fn register_window_bindings() {
     };
 
     for_all_window_callbacks!(bind_window_callbacks, bind);
+    #[cfg(feature = "e2e-hooks")]
+    e2e_hooks::register_e2e_window_hooks(&win);
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_floating_pane_drag_move(&ev);

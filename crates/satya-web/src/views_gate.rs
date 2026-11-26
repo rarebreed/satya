@@ -72,12 +72,12 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                 <div class="form-grid">
                     <label>
                         <span>"Username"</span>
-                        <input id="auth-username" type="text" placeholder="e.g. gm_sean" value="gm_sean"/>
+                        <input id="auth-username" type="text" placeholder="e.g. gm_sean"/>
                     </label>
                     <label>
                         <span>"Password"</span>
                         <div class="password-field">
-                            <input id="auth-password" type="password" placeholder="Password" value="satya-truth-2026"/>
+                            <input id="auth-password" type="password" placeholder="Password"/>
                             <PasswordToggleButton
                                 input_id="auth-password"
                                 btn_id="btn-toggle-auth-password"
@@ -86,7 +86,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                     <label>
                         <span>"Display / Character Name"</span>
-                        <input id="auth-display-name" type="text" placeholder="e.g. Sean (GM)" value="Sean (GM)"/>
+                        <input id="auth-display-name" type="text" placeholder="e.g. Sean (GM)"/>
                     </label>
                     <label>
                         <span>"Email (Optional, Private — for GM Search & Offline Alerts)"</span>
@@ -308,7 +308,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                             <label>
                                 <span>"Session Password"</span>
                                 <div class="password-field">
-                                    <input id="session-password-input" type="password" placeholder="Session password" value="orbital-drop-7"/>
+                                    <input id="session-password-input" type="password" placeholder="Session password"/>
                                     <PasswordToggleButton
                                         input_id="session-password-input"
                                         btn_id="btn-toggle-session-password"

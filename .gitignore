@@ -6,6 +6,8 @@
 .venv/
 target/
 pkg/
+pkg-e2e/
+e2e/test-results/
 data/
 
 # compiled Python extensions (built into src/ via `pixi run build-py`)

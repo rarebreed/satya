@@ -3374,3 +3374,237 @@ async fn test_delete_non_default_gm_docs_and_memories_protects_defaults() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_owner_and_member_resume_without_password_or_with_stale_password() {
+    use satya_schema::ResumeSessionRequest;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_owner_resume_{}", Uuid::now_v7()));
+    let mut cfg = StorageConfig::default();
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("owner_resume.db")
+        .to_string_lossy()
+        .to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let marcus_auth = state
+        .auth
+        .authenticate_user("marcus_recon", "satya-truth-2026")
+        .await
+        .unwrap();
+
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    let marcus_user = state
+        .auth
+        .verify_auth_token(&marcus_auth.auth_token)
+        .await
+        .unwrap();
+
+    // 1. Owner creates a session with a custom password (different from default "orbital-drop-7")
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "owner-resume-room",
+            "custom-owner-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+
+    // 2. Player joins with the custom password
+    state
+        .auth
+        .join_session(
+            &sara_user,
+            "owner-resume-room",
+            "custom-owner-pw",
+            SessionRole::Player,
+            None,
+        )
+        .await
+        .unwrap();
+
+    // 3. Both owner and returning player log out and re-authenticate
+    state.auth.logout_user(&gm_auth.auth_token).await;
+    state.auth.logout_user(&sara_auth.auth_token).await;
+
+    let gm_relogin = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_relogin = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_re_user = state
+        .auth
+        .verify_auth_token(&gm_relogin.auth_token)
+        .await
+        .unwrap();
+    let sara_re_user = state
+        .auth
+        .verify_auth_token(&sara_relogin.auth_token)
+        .await
+        .unwrap();
+
+    // 4. Owner resumes without password -> succeeds
+    state
+        .auth
+        .resume_session(
+            &gm_re_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: None,
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await
+        .expect("Owner must resume own session without password");
+
+    // 5. Owner resumes with stale/mismatched password -> still succeeds
+    state
+        .auth
+        .resume_session(
+            &gm_re_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: Some("orbital-drop-7".to_string()),
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await
+        .expect("Owner must not be denied by stale session_password");
+
+    // 6. Returning player resumes with stale/mismatched password -> succeeds
+    state
+        .auth
+        .resume_session(
+            &sara_re_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: Some("orbital-drop-7".to_string()),
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await
+        .expect("Returning member must not be denied by stale session_password");
+
+    // 7. Owner calls join_session with empty or wrong password -> succeeds for owner's existing GM role
+    state
+        .auth
+        .join_session(
+            &gm_re_user,
+            "owner-resume-room",
+            "",
+            SessionRole::Gm,
+            None,
+        )
+        .await
+        .expect("Owner must join own session with empty password");
+    state
+        .auth
+        .join_session(
+            &gm_re_user,
+            "owner-resume-room",
+            "wrong-pass",
+            SessionRole::Gm,
+            None,
+        )
+        .await
+        .expect("Owner must join own session with wrong password");
+
+    // 8. Non-member stranger is still gated by password on resume_session
+    let stranger_no_pw = state
+        .auth
+        .resume_session(
+            &marcus_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: None,
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await;
+    assert!(
+        stranger_no_pw.is_err(),
+        "Stranger without password must be rejected"
+    );
+
+    let stranger_wrong_pw = state
+        .auth
+        .resume_session(
+            &marcus_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: Some("orbital-drop-7".to_string()),
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await;
+    let err_msg = stranger_wrong_pw
+        .expect_err("Stranger with wrong password must be rejected")
+        .to_string();
+    assert!(
+        err_msg.contains("Invalid session password"),
+        "Expected 'Invalid session password' error, got: {err_msg}"
+    );
+
+    state
+        .auth
+        .resume_session(
+            &marcus_user,
+            &ResumeSessionRequest {
+                session_id: "owner-resume-room".to_string(),
+                session_password: Some("custom-owner-pw".to_string()),
+                join_token: None,
+                role: None,
+                display_name: None,
+            },
+        )
+        .await
+        .expect("Stranger with valid session password must succeed");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

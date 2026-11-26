@@ -1502,7 +1502,9 @@ impl AuthAndSessionManager {
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
 
+            let is_session_owner = session.host_user_id == user.user_id;
             if consumed_request_id.is_none()
+                && !is_session_owner
                 && !Self::verify_secret(session_password, &session.password_hash)
             {
                 anyhow::bail!("Invalid session password for session '{sid}'");

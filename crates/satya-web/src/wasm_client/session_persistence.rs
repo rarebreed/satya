@@ -240,6 +240,22 @@ pub(crate) fn resume_session_by_id(session_id: String, role_override: Option<Ses
     spawn_resume_saved_session(session_id, role_override);
 }
 
+/// Builds a [`ResumeSessionRequest`] for a saved/owned/joined session from the lobby,
+/// omitting `#session-password-input` (which belongs to the hidden Create New Session form).
+pub(crate) fn build_resume_saved_session_request(
+    session_id: String,
+    role_override: Option<SessionRole>,
+    display_name: Option<String>,
+) -> ResumeSessionRequest {
+    ResumeSessionRequest {
+        session_id,
+        session_password: None,
+        join_token: None,
+        role: role_override,
+        display_name,
+    }
+}
+
 fn spawn_resume_saved_session(session_id: String, role_override: Option<SessionRole>) {
     spawn_local(async move {
         let has_token = with_state(|st| st.auth_token.is_some());
@@ -260,12 +276,6 @@ fn spawn_resume_saved_session(session_id: String, role_override: Option<SessionR
             return;
         }
 
-        let pwd_raw = input_value("session-password-input");
-        let session_password = if pwd_raw.trim().is_empty() {
-            None
-        } else {
-            Some(pwd_raw)
-        };
         let display_raw = input_value("auth-display-name").trim().to_string();
         let display_name = if display_raw.is_empty() {
             None
@@ -273,13 +283,7 @@ fn spawn_resume_saved_session(session_id: String, role_override: Option<SessionR
             Some(display_raw)
         };
 
-        let req = ResumeSessionRequest {
-            session_id: session_id.clone(),
-            session_password,
-            join_token: None,
-            role: role_override,
-            display_name,
-        };
+        let req = build_resume_saved_session_request(session_id, role_override, display_name);
 
         match fetch_json::<_, SessionEnterResponse>(
             "POST",
@@ -587,5 +591,19 @@ mod tests {
             })
             .collect();
         assert_eq!(seqs, vec![(1, true), (2, false), (3, false), (4, true)]);
+    }
+
+    #[test]
+    fn test_build_resume_saved_session_request_omits_password() {
+        let req = build_resume_saved_session_request(
+            "daise-awakened-v1".to_string(),
+            Some(SessionRole::SoloGm),
+            Some("Sean".to_string()),
+        );
+        assert_eq!(req.session_id, "daise-awakened-v1");
+        assert_eq!(req.session_password, None);
+        assert_eq!(req.join_token, None);
+        assert_eq!(req.role, Some(SessionRole::SoloGm));
+        assert_eq!(req.display_name.as_deref(), Some("Sean"));
     }
 }

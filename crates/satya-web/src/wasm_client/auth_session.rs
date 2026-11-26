@@ -382,6 +382,7 @@ pub(crate) async fn create_session_in_campaign(
         Ok(data) => {
             set_input_value("session-title-input", "");
             set_input_value("session-id-input", "");
+            set_input_value("session-password-input", "");
             set_feedback(
                 "session-feedback",
                 &format!(
@@ -811,6 +812,9 @@ pub fn satya_logout() {
         set_html("lobby-dynamic-action-body", "");
         set_html("gm-join-requests-list", "");
         set_html("my-join-requests-list", "");
+        set_input_value("auth-password", "");
+        set_input_value("session-password-input", "");
+        set_input_value("dir-join-password-input", "");
         set_text("btn-menu-toggle-auth-pane", "Hide Auth Pane");
         set_text("btn-menu-toggle-session-pane", "Show Session Pane");
         set_text("menu-user-details", "Not Logged In");

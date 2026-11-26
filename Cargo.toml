@@ -103,3 +103,6 @@ web-sys = { version = "0.3", features = [
     "WheelEvent",
     "Window",
 ] }
+
+[profile.e2e]
+inherits = "dev"

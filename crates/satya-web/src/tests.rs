@@ -391,6 +391,10 @@ fn test_ssr_shell_workspace_columns_and_combat_techniques() {
     assert!(html.contains("<h2>Task Resolution &amp; Action Pool</h2>"));
     assert!(!html.contains("Satya TTRPG Task Resolution &amp; Combat Economy"));
     assert!(html.contains("Roll Satya Task"));
+    assert!(!html.contains(r#"value="gm_sean""#));
+    assert!(!html.contains(r#"value="satya-truth-2026""#));
+    assert!(!html.contains(r#"value="Sean (GM)""#));
+    assert!(!html.contains(r#"value="orbital-drop-7""#));
 
     for id in [
         "auth-card",
