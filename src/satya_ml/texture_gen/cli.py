@@ -47,14 +47,27 @@ class GeminiImageClient:
         self._preferred_model = preferred_model
         self._cached_strategy: tuple[bool, str, str] | None = None
 
-    def generate(self, prompt: str, *, ref_png_bytes: bytes | None = None) -> bytes:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        ref_png_bytes: bytes | None = None,
+        aspect_ratio: str = "1:1",
+    ) -> bytes:
         from google import genai
         from google.genai import types
 
         if self._cached_strategy is not None:
             vertexai, api_kind, model_id = self._cached_strategy
             return self._invoke_with_recitation_retry(
-                genai, types, vertexai, api_kind, model_id, prompt, ref_png_bytes
+                genai,
+                types,
+                vertexai,
+                api_kind,
+                model_id,
+                prompt,
+                ref_png_bytes,
+                aspect_ratio,
             )
 
         models = list(
@@ -78,7 +91,14 @@ class GeminiImageClient:
         for vertexai, api_kind, model_id in attempts:
             try:
                 data = self._invoke_with_recitation_retry(
-                    genai, types, vertexai, api_kind, model_id, prompt, ref_png_bytes
+                    genai,
+                    types,
+                    vertexai,
+                    api_kind,
+                    model_id,
+                    prompt,
+                    ref_png_bytes,
+                    aspect_ratio,
                 )
                 self._cached_strategy = (vertexai, api_kind, model_id)
                 mode = "vertex-express" if vertexai else "gemini-dev"
@@ -100,6 +120,7 @@ class GeminiImageClient:
         model_id: str,
         prompt: str,
         ref_png_bytes: bytes | None,
+        aspect_ratio: str = "1:1",
     ) -> bytes:
         """Retries with stronger artistic stylization suffixes if Gemini triggers image_recitation."""
         for idx, suffix in enumerate(_RECITATION_RETRY_SUFFIXES):
@@ -112,6 +133,7 @@ class GeminiImageClient:
                     model_id,
                     f"{prompt}{suffix}" if suffix else prompt,
                     ref_png_bytes,
+                    aspect_ratio,
                 )
             except Exception as exc:
                 msg = str(exc).lower()
@@ -134,6 +156,7 @@ class GeminiImageClient:
         model_id: str,
         prompt: str,
         ref_png_bytes: bytes | None,
+        aspect_ratio: str = "1:1",
     ) -> bytes:
         client = (
             genai.Client(vertexai=True, api_key=self._api_key)
@@ -156,7 +179,7 @@ class GeminiImageClient:
                 input=inp,
                 response_format={
                     "type": "image",
-                    "aspect_ratio": "1:1",
+                    "aspect_ratio": aspect_ratio,
                     "image_size": "1K",
                 },
             )
@@ -173,7 +196,7 @@ class GeminiImageClient:
             contents=contents,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE"],
-                image_config=types.ImageConfig(aspect_ratio="1:1"),
+                image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
             ),
         )
         for cand in getattr(resp, "candidates", None) or []:

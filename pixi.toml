@@ -88,3 +88,5 @@ gen-stubs = { cmd = "python -m satya_py._stubgen", depends-on = ["build-py"], en
 check-stubs = { cmd = "python -m satya_py._stubgen --check", env = { PYTHONPATH = "src" }, description = "Verify src/satya_py/_native.pyi matches Rust sources and compiled satya_py._native signatures" }
 gen-textures = { cmd = "python -m satya_ml.texture_gen", env = { PYTHONPATH = "src" }, description = "Generate and seam-heal 2D battlemap WebP textures via Gemini Nano Banana" }
 verify-textures = { cmd = "python -m satya_ml.texture_gen --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP tiles exist and pass seamless wrap checks" }
+gen-prop-sprites = { cmd = "python -m satya_ml.texture_gen.prop_cli --pilot", env = { PYTHONPATH = "src" }, description = "Generate and alpha-matte top-down 2D battlemap prop sprites via Gemini Nano Banana" }
+verify-prop-sprites = { cmd = "python -m satya_ml.texture_gen.prop_cli --pilot --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP prop sprites exist and pass alpha/despill checks" }

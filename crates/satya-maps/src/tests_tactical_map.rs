@@ -2187,3 +2187,157 @@ fn test_wave5_awakened_presets_spatial_bridges_and_blast_breach() {
     assert!(outcome.breached_edges_count >= 1);
     assert_eq!(outcome.token_exposures.len(), 1);
 }
+
+#[test]
+fn community_clinic_annex_is_richly_furnished_and_valid() {
+    use crate::map_surface_queries::topmost_surface_at_m;
+    use crate::tactical_map_geom::prop_crosses_wall_edge;
+    use satya_schema::SurfaceFeatureKind;
+
+    for (w, h, min_1f, min_b1) in [(36_i32, 26_i32, 40_usize, 20_usize), (24, 18, 20, 12)] {
+        let req = build_procedural_map_request_with_options(
+            "map-clinic-rich",
+            SectorPreset::CommunityClinicAnnex,
+            None,
+            w,
+            h,
+            2036,
+            None,
+            None,
+        );
+        assert!(
+            req.props.len() >= min_1f,
+            "CommunityClinicAnnex {w}x{h} 1F should have >= {min_1f} props, got {}",
+            req.props.len()
+        );
+        let b1 = req
+            .floors
+            .iter()
+            .find(|f| f.floor_index == -1)
+            .expect("CommunityClinicAnnex should include B1 floor");
+        assert!(
+            b1.props.len() >= min_b1,
+            "CommunityClinicAnnex {w}x{h} B1 should have >= {min_b1} props, got {}",
+            b1.props.len()
+        );
+
+        let required_1f = [
+            PropKind::NurseStation,
+            PropKind::HospitalBed,
+            PropKind::Cot,
+            PropKind::MedicalCounter,
+            PropKind::TelemetryMonitor,
+            PropKind::BiohazardBin,
+            PropKind::LinenCart,
+            PropKind::DieselGenerator,
+            PropKind::UtilityVan,
+        ];
+        for kind in required_1f {
+            assert!(
+                req.props.iter().any(|p| p.kind == kind),
+                "CommunityClinicAnnex {w}x{h} 1F missing {kind:?}"
+            );
+        }
+
+        let required_b1 = [
+            PropKind::CryoComputeCluster,
+            PropKind::BioServerVat,
+            PropKind::AirGappedTerminal,
+            PropKind::DieselGenerator,
+        ];
+        for kind in required_b1 {
+            assert!(
+                b1.props.iter().any(|p| p.kind == kind),
+                "CommunityClinicAnnex {w}x{h} B1 missing {kind:?}"
+            );
+        }
+
+        for p in &req.props {
+            assert!(
+                !prop_crosses_wall_edge(p, &req.wall_edges),
+                "1F {w}x{h} prop crosses wall edge: {p:?}"
+            );
+            if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan) {
+                let fp = p.footprint_m();
+                if let Some(top) = topmost_surface_at_m(&req.surfaces, fp.cx_m, fp.cy_m) {
+                    assert_ne!(
+                        top.kind, SurfaceFeatureKind::AsphaltRoad,
+                        "Non-vehicle prop {p:?} placed on AsphaltRoad"
+                    );
+                }
+            }
+        }
+        for p in &b1.props {
+            assert!(
+                !prop_crosses_wall_edge(p, &b1.wall_edges),
+                "B1 {w}x{h} prop crosses wall edge: {p:?}"
+            );
+        }
+
+        assert!(
+            all_walkable_areas_connected(w, h, &req.wall_edges, &req.props),
+            "CommunityClinicAnnex {w}x{h} 1F disconnected"
+        );
+        let b1_lot = crate::map_gen_residential::LotBox::new(
+            b1.surfaces
+                .iter()
+                .flat_map(|s| s.points_cm.iter().map(|p| p.x_cm / 100))
+                .min()
+                .unwrap_or(0),
+            b1.surfaces
+                .iter()
+                .flat_map(|s| s.points_cm.iter().map(|p| p.y_cm / 100))
+                .min()
+                .unwrap_or(0),
+            b1.surfaces
+                .iter()
+                .flat_map(|s| s.points_cm.iter().map(|p| p.x_cm / 100))
+                .max()
+                .unwrap_or(w),
+            b1.surfaces
+                .iter()
+                .flat_map(|s| s.points_cm.iter().map(|p| p.y_cm / 100))
+                .max()
+                .unwrap_or(h),
+        );
+        assert!(
+            crate::map_gen_residential::floor_lot_connected(
+                w,
+                h,
+                b1_lot,
+                &b1.wall_edges,
+                &b1.props
+            ),
+            "CommunityClinicAnnex {w}x{h} B1 disconnected"
+        );
+
+        // Every surviving 1F surface must have non-zero exposed area.
+        for surf in &req.surfaces {
+            let mut exposed = false;
+            for gy in 0..h {
+                for gx in 0..w {
+                    for &(ox, oy) in &[(0.25_f32, 0.25_f32), (0.75, 0.75)] {
+                        if let Some(top) =
+                            topmost_surface_at_m(&req.surfaces, gx as f32 + ox, gy as f32 + oy)
+                            && std::ptr::eq(top, surf)
+                        {
+                            exposed = true;
+                            break;
+                        }
+                    }
+                    if exposed {
+                        break;
+                    }
+                }
+                if exposed {
+                    break;
+                }
+            }
+            assert!(
+                exposed,
+                "CommunityClinicAnnex {w}x{h} 1F surface {:?} is completely occluded",
+                surf.kind
+            );
+        }
+    }
+}

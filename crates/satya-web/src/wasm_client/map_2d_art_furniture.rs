@@ -117,6 +117,18 @@ pub fn push_furniture_glyph_with_mode(
     let (cx, cy) = (fp.cx_m * cell_px, fp.cy_m * cell_px);
     let (lw, lh) = (fp.span_w_m * cell_px, fp.span_h_m * cell_px);
     let rot = fp.rot_deg;
+    if painted
+        && let Some(sprite) =
+            crate::wasm_client::map_2d_art_sprites::prop_sprite_for_placement(p)
+    {
+        let _ = write!(
+            out,
+            r#"<g transform="translate({cx:.1} {cy:.1}) rotate({rot})">"#
+        );
+        crate::wasm_client::map_2d_art_sprites::push_prop_sprite_image(out, sprite, lw, lh);
+        out.push_str("</g>");
+        return;
+    }
     let legacy = match p.kind {
         PropKind::Armchair => Some(BattlemapPropKind::Armchair),
         PropKind::Planter => Some(BattlemapPropKind::Planter),

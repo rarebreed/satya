@@ -47,6 +47,7 @@ pub mod map_2d_art_props_awakened;
 pub mod map_2d_art_props_facility;
 pub mod map_2d_art_props_home;
 pub mod map_2d_art_props_lab_urban;
+pub mod map_2d_art_sprites;
 pub mod map_2d_art_surfaces;
 pub mod map_2d_art_textures;
 pub mod map_2d_art_walls;
