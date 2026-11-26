@@ -9,7 +9,8 @@ pub use crate::views_header::*;
 use crate::wasm_client;
 use leptos::prelude::*;
 
-/// Static table of quick-fill demo accounts for testing TTRPG and Meeting sessions.
+/// Static table of quick-fill demo accounts for testing TTRPG and Meeting sessions (opt-in `demo-accounts` feature only).
+#[cfg(feature = "demo-accounts")]
 const DEMO_ACCOUNT_SPECS: &[(&str, &str, &str, &str)] = &[
     ("gm_sean", "satya-truth-2026", "Sean (GM)", "GM: gm_sean"),
     (
@@ -35,6 +36,40 @@ const DEMO_ACCOUNT_SPECS: &[(&str, &str, &str, &str)] = &[
 /// Pre-session user authentication card (`#auth-card`) and session creation/join card (`#session-card`).
 #[component]
 pub fn AuthAndSessionGate() -> impl IntoView {
+    #[cfg(feature = "demo-accounts")]
+    let demo_chips_view = view! {
+        <div class="preset-users">
+            <span class="preset-label">"Quick Fill Demo Accounts:"</span>
+            {DEMO_ACCOUNT_SPECS
+                .iter()
+                .copied()
+                .map(|(user, pass, display, chip_label)| {
+                    let onclick_js =
+                        format!("window.satyaFillDemo('{user}', '{pass}', '{display}')");
+                    view! {
+                        <button
+                            type="button"
+                            class="btn-chip"
+                            onclick=onclick_js
+                            on:click=move |_| {
+                                wasm_client::satya_fill_demo(
+                                    user.to_string(),
+                                    pass.to_string(),
+                                    display.to_string(),
+                                )
+                            }
+                        >
+                            {chip_label}
+                        </button>
+                    }
+                })
+                .collect_view()}
+        </div>
+    }
+    .into_any();
+    #[cfg(not(feature = "demo-accounts"))]
+    let demo_chips_view = ().into_any();
+
     view! {
         <section id="gate-panel" class="gate-container">
             <div id="auth-card" class="card auth-card">
@@ -42,33 +77,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                     <h2>"1. User Authentication"</h2>
                     <span class="subtitle">"Persistent user_id across sessions for ML & analytics"</span>
                 </div>
-                <div class="preset-users">
-                    <span class="preset-label">"Quick Fill Demo Accounts:"</span>
-                    {DEMO_ACCOUNT_SPECS
-                        .iter()
-                        .copied()
-                        .map(|(user, pass, display, chip_label)| {
-                            let onclick_js =
-                                format!("window.satyaFillDemo('{user}', '{pass}', '{display}')");
-                            view! {
-                                <button
-                                    type="button"
-                                    class="btn-chip"
-                                    onclick=onclick_js
-                                    on:click=move |_| {
-                                        wasm_client::satya_fill_demo(
-                                            user.to_string(),
-                                            pass.to_string(),
-                                            display.to_string(),
-                                        )
-                                    }
-                                >
-                                    {chip_label}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
-                </div>
+                {demo_chips_view}
                 <div class="form-grid">
                     <label>
                         <span>"Username"</span>

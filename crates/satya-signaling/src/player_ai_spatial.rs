@@ -746,7 +746,7 @@ mod tests {
     async fn test_player_ai_spatial_move_lookup_and_gm_secret_isolation() {
         let (temp_dir, state, app, gm, _p1) = build_test_app_and_users("ai_spatial").await;
         let sid = "sess-ai_spatial";
-        let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+        let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
 
         // Add GM_ONLY document, secret NPC, and a GM_ONLY map token
         state

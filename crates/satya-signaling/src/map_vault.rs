@@ -21,7 +21,6 @@ use satya_schema::{
     SavedMapEventType, SavedMapListResponse, SavedMapRecordResponse, SavedMapSummary,
     SessionMode, SessionRole, SurfaceShapeKind, sanitize_portrait_url, subjects,
 };
-use satya_storage::default_local_satya_maps_dir;
 use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
@@ -37,7 +36,7 @@ fn resolve_local_maps_dir() -> PathBuf {
     if let Ok(custom) = std::env::var("SATYA_LOCAL_MAPS_DIR")
         && !custom.trim().is_empty()
     {
-        return default_local_satya_maps_dir();
+        return PathBuf::from(custom.trim());
     }
     #[cfg(test)]
     {
@@ -45,7 +44,7 @@ fn resolve_local_maps_dir() -> PathBuf {
     }
     #[cfg(not(test))]
     {
-        default_local_satya_maps_dir()
+        satya_storage::default_local_satya_maps_dir()
     }
 }
 
@@ -172,12 +171,16 @@ fn write_local_satyamap_bundle(
     let dir = resolve_local_maps_dir();
     std::fs::create_dir_all(&dir)?;
     let slug = sanitize_slug(&map.title);
-    let short_id: String = map
+    let raw_short: String = map
         .map_id
         .trim_start_matches("map_")
         .trim_start_matches("map-")
         .chars()
         .take(8)
+        .collect();
+    let short_id: String = raw_short
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
         .collect();
     let filename = if short_id.is_empty() {
         format!("{slug}.satyamap")
@@ -355,6 +358,11 @@ pub async fn save_map_handler(
 
     let now_us = Utc::now().timestamp_micros();
     let incoming_id = req.map.map_id.trim().to_string();
+    if !incoming_id.is_empty()
+        && let Err(msg) = crate::security::validate_safe_resource_id("map_id", &incoming_id)
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+    }
     let is_ephemeral_id =
         incoming_id.is_empty() || incoming_id == "map-default" || incoming_id == "map-starter";
 

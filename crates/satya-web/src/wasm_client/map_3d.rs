@@ -631,7 +631,7 @@ pub fn format_selectable_token_chips_html(
             } else {
                 "pill pill-iggy"
             };
-            let safe_id = escape_html(&tok.entity_id);
+            let safe_id = crate::wasm_client::dom::escape_js_single_quoted_attr(&tok.entity_id);
             let (px_cm, py_cm) = map.token_pos_cm(tok);
             let cell_cx = tok.x * map.cell_size_cm.max(25) + map.cell_size_cm.max(25) / 2;
             let cell_cy = tok.y * map.cell_size_cm.max(25) + map.cell_size_cm.max(25) / 2;

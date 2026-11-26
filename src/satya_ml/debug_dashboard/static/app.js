@@ -34,8 +34,10 @@
   }
 
   async function apiJson(url, opts = {}) {
+    const debugToken = window.sessionStorage ? window.sessionStorage.getItem("satya_debug_token") : "";
+    const extraHeaders = debugToken ? { "X-Satya-Debug-Token": debugToken } : {};
     const resp = await fetch(url, {
-      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+      headers: { "Content-Type": "application/json", ...extraHeaders, ...(opts.headers || {}) },
       ...opts,
     });
     const body = await resp.json().catch(() => ({}));
@@ -374,9 +376,9 @@
         ? tools
             .map(
               (t) => `<div class="tool-card">
-                <div><strong>#${t.step_index} ${escapeHtml(t.tool_name)}</strong>
+                <div><strong>#${escapeHtml(String(t.step_index))} ${escapeHtml(String(t.tool_name))}</strong>
                   <span class="pill ${t.is_error ? "pill-err" : "pill-ok"}">${t.is_error ? "ERR" : "OK"}</span>
-                  <span class="hint">${t.duration_ms}ms · ${escapeHtml(t.mcp_tier || "")}</span>
+                  <span class="hint">${escapeHtml(String(t.duration_ms))}ms · ${escapeHtml(t.mcp_tier || "")}</span>
                 </div>
                 <pre class="json-block">args: ${escapeHtml(t.arguments_json || "{}")}\nresult: ${escapeHtml(t.result_summary_json || "")}</pre>
               </div>`

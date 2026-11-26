@@ -1,6 +1,8 @@
 [auth]
 # SQLx SQLite connection URL (relative paths are resolved against the workspace root).
 database_url = "sqlite://data/auth/users.db?mode=rwc"
+# Disable demo account auto-seeding in production (set `SATYA_ENABLE_DEMO_ACCOUNTS=1` for local dev).
+seed_demo_accounts = false
 # Usernames automatically granted the platform-wide `ADMIN` role on startup or registration.
 bootstrap_admins = ["gm_sean"]
 # Usernames automatically granted the `GM` role (authorized to create campaigns and sessions).
@@ -20,6 +22,12 @@ max_registrations_per_ip_per_hour = 10
 max_creates_per_user_per_hour = 20
 max_directory_searches_per_user_per_min = 30
 max_join_requests_per_user_per_hour = 20
+max_logins_per_ip_per_min = 30
+max_logins_per_username_per_min = 10
+max_session_joins_per_user_per_min = 20
+max_session_resumes_per_user_per_min = 30
+auth_token_ttl_hours = 168
+join_token_ttl_secs = 900
 join_request_ttl_hours = 72
 approval_grant_ttl_hours = 24
 

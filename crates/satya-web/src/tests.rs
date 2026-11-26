@@ -393,6 +393,8 @@ fn test_ssr_shell_workspace_columns_and_combat_techniques() {
     assert!(html.contains("Roll Satya Task"));
     assert!(!html.contains(r#"value="gm_sean""#));
     assert!(!html.contains(r#"value="satya-truth-2026""#));
+    assert!(!html.contains("satya-truth-2026"));
+    assert!(!html.contains("satyaFillDemo"));
     assert!(!html.contains(r#"value="Sean (GM)""#));
     assert!(!html.contains(r#"value="orbital-drop-7""#));
 
@@ -913,4 +915,46 @@ fn test_appearance_normalizers_and_saved_sessions() {
     assert!(html.contains(r#"html[data-font="pulp"]"#));
     assert!(html.contains(r#"html[data-font-size="lg"]"#));
     assert!(html.contains(r#"html[data-font-size="xl"]"#));
+}
+
+#[test]
+fn test_security_xss_escaping_in_token_chips_and_combat_tracker() {
+    let mut map = satya_schema::GmMapUpdateRequest {
+        map_id: "map-sec".to_string(),
+        title: "Sec Map".to_string(),
+        grid_width: 8,
+        grid_height: 8,
+        ..Default::default()
+    };
+    map.tokens.push(satya_schema::TokenPlacement {
+        entity_id: "tok');alert(1);//".to_string(),
+        label: "<script>alert(1)</script>".to_string(),
+        x: 2,
+        y: 3,
+        visibility: satya_schema::MessageVisibility::Public,
+    });
+    let chips_html = wasm_client::format_selectable_token_chips_html(&map, None);
+    assert!(!chips_html.contains("tok');alert(1)"));
+    assert!(chips_html.contains("tok\\');alert(1);//"));
+    assert!(!chips_html.contains("<script>"));
+
+    let tracker_html = wasm_client::format_combat_tracker_entries_html(
+        &[satya_schema::CombatantTickEntry {
+            entity_id: "u-1".to_string(),
+            display_name: "Tester".to_string(),
+            role_or_faction: "Player".to_string(),
+            ooda_score: 10,
+            next_action_tick: 1,
+            active_stance: Some("<img src=x onerror=alert(1)>".to_string()),
+            fatigue_level: 0,
+            wound_shock: 0,
+            grid_x: None,
+            grid_y: None,
+            zone_label: None,
+            visibility: satya_schema::MessageVisibility::Public,
+        }],
+        1,
+    );
+    assert!(!tracker_html.contains("<img "));
+    assert!(tracker_html.contains("&lt;img src=x onerror=alert(1)&gt;"));
 }

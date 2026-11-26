@@ -4,7 +4,9 @@
 [ai_gm]
 enabled = true
 service_url = "http://127.0.0.1:8090"
-service_token = "satya_gm_secret_dev_token"
+# Inject the shared AI GM service secret via `SATYA_AI_GM_SERVICE_TOKEN` (or `SATYA_GM_SERVICE_TOKEN`)
+# from your environment / Secret Manager in non-dev deployments.
+service_token = ""
 default_provider = "ollama"
 ollama_base_url = "http://127.0.0.1:11434"
 reasoning_model = "gemma4:12b"

@@ -2106,7 +2106,7 @@ async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
     );
 
     // H3: BYOK key is preserved on same-provider model change and cleared on clear_api_key=true.
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
     state
         .auth
         .configure_session_ai_gm(
@@ -2390,8 +2390,10 @@ async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
     assert_eq!(hijack_resp.status(), StatusCode::FORBIDDEN);
 
     // H8: GM_ONLY roll stays off player/observer sockets.
-    let (gm_tx, mut gm_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let (pl_tx, mut pl_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (gm_tx, mut gm_rx) =
+        tokio::sync::mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
+    let (pl_tx, mut pl_rx) =
+        tokio::sync::mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
     {
         let mut sock_guard = state.active_sockets.write().await;
         let room = sock_guard.entry("w2-gm-vault".to_string()).or_default();
@@ -2495,7 +2497,8 @@ async fn test_ai_gm_service_generated_npc_visible_to_player_in_session_npcs_and_
         .await
         .unwrap();
 
-    let (pl_tx, mut pl_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (pl_tx, mut pl_rx) =
+        tokio::sync::mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
     {
         let mut sock_guard = state.active_sockets.write().await;
         sock_guard
@@ -2504,7 +2507,7 @@ async fn test_ai_gm_service_generated_npc_visible_to_player_in_session_npcs_and_
             .insert(player_user.user_id.clone(), (1, pl_tx));
     }
 
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
     let prompt = "Can you add an NPC for me? I want a researcher at DAISE who is adamant that AI are not conscious and believes that AGI will solve many of the world's problems. The NPC name will be Cliff Reed. He has advanced degrees in Computer Science and Math";
 
     // 1. AI GM service generates Cliff Reed via `/api/gm/sessions/:id/npcs/generate`
@@ -2742,7 +2745,7 @@ async fn test_solo_gm_spoiler_shield_and_table_mutations() {
         .await
         .unwrap();
 
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
     state
         .auth
         .upsert_session_gm_memory(
@@ -3303,7 +3306,7 @@ async fn test_delete_non_default_gm_docs_and_memories_protects_defaults() {
         .await
         .unwrap();
 
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
     state
         .auth
         .upsert_session_gm_memory(

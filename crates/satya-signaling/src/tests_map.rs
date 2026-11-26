@@ -165,7 +165,10 @@ async fn test_ai_player_spawn_step_context_isolation_and_rally_budget() {
         .uri("/api/player-ai/sessions/ep-ai-player-1/context?user_id=ai-player-kaelen")
         .header(
             "Authorization",
-            format!("Bearer {}", state.storage.config().ai_gm.service_token),
+            format!(
+                "Bearer {}",
+                crate::gm_api::resolve_effective_gm_service_token(&state).unwrap()
+            ),
         )
         .body(axum::body::Body::empty())
         .unwrap();
@@ -851,7 +854,7 @@ async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_
 
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let app = build_router(state.clone());
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
 
     let obs_auth = state
         .auth
@@ -1431,7 +1434,7 @@ async fn test_wave5_gm_only_surveillance_filter_and_passive_movement_whisper() {
 
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let app = build_router(state.clone());
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
 
     let gm_auth = state
         .auth

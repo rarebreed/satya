@@ -121,6 +121,9 @@ pub struct TopicStorageConfig {
 pub struct AuthConfig {
     /// SQLx database URL or SQLite path for storing persistent user accounts.
     pub database_url: String,
+    /// Explicit opt-in controlling whether fresh databases auto-seed demo accounts (`None` defaults to `false` in prod, `true` in `#[cfg(test)]`).
+    #[serde(default)]
+    pub seed_demo_accounts: Option<bool>,
     /// List of usernames automatically assigned [`satya_schema::AccountRole::Admin`].
     #[serde(default)]
     pub bootstrap_admins: Vec<String>,
@@ -143,6 +146,7 @@ impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             database_url: "sqlite://data/auth/users.db?mode=rwc".to_string(),
+            seed_demo_accounts: None,
             bootstrap_admins: vec!["gm_sean".to_string()],
             bootstrap_gms: default_bootstrap_gms(),
             google_oauth_client_id: None,
@@ -171,6 +175,18 @@ pub struct QuotaConfig {
     pub max_directory_searches_per_user_per_min: usize,
     /// Sliding-window join-request submission limit per user per hour.
     pub max_join_requests_per_user_per_hour: usize,
+    /// Sliding-window login attempt limit per client IP per minute.
+    pub max_logins_per_ip_per_min: usize,
+    /// Sliding-window login attempt limit per username per minute.
+    pub max_logins_per_username_per_min: usize,
+    /// Sliding-window session join attempt limit per user per minute.
+    pub max_session_joins_per_user_per_min: usize,
+    /// Sliding-window session resume attempt limit per user per minute.
+    pub max_session_resumes_per_user_per_min: usize,
+    /// Time-to-live (hours) before an issued bearer `auth_token` expires.
+    pub auth_token_ttl_hours: u64,
+    /// Time-to-live (seconds) before a WebSocket `join_token` expires.
+    pub join_token_ttl_secs: u64,
     /// Time-to-live (hours) before an unanswered `PENDING` join request expires.
     pub join_request_ttl_hours: u64,
     /// Time-to-live (hours) before an unused `APPROVED` join grant expires.
@@ -188,6 +204,12 @@ impl Default for QuotaConfig {
             max_creates_per_user_per_hour: 20,
             max_directory_searches_per_user_per_min: 30,
             max_join_requests_per_user_per_hour: 20,
+            max_logins_per_ip_per_min: 30,
+            max_logins_per_username_per_min: 10,
+            max_session_joins_per_user_per_min: 20,
+            max_session_resumes_per_user_per_min: 30,
+            auth_token_ttl_hours: 168,
+            join_token_ttl_secs: 900,
             join_request_ttl_hours: 72,
             approval_grant_ttl_hours: 24,
         }
@@ -253,7 +275,11 @@ pub struct AiGmConfig {
     /// HTTP base URL of the Python LangGraph FastAPI service (e.g. `"http://127.0.0.1:8090"`).
     pub service_url: String,
     /// Shared bearer secret authenticating requests between `satya-signaling` and the Python AI GM service.
+    #[serde(default)]
     pub service_token: String,
+    /// Optional explicit dev/test opt-in allowing the legacy fallback dev service token when `service_token` and env vars are unset.
+    #[serde(default)]
+    pub allow_dev_service_token_fallback: Option<bool>,
     /// Default LLM provider (`"ollama"`, `"google_genai"`, `"openai"`, or `"anthropic"`).
     pub default_provider: String,
     /// Base URL for local Ollama inference (`"http://127.0.0.1:11434"`).
@@ -334,7 +360,8 @@ impl Default for AiGmConfig {
         Self {
             enabled: true,
             service_url: "http://127.0.0.1:8090".to_string(),
-            service_token: "satya_gm_secret_dev_token".to_string(),
+            service_token: String::new(),
+            allow_dev_service_token_fallback: None,
             default_provider: "ollama".to_string(),
             ollama_base_url: "http://127.0.0.1:11434".to_string(),
             reasoning_model: "gemma4:12b".to_string(),

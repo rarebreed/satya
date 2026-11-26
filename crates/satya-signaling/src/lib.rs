@@ -29,6 +29,7 @@ pub mod npcs_store;
 pub mod player_ai_api;
 pub mod player_ai_spatial;
 pub mod rate_limit;
+pub mod security;
 pub mod session_export;
 pub mod session_persistence;
 pub mod state;
@@ -47,6 +48,7 @@ pub use map_vault::*;
 pub use npcs::*;
 pub use player_ai_api::*;
 pub use rate_limit::*;
+pub use security::*;
 pub use session_export::*;
 pub use session_persistence::*;
 pub use state::*;
@@ -80,7 +82,7 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
     Router::new()
         .route("/", get(index_handler))
         .nest_service("/pkg", tower_http::services::ServeDir::new(pkg_dir))
-        .nest_service("/maps", tower_http::services::ServeDir::new("data/maps"))
+        .route("/maps/*file", get(get_data_map_asset_handler))
         .nest_service("/book", tower_http::services::ServeDir::new("docs/book"))
         .nest_service(
             "/campaign-book",
@@ -105,7 +107,9 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route("/api/auth/register", post(register_handler))
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/logout", post(logout_handler))
+        .route("/api/auth/logout-all", post(logout_all_handler))
         .route("/api/auth/me", get(auth_me_handler))
+        .route("/api/ws/ticket", post(issue_ws_ticket_handler))
         .route("/api/auth/profile", patch(update_profile_handler))
         .route("/api/auth/quotas", get(get_account_quotas_handler))
         .route("/api/admin/users/role", post(admin_set_user_role_handler))
@@ -145,7 +149,11 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             "/api/join-requests/:request_id",
             delete(cancel_join_request_handler),
         )
-        .route("/ws/notifications", get(ws_notifications_handler))
+        .route(
+            "/ws/notifications",
+            get(ws_notifications_handler)
+                .route_layer(axum::middleware::from_fn(ws_origin_guard_middleware)),
+        )
         .route("/api/sessions/create", post(create_session_handler))
         .route("/api/sessions/join", post(join_session_handler))
         .route("/api/sessions/leave", post(leave_session_handler))
@@ -378,7 +386,16 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             "/api/characters/:character_id/assets/:asset_id",
             get(get_character_asset_handler),
         )
-        .route("/ws/session", get(ws_session_handler))
+        .route(
+            "/ws/session",
+            get(ws_session_handler)
+                .route_layer(axum::middleware::from_fn(ws_origin_guard_middleware)),
+        )
+        .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            security_headers_middleware,
+        ))
         .with_state(state)
 }
 
@@ -392,6 +409,8 @@ mod tests_map;
 mod tests_map_floors;
 #[cfg(test)]
 mod tests_persistence;
+#[cfg(test)]
+mod tests_security;
 
 #[cfg(test)]
 mod router_assets_tests {

@@ -16,6 +16,11 @@ import fastavro
 import lance
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _bridge_service_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SATYA_AI_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+
 from satya_ml.campaign_config import set_campaign_pack_override
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model, redact_api_key
 from satya_ml.ai_gm.tools import (

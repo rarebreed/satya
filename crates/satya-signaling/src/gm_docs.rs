@@ -129,16 +129,19 @@ pub fn sanitize_and_guard_gm_document(
     Ok((clean_title, final_text, safety_flagged))
 }
 
-fn strip_html_and_media_tags(input: &str) -> (String, bool) {
+pub(crate) fn strip_html_and_media_tags(input: &str) -> (String, bool) {
     let mut without_blocks = input.to_string();
     let mut flagged = false;
 
     for tag in ["script", "style", "iframe", "object", "embed", "svg"] {
         let open_pat = format!("<{tag}");
         let close_pat = format!("</{tag}>");
-        while let Some(start) = without_blocks.to_lowercase().find(&open_pat) {
+        while let Some(start) = without_blocks.to_ascii_lowercase().find(&open_pat) {
             flagged = true;
-            if let Some(rel_end) = without_blocks[start..].to_lowercase().find(&close_pat) {
+            if let Some(rel_end) = without_blocks[start..]
+                .to_ascii_lowercase()
+                .find(&close_pat)
+            {
                 let end = start + rel_end + close_pat.len();
                 without_blocks.replace_range(start..end, "");
             } else {
@@ -148,7 +151,7 @@ fn strip_html_and_media_tags(input: &str) -> (String, bool) {
         }
     }
 
-    if without_blocks.to_lowercase().contains("data:image/") {
+    if without_blocks.to_ascii_lowercase().contains("data:image/") {
         flagged = true;
         without_blocks =
             replace_case_insensitive(&without_blocks, "data:image/", "[stripped-image-uri]/");
@@ -182,7 +185,7 @@ fn replace_case_insensitive(haystack: &str, needle_lower: &str, replacement: &st
     }
     let mut search_from = 0;
     while search_from <= result.len() {
-        let lower_slice = result[search_from..].to_lowercase();
+        let lower_slice = result[search_from..].to_ascii_lowercase();
         let Some(pos) = lower_slice.find(needle_lower) else {
             break;
         };

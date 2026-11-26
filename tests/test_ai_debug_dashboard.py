@@ -11,6 +11,11 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _debug_bridge_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SATYA_AI_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+
 from satya_ml.ai_gm.graph import build_ai_gm_graph
 from satya_ml.ai_gm.models import SessionLlmConfig
 from satya_ml.ai_gm.server import app as gm_app
@@ -124,7 +129,7 @@ def test_observed_graph_tracks_all_gm_nodes_and_tool_loop() -> None:
 
 
 def test_debug_ui_routes_topology_and_session_lifecycle() -> None:
-    client = TestClient(gm_app)
+    client = TestClient(gm_app, headers={"Authorization": "Bearer satya_gm_secret_dev_token"})
     GRAPH_HUB.clear_traces(delete_files=False)
 
     html_resp = client.get("/debug")
@@ -178,12 +183,15 @@ def test_debug_ui_routes_topology_and_session_lifecycle() -> None:
     assert after_reset["active_map"] is None
 
     # Standalone AI Player server also mounts /debug cleanly
-    player_client = TestClient(player_app)
+    player_client = TestClient(
+        player_app,
+        headers={"Authorization": "Bearer satya_gm_secret_dev_token"},
+    )
     assert player_client.get("/debug/api/topology").status_code == 200
 
 
 def test_interrupt_before_pause_step_patch_and_resume() -> None:
-    client = TestClient(gm_app)
+    client = TestClient(gm_app, headers={"Authorization": "Bearer satya_gm_secret_dev_token"})
     sid = "dbg-breakpoint-1"
     client.post(f"/debug/api/sessions/{sid}/reset")
 
@@ -311,7 +319,7 @@ def test_trace_persistence_redaction_and_reload(tmp_path: Path) -> None:
 
 
 def test_builtin_scenarios_and_player_gm_loop() -> None:
-    client = TestClient(gm_app)
+    client = TestClient(gm_app, headers={"Authorization": "Bearer satya_gm_secret_dev_token"})
     presets_resp = client.get("/debug/api/scenarios")
     assert presets_resp.status_code == 200
     preset_ids = {s["id"] for s in presets_resp.json()["scenarios"]}
@@ -353,7 +361,7 @@ async def test_hub_threadsafe_sse_pubsub() -> None:
 
 
 def test_debug_ui_disabled_on_non_loopback_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = TestClient(gm_app)
+    client = TestClient(gm_app, headers={"Authorization": "Bearer satya_gm_secret_dev_token"})
     monkeypatch.delenv("SATYA_AI_DEBUG_UI", raising=False)
     monkeypatch.setenv("SATYA_AI_GM_HOST", "0.0.0.0")
     assert client.get("/debug/api/topology").status_code == 403
@@ -363,7 +371,7 @@ def test_debug_ui_disabled_on_non_loopback_host(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_debug_ui_serves_animated_brain_icon() -> None:
-    client = TestClient(gm_app)
+    client = TestClient(gm_app, headers={"Authorization": "Bearer satya_gm_secret_dev_token"})
     html_res = client.get("/debug/")
     assert html_res.status_code == 200
     assert "/debug/static/debug-brain.svg" in html_res.text

@@ -20,6 +20,8 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # Exposes read-only window.__satyaE2eSnapshot() for Playwright grey-box E2E tests (never enabled in prod).
 e2e-hooks = []
+# Enables quick-fill demo account buttons on the login card for local development only (never enabled in prod).
+demo-accounts = []
 
 [dependencies]
 satya-schema = { path = "../satya-schema" }

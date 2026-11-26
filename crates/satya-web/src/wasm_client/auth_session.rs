@@ -402,6 +402,15 @@ pub(crate) async fn create_session_in_campaign(
 }
 
 pub(crate) fn enter_session(data: SessionEnterResponse) {
+    let switching_room = with_state(|st| {
+        st.session_id
+            .as_deref()
+            .is_some_and(|prev_sid| prev_sid != data.session_id)
+    });
+    if switching_room {
+        cleanup_client_session_state();
+    }
+
     set_text(
         "session-status-pill",
         &format!(

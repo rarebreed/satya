@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from satya_ml.agent_server import (
     BaseTurnEventPayload,
+    BodySizeLimitMiddleware,
     SessionLockPool,
     resolve_turn_llm_config,
     verify_service_auth,
@@ -119,6 +120,7 @@ app = FastAPI(
     version="0.1.0",
     description="Internal loopback bridge between satya-signaling (Rust) and LangGraph AI GM / AI Player.",
 )
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=4 * 1024 * 1024)
 app.include_router(ai_player_router)
 app.include_router(debug_router)
 

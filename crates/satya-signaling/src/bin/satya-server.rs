@@ -39,7 +39,13 @@ async fn main() -> anyhow::Result<()> {
         storage_cfg.ai_gm = AiGmConfig::load_from_file(&ai_config_path)?;
     }
 
-    let state = SignalingAppState::new(storage_cfg, &data_base_dir).await?;
+    let tls_paths = satya_signaling::tls::resolve_tls_paths_from_env()?;
+    let mut state = SignalingAppState::new(storage_cfg, &data_base_dir).await?;
+    if tls_paths.is_some()
+        && let Some(mut_state) = std::sync::Arc::get_mut(&mut state)
+    {
+        mut_state.tls_enabled = true;
+    }
     let app = build_router(state);
 
     let port: u16 = std::env::var("PORT")
@@ -52,7 +58,6 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
     let addr = SocketAddr::new(host_ip, port);
-    let tls_paths = satya_signaling::tls::resolve_tls_paths_from_env()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     if let Some(paths) = tls_paths {
@@ -61,7 +66,11 @@ async fn main() -> anyhow::Result<()> {
         satya_signaling::tls::serve_https(listener, app, acceptor).await?;
     } else {
         info!("Satya WebRTC & Apache Iggy Event Server listening on http://{addr}");
-        axum::serve(listener, app).await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
     }
     Ok(())
 }

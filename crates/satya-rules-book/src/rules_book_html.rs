@@ -590,6 +590,32 @@ fn parse_standalone_markdown_image(trimmed: &str) -> Option<(String, String)> {
     }
 }
 
+/// Validates that a Markdown link or image URL does not use an executable/unsafe URI scheme.
+pub(crate) fn is_safe_markdown_url(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.chars().any(char::is_control) {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("javascript:")
+        || lower.starts_with("data:")
+        || lower.starts_with("vbscript:")
+        || lower.starts_with("file:")
+    {
+        return false;
+    }
+    if trimmed.starts_with('#')
+        || trimmed.starts_with('/')
+        || trimmed.starts_with("./")
+        || trimmed.starts_with("../")
+        || lower.starts_with("https://")
+        || lower.starts_with("http://")
+    {
+        return true;
+    }
+    !trimmed.split(['/', '?', '#']).next().unwrap_or("").contains(':')
+}
+
 /// Formats inline Markdown syntax (inline code `` `...` ``, display math `$$...$$`, inline math `$...$`,
 /// bold `**...**`, italic `*...*`, images `![alt](src)`, and links `[label](href)`).
 pub fn format_inline_markdown(line: &str) -> String {
@@ -686,34 +712,47 @@ pub fn format_inline_markdown(line: &str) -> String {
             && let Some((alt, url, next_i)) = parse_bracket_paren(&chars, i + 1)
         {
             let (resolved_src, layout) = resolve_markdown_image_with_layout(&url);
-            result.push_str("<img class=\"rules-image");
-            if let Some(hint) = layout {
-                result.push_str(" rules-image--");
-                result.push_str(hint);
+            if is_safe_markdown_url(&resolved_src) {
+                result.push_str("<img class=\"rules-image");
+                if let Some(hint) = layout {
+                    result.push_str(" rules-image--");
+                    result.push_str(hint);
+                }
+                result.push_str("\" src=\"");
+                result.push_str(&escape_html_text(&resolved_src));
+                result.push_str("\" alt=\"");
+                result.push_str(&escape_html_text(&alt));
+                result.push_str("\" loading=\"lazy\"/>");
+            } else {
+                result.push_str(&escape_html_text(&alt));
             }
-            result.push_str("\" src=\"");
-            result.push_str(&escape_html_text(&resolved_src));
-            result.push_str("\" alt=\"");
-            result.push_str(&escape_html_text(&alt));
-            result.push_str("\" loading=\"lazy\"/>");
             i = next_i;
             continue;
         }
 
         if let Some((label, url, next_i)) = parse_bracket_paren(&chars, i) {
-            result.push_str("<a class=\"rules-link\" href=\"");
-            result.push_str(&escape_html_text(&url));
-            result.push('"');
-            if let Some(target_chapter) = resolve_markdown_link_chapter_id(&url) {
-                result.push_str(" data-rules-chapter=\"");
-                result.push_str(target_chapter);
-                result.push_str("\" onclick=\"if(window.satyaSelectRulesChapter){window.satyaSelectRulesChapter('");
-                result.push_str(target_chapter);
-                result.push_str("');return false;}\"");
+            let safe_url = is_safe_markdown_url(&url);
+            if safe_url {
+                let lower = url.trim().to_ascii_lowercase();
+                let is_external = lower.starts_with("http://") || lower.starts_with("https://");
+                result.push_str("<a class=\"rules-link\" href=\"");
+                result.push_str(&escape_html_text(&url));
+                result.push('"');
+                if is_external {
+                    result.push_str(" target=\"_blank\" rel=\"noopener noreferrer\"");
+                } else if let Some(target_chapter) = resolve_markdown_link_chapter_id(&url) {
+                    result.push_str(" data-rules-chapter=\"");
+                    result.push_str(target_chapter);
+                    result.push_str("\" onclick=\"if(window.satyaSelectRulesChapter){window.satyaSelectRulesChapter('");
+                    result.push_str(target_chapter);
+                    result.push_str("');return false;}\"");
+                }
+                result.push('>');
+                result.push_str(&format_inline_markdown(&label));
+                result.push_str("</a>");
+            } else {
+                result.push_str(&format_inline_markdown(&label));
             }
-            result.push('>');
-            result.push_str(&format_inline_markdown(&label));
-            result.push_str("</a>");
             i = next_i;
             continue;
         }

@@ -69,6 +69,7 @@ pub fn format_metrics_table_html(topics: &[TopicMetricsView]) -> String {
         .iter()
         .map(|t| {
             let fp_short: String = t.active_schema_fingerprint_hex.chars().take(10).collect();
+            let safe_fp = escape_html(&fp_short);
             let last_off = t
                 .last_flushed_offset
                 .map(|o| o.to_string())
@@ -76,7 +77,7 @@ pub fn format_metrics_table_html(topics: &[TopicMetricsView]) -> String {
             format!(
                 r#"<tr>
                     <td><strong>{}</strong></td>
-                    <td><span class="mono">v{} ({fp_short}...)</span></td>
+                    <td><span class="mono">v{} ({safe_fp}...)</span></td>
                     <td>{} (<span class="mono">{}</span>)</td>
                     <td>{}</td>
                     <td>{}</td>

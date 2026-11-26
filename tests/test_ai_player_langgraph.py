@@ -28,6 +28,11 @@ from satya_ml.ai_player.tools import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _bridge_service_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SATYA_AI_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+
+
 @pytest.fixture
 def space_opera_pack() -> Any:
     """Temporarily activate the optional `space_opera` pack for Space Opera regression tests."""

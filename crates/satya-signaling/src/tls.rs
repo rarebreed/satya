@@ -13,10 +13,16 @@ use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 use tokio_rustls::TlsAcceptor;
 use tower::Service;
 use tracing::{debug, warn};
+
+const DEFAULT_MAX_TLS_CONNECTIONS: usize = 1024;
+const TLS_HANDSHAKE_TIMEOUT_SECS: u64 = 10;
+const HTTP_HEADER_READ_TIMEOUT_SECS: u64 = 15;
 
 /// Filesystem paths to the PEM certificate chain and private key used for native HTTPS.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,18 +102,29 @@ pub fn build_tls_acceptor(paths: &TlsPaths) -> anyhow::Result<TlsAcceptor> {
 }
 
 /// Accepts incoming TCP connections, terminates TLS with `acceptor`, and serves `app`
-/// with HTTP/1.1, HTTP/2, and WebSocket upgrade support.
+/// with HTTP/1.1, HTTP/2, and WebSocket upgrade support under bounded concurrency and handshake timeouts.
 pub async fn serve_https(
     listener: TcpListener,
     app: Router,
     acceptor: TlsAcceptor,
 ) -> anyhow::Result<()> {
     let executor = TokioExecutor::new();
+    let max_conns = std::env::var("SATYA_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(DEFAULT_MAX_TLS_CONNECTIONS);
+    let conn_semaphore = Arc::new(Semaphore::new(max_conns));
 
     loop {
+        let permit = match conn_semaphore.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break,
+        };
         let (tcp_stream, peer_addr) = match listener.accept().await {
             Ok(conn) => conn,
             Err(err) => {
+                drop(permit);
                 warn!("TLS TCP accept error: {err}");
                 continue;
             }
@@ -118,20 +135,37 @@ pub async fn serve_https(
         let executor = executor.clone();
 
         tokio::spawn(async move {
-            let tls_stream = match acceptor.accept(tcp_stream).await {
-                Ok(stream) => stream,
-                Err(err) => {
+            let _permit = permit;
+            let tls_stream = match tokio::time::timeout(
+                Duration::from_secs(TLS_HANDSHAKE_TIMEOUT_SECS),
+                acceptor.accept(tcp_stream),
+            )
+            .await
+            {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(err)) => {
                     debug!("TLS handshake failed from {peer_addr}: {err}");
+                    return;
+                }
+                Err(_) => {
+                    debug!("TLS handshake timed out from {peer_addr}");
                     return;
                 }
             };
 
-            let hyper_svc = service_fn(move |req: Request<Incoming>| {
+            let hyper_svc = service_fn(move |mut req: Request<Incoming>| {
+                req.extensions_mut()
+                    .insert(axum::extract::ConnectInfo(peer_addr));
                 let mut svc = app.clone();
                 async move { svc.call(req.map(Body::new)).await }
             });
 
-            if let Err(err) = AutoServerBuilder::new(executor)
+            let mut builder = AutoServerBuilder::new(executor);
+            builder
+                .http1()
+                .header_read_timeout(Duration::from_secs(HTTP_HEADER_READ_TIMEOUT_SECS));
+
+            if let Err(err) = builder
                 .serve_connection_with_upgrades(TokioIo::new(tls_stream), hyper_svc)
                 .await
             {
@@ -139,6 +173,7 @@ pub async fn serve_https(
             }
         });
     }
+    Ok(())
 }
 
 #[cfg(test)]

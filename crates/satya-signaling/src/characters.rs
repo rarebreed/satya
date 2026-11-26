@@ -211,17 +211,28 @@ pub fn compute_character_content_sha256(record: &CharacterSheetRecord) -> String
     hex::encode(sha256_digest(&bytes))
 }
 
-fn server_signing_secret(state: &SignalingAppState) -> Vec<u8> {
+static EPHEMERAL_SIGNING_SECRET: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
+
+fn server_signing_secret(_state: &SignalingAppState) -> Vec<u8> {
     if let Ok(env_secret) = std::env::var("SATYA_CHARACTER_SIGNING_KEY")
         && !env_secret.trim().is_empty()
     {
         return env_secret.into_bytes();
     }
-    format!(
-        "satya-char-hmac-v1:{}",
-        state.storage.config().ai_gm.service_token
-    )
-    .into_bytes()
+    let key = EPHEMERAL_SIGNING_SECRET.get_or_init(|| {
+        if !cfg!(test) {
+            tracing::warn!(
+                "SATYA_CHARACTER_SIGNING_KEY is not set; using an ephemeral per-process CSPRNG signing key (VerifiedOfficial signatures will not verify across server restarts)"
+            );
+        }
+        let mut buf = [0u8; 32];
+        argon2::password_hash::rand_core::RngCore::fill_bytes(
+            &mut argon2::password_hash::rand_core::OsRng,
+            &mut buf,
+        );
+        buf
+    });
+    key.to_vec()
 }
 
 /// Audits a [`CharacterSheetRecord`] using `satya-engine` (`verify_character_sheet_legality`) and either:
@@ -247,7 +258,11 @@ pub fn audit_and_stamp_character_record(
     } else if sign_as_official {
         record.verification_status = CharacterVerificationStatus::VerifiedOfficial;
         record.server_signature_hex = Some(expected_sig);
-    } else if record.server_signature_hex.as_deref() == Some(expected_sig.as_str()) {
+    } else if record
+        .server_signature_hex
+        .as_deref()
+        .is_some_and(|sig| crate::rate_limit::ct_eq_str(sig, &expected_sig))
+    {
         record.verification_status = CharacterVerificationStatus::VerifiedOfficial;
     } else {
         record.verification_status = CharacterVerificationStatus::LegalCustom;
@@ -280,11 +295,15 @@ fn write_local_satyachar_bundle(
     let dir = default_local_satya_characters_dir();
     std::fs::create_dir_all(&dir)?;
     let slug = sanitize_slug(&record.character_name);
-    let short_id: String = record
+    let raw_short: String = record
         .character_id
         .trim_start_matches("char_")
         .chars()
         .take(8)
+        .collect();
+    let short_id: String = raw_short
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
         .collect();
     let filename = if short_id.is_empty() {
         format!("{slug}.satyachar")
@@ -508,6 +527,13 @@ pub async fn save_character_handler(
         Err(resp) => return resp.into_response(),
     };
 
+    if !req.character.character_id.trim().is_empty()
+        && let Err(msg) =
+            crate::security::validate_safe_resource_id("character_id", &req.character.character_id)
+    {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+    }
+
     let existing = if req.character.character_id.trim().is_empty() {
         None
     } else {
@@ -708,6 +734,15 @@ pub async fn import_character_handler(
         },
     };
 
+    if !imported_record.character_id.trim().is_empty()
+        && crate::security::validate_safe_resource_id(
+            "character_id",
+            &imported_record.character_id,
+        )
+        .is_err()
+    {
+        imported_record.character_id = format!("char_{}", Uuid::now_v7());
+    }
     if imported_record.character_id.trim().is_empty()
         || load_character_from_sqlite(&state, &imported_record.character_id)
             .await

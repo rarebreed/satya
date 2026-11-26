@@ -1545,6 +1545,10 @@ pub fn satya_delete_selected_session(session_id: String) {
         .await
         {
             Ok(_) => {
+                let deleted_active = with_state(|st| st.session_id.as_deref() == Some(sid.as_str()));
+                if deleted_active {
+                    crate::wasm_client::auth_session::cleanup_client_session_state();
+                }
                 with_state_mut(|st| {
                     st.selected_session_key = SessionSelectionKey::None;
                     st.lobby_step = LobbyStep::ChooseSession;
@@ -2038,41 +2042,74 @@ pub fn satya_refresh_join_requests() {
     });
 }
 
-/// Connects the account-level `/ws/notifications` WebSocket for live alerts.
+#[derive(serde::Serialize)]
+struct WsNotifTicketReq {
+    kind: &'static str,
+}
+
+#[derive(serde::Deserialize)]
+struct WsNotifTicketResp {
+    ticket: String,
+}
+
+/// Connects the account-level `/ws/notifications` WebSocket for live alerts via a short-lived ticket.
 pub(crate) fn connect_notifications_websocket() {
-    let Some(win) = window() else {
-        return;
-    };
     let Some(tok) = with_state(|st| st.auth_token.clone()) else {
         return;
     };
-    let loc = win.location();
-    let proto = if loc.protocol().unwrap_or_default() == "https:" {
-        "wss:"
-    } else {
-        "ws:"
-    };
-    let host = loc.host().unwrap_or_else(|_| "127.0.0.1:3000".to_string());
 
     disconnect_notifications_websocket();
 
-    let url = format!("{proto}//{host}/ws/notifications?auth_token={tok}");
-    let Ok(ws) = WebSocket::new(&url) else {
-        return;
-    };
+    spawn_local(async move {
+        let Ok(ticket_resp) = fetch_json::<_, WsNotifTicketResp>(
+            "POST",
+            "/api/ws/ticket",
+            Some(&tok),
+            Some(&WsNotifTicketReq {
+                kind: "notifications",
+            }),
+        )
+        .await
+        else {
+            return;
+        };
 
-    let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |ev: MessageEvent| {
-        if let Some(text) = ev.data().as_string()
-            && let Ok(pkt) = serde_json::from_str::<AccountWsPacket>(&text)
-        {
-            handle_account_ws_packet(pkt);
+        let still_logged_in = with_state(|st| st.auth_token.as_deref() == Some(tok.as_str()));
+        if !still_logged_in {
+            return;
         }
-    });
-    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-    onmessage.forget();
+        let Some(win) = window() else {
+            return;
+        };
+        let loc = win.location();
+        let proto = if loc.protocol().unwrap_or_default() == "https:" {
+            "wss:"
+        } else {
+            "ws:"
+        };
+        let host = loc.host().unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+        let url = format!("{proto}//{host}/ws/notifications?ticket={}", ticket_resp.ticket);
+        let Ok(ws) = WebSocket::new(&url) else {
+            return;
+        };
 
-    with_state_mut(|st| {
-        st.notifications_ws = Some(ws);
+        let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |ev: MessageEvent| {
+            if let Some(text) = ev.data().as_string()
+                && let Ok(pkt) = serde_json::from_str::<AccountWsPacket>(&text)
+            {
+                handle_account_ws_packet(pkt);
+            }
+        });
+        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+        onmessage.forget();
+
+        with_state_mut(|st| {
+            if st.auth_token.as_deref() == Some(tok.as_str()) {
+                st.notifications_ws = Some(ws);
+            } else {
+                let _ = ws.close();
+            }
+        });
     });
 }
 

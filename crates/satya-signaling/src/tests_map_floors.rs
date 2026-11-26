@@ -971,7 +971,7 @@ async fn wave2_portal_strictness_notes_stripping_and_player_ai_door() {
         .set_session_active_map("w2-floor-door", map)
         .await
         .unwrap();
-    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    let gm_svc_tok = crate::gm_api::resolve_effective_gm_service_token(&state).unwrap();
 
     // Adjacent door toggles DoorClosed -> DoorOpen
     let near_door = tower::ServiceExt::oneshot(

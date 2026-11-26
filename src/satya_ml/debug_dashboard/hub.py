@@ -480,6 +480,8 @@ class GraphExecutionHub:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=_MAX_QUEUE_SIZE)
         with self._lock:
+            if len(self._subscribers) >= 16:
+                raise RuntimeError("Too many active debug SSE subscribers")
             self._sub_seq += 1
             sub_id = self._sub_seq
             self._subscribers[sub_id] = (loop, queue)

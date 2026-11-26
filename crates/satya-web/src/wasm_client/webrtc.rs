@@ -32,21 +32,62 @@ use web_sys::{
     RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
 };
 
+#[derive(serde::Serialize)]
+struct WsSessionTicketReq {
+    kind: &'static str,
+    join_token: String,
+}
+
+#[derive(serde::Deserialize)]
+struct WsSessionTicketResp {
+    ticket: String,
+}
+
+fn stop_media_stream_tracks(stream: &MediaStream) {
+    let tracks = stream.get_tracks();
+    for i in 0..tracks.length() {
+        if let Ok(track) = tracks.get(i).dyn_into::<web_sys::MediaStreamTrack>() {
+            track.stop();
+        }
+    }
+}
+
+fn teardown_active_media_and_peers() {
+    teardown_prosody_monitor();
+    let peer_ids: Vec<String> = with_state_mut(|st| {
+        let ids: Vec<String> = st.peers.keys().cloned().collect();
+        for (_, peer) in st.peers.drain() {
+            if let Some(dc) = peer.dc {
+                dc.close();
+            }
+            peer.pc.set_onicecandidate(None);
+            peer.pc.set_ontrack(None);
+            peer.pc.set_ondatachannel(None);
+            peer.pc.close();
+        }
+        if let Some(stream) = st.local_stream.take() {
+            stop_media_stream_tracks(&stream);
+        }
+        ids
+    });
+    for uid in peer_ids {
+        if let Some(tile) = get_element(&format!("video-tile-{uid}")) {
+            tile.remove();
+        }
+    }
+    if let Some(video) =
+        get_element("local-video").and_then(|e| e.dyn_into::<HtmlVideoElement>().ok())
+    {
+        video.set_src_object(None);
+    }
+}
+
 pub(crate) fn connect_signaling_websocket() {
-    let Some(win) = window() else {
-        return;
-    };
-    let loc = win.location();
-    let proto = if loc.protocol().unwrap_or_default() == "https:" {
-        "wss:"
-    } else {
-        "ws:"
-    };
-    let host = loc.host().unwrap_or_else(|_| "127.0.0.1:3000".to_string());
-    let (Some(join_tok), session_id) = with_state(|st| {
+    let (Some(auth_tok), Some(join_tok), Some(session_id)) = with_state(|st| {
         (
+            st.auth_token.clone(),
             st.join_token.clone(),
-            st.session_id.clone().unwrap_or_default(),
+            st.session_id.clone(),
         )
     }) else {
         return;
@@ -60,54 +101,95 @@ pub(crate) fn connect_signaling_websocket() {
         }
     });
 
-    let url = format!("{proto}//{host}/ws/session?join_token={join_tok}");
-    let Ok(ws) = WebSocket::new(&url) else {
-        schedule_ws_reconnect_with_backoff();
-        return;
-    };
+    spawn_local(async move {
+        let Ok(ticket_resp) = fetch_json::<_, WsSessionTicketResp>(
+            "POST",
+            "/api/ws/ticket",
+            Some(&auth_tok),
+            Some(&WsSessionTicketReq {
+                kind: "session",
+                join_token: join_tok.clone(),
+            }),
+        )
+        .await
+        else {
+            schedule_ws_reconnect_with_backoff();
+            return;
+        };
 
-    let sid_clone = session_id;
-    let onopen = Closure::<dyn FnMut()>::new(move || {
-        with_state_mut(|st| {
-            st.ws_reconnect_attempts = 0;
-            st.ws_reconnect_scheduled = false;
-            st.ws_reconnect_suppressed = false;
+        let still_active = with_state(|st| {
+            !st.ws_reconnect_suppressed
+                && st.session_id.as_deref() == Some(session_id.as_str())
+                && st.join_token.as_deref() == Some(join_tok.as_str())
         });
-        append_system_notice(&format!(
-            "Connected to WebRTC Signaling & Apache Iggy Event Hub for '{sid_clone}' (Rust/Wasm client)."
-        ));
-        initiate_webrtc_mesh(false);
-    });
-    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-    onopen.forget();
-
-    let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |ev: MessageEvent| {
-        if let Some(text) = ev.data().as_string()
-            && let Ok(pkt) = serde_json::from_str::<ServerWsPacket>(&text)
-        {
-            handle_server_packet(pkt);
+        if !still_active {
+            return;
         }
-    });
-    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-    onmessage.forget();
+        let Some(win) = window() else {
+            return;
+        };
+        let loc = win.location();
+        let proto = if loc.protocol().unwrap_or_default() == "https:" {
+            "wss:"
+        } else {
+            "ws:"
+        };
+        let host = loc.host().unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+        let url = format!("{proto}//{host}/ws/session?ticket={}", ticket_resp.ticket);
+        let Ok(ws) = WebSocket::new(&url) else {
+            schedule_ws_reconnect_with_backoff();
+            return;
+        };
 
-    let onclose = Closure::<dyn FnMut()>::new(move || {
-        with_state_mut(|st| {
-            st.ws = None;
+        let sid_clone = session_id.clone();
+        let onopen = Closure::<dyn FnMut()>::new(move || {
+            with_state_mut(|st| {
+                st.ws_reconnect_attempts = 0;
+                st.ws_reconnect_scheduled = false;
+                st.ws_reconnect_suppressed = false;
+            });
+            append_system_notice(&format!(
+                "Connected to WebRTC Signaling & Apache Iggy Event Hub for '{sid_clone}' (Rust/Wasm client)."
+            ));
+            initiate_webrtc_mesh(false);
         });
-        schedule_ws_reconnect_with_backoff();
-    });
-    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-    onclose.forget();
+        ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+        onopen.forget();
 
-    let onerror = Closure::<dyn FnMut()>::new(move || {
-        schedule_ws_reconnect_with_backoff();
-    });
-    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-    onerror.forget();
+        let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |ev: MessageEvent| {
+            if let Some(text) = ev.data().as_string()
+                && let Ok(pkt) = serde_json::from_str::<ServerWsPacket>(&text)
+            {
+                handle_server_packet(pkt);
+            }
+        });
+        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+        onmessage.forget();
 
-    with_state_mut(|st| {
-        st.ws = Some(ws);
+        let onclose = Closure::<dyn FnMut()>::new(move || {
+            with_state_mut(|st| {
+                st.ws = None;
+            });
+            schedule_ws_reconnect_with_backoff();
+        });
+        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+        onclose.forget();
+
+        let onerror = Closure::<dyn FnMut()>::new(move || {
+            schedule_ws_reconnect_with_backoff();
+        });
+        ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+        onerror.forget();
+
+        with_state_mut(|st| {
+            if st.session_id.as_deref() == Some(session_id.as_str())
+                && !st.ws_reconnect_suppressed
+            {
+                st.ws = Some(ws);
+            } else {
+                let _ = ws.close();
+            }
+        });
     });
 }
 
@@ -115,20 +197,26 @@ fn schedule_ws_reconnect_with_backoff() {
     let Some(win) = window() else {
         return;
     };
-    let delay_ms = with_state_mut(|st| {
+    let (delay_ms, exhausted) = with_state_mut(|st| {
         if st.ws_reconnect_suppressed
             || st.ws_reconnect_scheduled
             || st.auth_token.is_none()
             || st.session_id.is_none()
-            || st.ws_reconnect_attempts >= 10
         {
-            return None;
+            return (None, false);
+        }
+        if st.ws_reconnect_attempts >= 10 {
+            return (None, true);
         }
         st.ws_reconnect_attempts += 1;
         st.ws_reconnect_scheduled = true;
         let exp = st.ws_reconnect_attempts.saturating_sub(1).min(4);
-        Some((1000i32 << exp).min(15_000))
+        (Some((1000i32 << exp).min(15_000)), false)
     });
+    if exhausted {
+        teardown_active_media_and_peers();
+        return;
+    }
     let Some(delay_ms) = delay_ms else {
         return;
     };
@@ -314,6 +402,7 @@ pub fn satya_start_camera() {
         let Some(win) = window() else {
             return;
         };
+        let expected_session_id = with_state(|st| st.session_id.clone());
         let Ok(media_devices) = win.navigator().media_devices() else {
             append_system_notice(
                 "MediaDevices unavailable; continuing in DataChannel & signaling mode.",
@@ -342,6 +431,15 @@ pub fn satya_start_camera() {
         match stream_res {
             Ok(stream_val) => {
                 if let Ok(stream) = stream_val.dyn_into::<MediaStream>() {
+                    let still_same_session = with_state(|st| {
+                        st.auth_token.is_some()
+                            && st.session_id.is_some()
+                            && st.session_id == expected_session_id
+                    });
+                    if !still_same_session {
+                        stop_media_stream_tracks(&stream);
+                        return;
+                    }
                     if let Some(video_el) = get_element("local-video")
                         .and_then(|e| e.dyn_into::<HtmlVideoElement>().ok())
                     {
@@ -350,7 +448,9 @@ pub fn satya_start_camera() {
                     }
                     start_audio_prosody_monitor(&stream);
                     with_state_mut(|st| {
-                        st.local_stream = Some(stream);
+                        if let Some(prev) = st.local_stream.replace(stream) {
+                            stop_media_stream_tracks(&prev);
+                        }
                     });
                     initiate_webrtc_mesh(true);
                 }
@@ -630,6 +730,7 @@ fn ensure_peer_connection(
     let dname_track = remote_display_name.to_string();
     let ontrack = Closure::<dyn FnMut(RtcTrackEvent)>::new(move |ev: RtcTrackEvent| {
         let tile_id = format!("video-tile-{uid_track}");
+        let safe_uid = escape_html(&uid_track);
         if get_element(&tile_id).is_none()
             && let (Some(doc), Some(grid)) = (document(), get_element("video-grid"))
             && let Ok(tile) = doc.create_element("div")
@@ -637,7 +738,7 @@ fn ensure_peer_connection(
             tile.set_id(&tile_id);
             tile.set_class_name("video-tile");
             tile.set_inner_html(&format!(
-                r#"<video id="remote-video-{uid_track}" autoplay playsinline></video>
+                r#"<video id="remote-video-{safe_uid}" autoplay playsinline></video>
                 <div class="tile-overlay">
                     <span class="role-tag">{}</span>
                     <span class="telemetry-mini">P2P WebRTC</span>
@@ -646,7 +747,7 @@ fn ensure_peer_connection(
             ));
             let _ = grid.append_child(&tile);
         }
-        if let Some(vid) = get_element(&format!("remote-video-{uid_track}"))
+        if let Some(vid) = get_element(&format!("remote-video-{safe_uid}"))
             .and_then(|e| e.dyn_into::<HtmlVideoElement>().ok())
         {
             let streams = ev.streams();
@@ -735,6 +836,7 @@ fn ensure_peer_connection(
                 dc: dc_opt,
                 remote_desc_set: false,
                 pending_ice_candidates: Vec::new(),
+                last_offer_at_ms: 0.0,
             },
         );
     });
@@ -784,18 +886,45 @@ async fn handle_webrtc_signal(
     payload: String,
 ) {
     let remote_uid = from_participant.user_id.clone();
+    let is_valid_peer = with_state(|st| {
+        let is_self = st.user.as_ref().is_some_and(|u| u.user_id == remote_uid);
+        if remote_uid.is_empty() || is_self {
+            return false;
+        }
+        st.roster
+            .iter()
+            .any(|p| p.user_id == remote_uid && matches!(p.participant_kind, ParticipantKind::Human))
+    });
+    if !is_valid_peer {
+        return;
+    }
+
     let Ok(parsed_js) = js_sys::JSON::parse(&payload) else {
         return;
     };
 
     match signal_kind {
         WebRtcEventKind::SignalingOffer => {
+            let now_ms = js_sys::Date::now();
+            let throttled = with_state(|st| {
+                st.peers
+                    .get(&remote_uid)
+                    .is_some_and(|e| e.last_offer_at_ms > 0.0 && (now_ms - e.last_offer_at_ms) < 1000.0)
+            });
+            if throttled {
+                return;
+            }
             close_peer_connection(&remote_uid);
             let Some(pc) =
                 ensure_peer_connection(&remote_uid, &from_participant.display_name, false)
             else {
                 return;
             };
+            with_state_mut(|st| {
+                if let Some(entry) = st.peers.get_mut(&remote_uid) {
+                    entry.last_offer_at_ms = now_ms;
+                }
+            });
 
             let sdp = Reflect::get(&parsed_js, &JsValue::from_str("sdp"))
                 .ok()
@@ -857,7 +986,9 @@ async fn handle_webrtc_signal(
                     if entry.remote_desc_set {
                         (Some(entry.pc.clone()), true)
                     } else {
-                        entry.pending_ice_candidates.push(payload.clone());
+                        if entry.pending_ice_candidates.len() < 64 {
+                            entry.pending_ice_candidates.push(payload.clone());
+                        }
                         (None, false)
                     }
                 } else {

@@ -437,6 +437,22 @@ impl AuthAndSessionManager {
             })
             .unwrap_or_else(|| format!("mem_{}", Uuid::now_v7()));
 
+        if let Some(existing_row) = sqlx::query(
+            "SELECT session_id, author_user_id FROM gm_memories WHERE memory_id = ?1",
+        )
+        .bind(&mem_id)
+        .fetch_optional(self.db_pool())
+        .await
+        .ok()
+        .flatten()
+        {
+            let existing_sid: String = existing_row.try_get("session_id").unwrap_or_default();
+            let existing_author: String = existing_row.try_get("author_user_id").unwrap_or_default();
+            if existing_sid != sid && existing_author != author_user_id {
+                anyhow::bail!("memory_id '{mem_id}' belongs to another session");
+            }
+        }
+
         let record = {
             let mut guard = self.sessions.write().await;
             if let Some(session) = guard.get_mut(sid) {
@@ -514,8 +530,9 @@ impl AuthAndSessionManager {
         if record.is_persistent {
             self.persist_gm_memory_to_db(&record).await?;
         } else {
-            let _ = sqlx::query("DELETE FROM gm_memories WHERE memory_id = ?1")
+            let _ = sqlx::query("DELETE FROM gm_memories WHERE memory_id = ?1 AND session_id = ?2")
                 .bind(&record.memory_id)
+                .bind(&record.session_id)
                 .execute(self.db_pool())
                 .await;
         }
@@ -607,12 +624,15 @@ impl AuthAndSessionManager {
         is_persistent: bool,
     ) {
         if let Some(npc_id) = memory_id.strip_prefix("mem_") {
-            let _ =
-                sqlx::query("UPDATE session_npcs SET is_persistent = ?1 WHERE character_id = ?2")
-                    .bind(i32::from(is_persistent))
-                    .bind(npc_id)
-                    .execute(self.db_pool())
-                    .await;
+            let _ = sqlx::query(
+                "UPDATE session_npcs SET is_persistent = ?1 WHERE character_id = ?2 AND (session_id = ?3 OR campaign_tag = ?3 COLLATE NOCASE OR campaign_tag = ?4 COLLATE NOCASE)",
+            )
+            .bind(i32::from(is_persistent))
+            .bind(npc_id)
+            .bind(session_id)
+            .bind(campaign_tag)
+            .execute(self.db_pool())
+            .await;
             if memory_id.starts_with("mem_npc_")
                 && let Some(npc_name) = extract_npc_name_from_memory_title(title)
             {

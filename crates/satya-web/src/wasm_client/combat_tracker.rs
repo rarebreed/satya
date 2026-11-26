@@ -462,8 +462,8 @@ pub fn format_combat_tracker_entries_html(
             };
             let stance = c
                 .active_stance
-                .as_ref()
-                .map(|s| format!(" · {s:?}"))
+                .as_deref()
+                .map(|s| format!(" · {}", escape_html(s)))
                 .unwrap_or_default();
             let fatigue = if c.fatigue_level != 0 {
                 format!(" · Fatigue {}", c.fatigue_level)

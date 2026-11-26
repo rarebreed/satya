@@ -11,11 +11,12 @@ use crate::{
     state::SignalingAppState,
 };
 use axum::{
+    Json,
     extract::{
         Query, State,
         ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use futures::{SinkExt, StreamExt};
@@ -32,29 +33,185 @@ use satya_schema::{
 };
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-/// Query string parameters required when upgrading `/ws/session?join_token=...`.
+/// Request body for `POST /api/ws/ticket` to obtain a single-use, short-lived WebSocket ticket.
 #[derive(Debug, Deserialize)]
-pub struct WsConnectQuery {
-    /// Single-session join token returned by `/api/sessions/create` or `/api/sessions/join`.
-    pub join_token: String,
+pub struct IssueWsTicketRequest {
+    /// Target stream kind: `"notifications"` or `"session"`.
+    pub kind: String,
+    /// Session join token (`join_*`) required when `kind == "session"`.
+    #[serde(default)]
+    pub join_token: Option<String>,
 }
 
-/// Upgrades an authenticated HTTP request at `GET /ws/session?join_token=...` to a full-duplex WebSocket.
+/// Issues a short-lived (`30s`), single-use WebSocket upgrade ticket at `POST /api/ws/ticket`.
+pub async fn issue_ws_ticket_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+    Json(req): Json<IssueWsTicketRequest>,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+
+    let kind_norm = req.kind.trim().to_ascii_lowercase();
+    let entry_kind = match kind_norm.as_str() {
+        "notifications" => crate::state::WsTicketKind::Notifications(user),
+        "session" => {
+            let Some(jtok) = req
+                .join_token
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "join_token is required for session WS ticket" })),
+                )
+                    .into_response();
+            };
+            let Some(claims) = state.auth.verify_join_token(jtok).await else {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({ "error": "Invalid or expired join_token" })),
+                )
+                    .into_response();
+            };
+            if claims.participant.user_id != user.user_id {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({ "error": "join_token does not belong to authenticated user" })),
+                )
+                    .into_response();
+            }
+            crate::state::WsTicketKind::Session {
+                claims,
+                join_token: jtok.to_string(),
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Unsupported WS ticket kind; use 'notifications' or 'session'" })),
+            )
+                .into_response();
+        }
+    };
+
+    let ticket = format!("wst_{}", Uuid::new_v4());
+    let now_us = chrono::Utc::now().timestamp_micros();
+    let ttl_secs: i64 = 30;
+    let expires_at_us = now_us + ttl_secs * 1_000_000;
+
+    let mut guard = state.ws_tickets.write().await;
+    if guard.len() > 1024 {
+        guard.retain(|_, v| v.expires_at_us > now_us);
+    }
+    if guard.len() >= 16_384 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({ "error": "Too many pending WebSocket tickets" })),
+        )
+            .into_response();
+    }
+    guard.insert(
+        ticket.clone(),
+        crate::state::WsTicketEntry {
+            kind: entry_kind,
+            expires_at_us,
+        },
+    );
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ticket": ticket,
+            "expires_in_secs": ttl_secs,
+        })),
+    )
+        .into_response()
+}
+
+/// Query string parameters required when upgrading `/ws/session?ticket=...`.
+#[derive(Debug, Default, Deserialize)]
+pub struct WsConnectQuery {
+    /// Single-use WebSocket ticket returned by `POST /api/ws/ticket`.
+    pub ticket: Option<String>,
+}
+
+/// Consumes a single-use `session` WebSocket ticket from `state.ws_tickets`.
+pub(crate) async fn consume_ws_session_ticket(
+    state: &SignalingAppState,
+    ticket_opt: Option<&str>,
+) -> Result<(JoinTokenClaims, String), (StatusCode, &'static str)> {
+    let Some(ticket_str) = ticket_opt.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Err((StatusCode::UNAUTHORIZED, "Missing WebSocket ticket"));
+    };
+    let now_us = chrono::Utc::now().timestamp_micros();
+    let entry_opt = state.ws_tickets.write().await.remove(ticket_str);
+    let Some(entry) = entry_opt else {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid or already used ticket"));
+    };
+    if entry.expires_at_us <= now_us {
+        return Err((StatusCode::UNAUTHORIZED, "Expired WebSocket ticket"));
+    }
+    let crate::state::WsTicketKind::Session { claims, join_token } = entry.kind else {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid ticket kind"));
+    };
+    if state.auth.verify_join_token(&join_token).await.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid or expired join_token"));
+    }
+    Ok((claims, join_token))
+}
+
+/// Upgrades an authenticated HTTP request at `GET /ws/session?ticket=...` to a full-duplex WebSocket.
 pub async fn ws_session_handler(
     ws: WebSocketUpgrade,
     Query(query): Query<WsConnectQuery>,
+    headers: HeaderMap,
     State(state): State<Arc<SignalingAppState>>,
 ) -> impl IntoResponse {
-    let Some(claims) = state.auth.verify_join_token(&query.join_token).await else {
-        return (StatusCode::UNAUTHORIZED, "Invalid join_token").into_response();
+    if let Err(err_resp) = crate::security::verify_ws_origin(&headers) {
+        return err_resp.into_response();
+    }
+    let (claims, join_token) = match consume_ws_session_ticket(&state, query.ticket.as_deref()).await {
+        Ok(pair) => pair,
+        Err(err_resp) => return err_resp.into_response(),
     };
-    let join_token = query.join_token;
-    ws.on_upgrade(move |socket| handle_ws_client(socket, claims, state, join_token))
+    let open_count = {
+        let guard = state.active_sockets.read().await;
+        guard
+            .values()
+            .filter(|room| room.contains_key(&claims.participant.user_id))
+            .count()
+    };
+    if open_count >= crate::state::MAX_WS_SOCKETS_PER_ACCOUNT {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many concurrent session WebSocket connections",
+        )
+            .into_response();
+    }
+    ws.max_message_size(256 * 1024)
+        .max_frame_size(64 * 1024)
+        .on_upgrade(move |socket| handle_ws_client(socket, claims, state, join_token))
 }
 
 async fn handle_ws_client(
@@ -64,7 +221,7 @@ async fn handle_ws_client(
     join_token: String,
 ) {
     let (mut ws_tx, mut ws_rx) = socket.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let (tx, mut rx) = mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
 
     let session_id = claims.session_id.clone();
     let session_mode = claims.session_mode;
@@ -102,6 +259,8 @@ async fn handle_ws_client(
         let _ = closed_tx.send(());
     });
 
+    let mut inbound_frames: VecDeque<Instant> = VecDeque::with_capacity(64);
+
     loop {
         let msg = tokio::select! {
             _ = &mut closed_rx => break,
@@ -110,9 +269,28 @@ async fn handle_ws_client(
                 _ => break,
             }
         };
+        let now_inst = Instant::now();
+        let cutoff = now_inst
+            .checked_sub(Duration::from_secs(10))
+            .unwrap_or(now_inst);
+        while let Some(&front) = inbound_frames.front() {
+            if front <= cutoff {
+                inbound_frames.pop_front();
+            } else {
+                break;
+            }
+        }
+        if inbound_frames.len() >= 80 {
+            break;
+        }
+        inbound_frames.push_back(now_inst);
+
         let WsMessage::Text(text) = msg else {
             continue;
         };
+        if text.len() > 256 * 1024 {
+            continue;
+        }
         let Ok(packet) = serde_json::from_str::<ClientWsPacket>(&text) else {
             continue;
         };
@@ -130,6 +308,36 @@ async fn handle_ws_client(
                 body,
                 composition_time_ms,
             } => {
+                if body.len() > crate::security::MAX_WS_CHAT_BODY_BYTES {
+                    if let Ok(meta) = state.storage.registry().build_metadata(
+                        state.next_seq(),
+                        subjects::CHAT_MESSAGE,
+                        1,
+                        &session_id,
+                        session_mode,
+                    ) {
+                        let notice_text = "Message rejected: exceeds maximum allowed 16 KB size.";
+                        let err_ev = ChatMessageEvent {
+                            metadata: meta,
+                            message_id: Uuid::now_v7().to_string(),
+                            sender: self_participant.clone(),
+                            visibility: MessageVisibility::Private,
+                            recipients: vec![self_participant.clone()],
+                            channel_context: ChannelContext::SystemNotice,
+                            reply_to_message_id: None,
+                            body: notice_text.to_string(),
+                            char_count: notice_text.chars().count() as i32,
+                            word_count: notice_text.split_whitespace().count() as i32,
+                            composition_time_ms: 0,
+                            is_edited: false,
+                        };
+                        let pkt_str = json!({ "type": "CHAT_EVENT", "event": err_ev }).to_string();
+                        state
+                            .send_to_users(&session_id, std::slice::from_ref(&user_id), &pkt_str)
+                            .await;
+                    }
+                    continue;
+                }
                 if self_participant.role == SessionRole::Observer
                     && (channel_context != ChannelContext::OutOfCharacter
                         || visibility != MessageVisibility::Public)
@@ -302,6 +510,9 @@ async fn handle_ws_client(
                 signal_kind,
                 payload,
             } => {
+                if payload.len() > crate::security::MAX_WS_WEBRTC_PAYLOAD_BYTES {
+                    continue;
+                }
                 let remote_p = current_roster
                     .iter()
                     .find(|p| p.user_id == target_user_id)
@@ -422,6 +633,10 @@ async fn handle_ws_client(
                 control_pool,
                 force_pool,
             } => {
+                let skill_name: String = skill_name.trim().chars().take(128).collect();
+                if skill_name.is_empty() {
+                    continue;
+                }
                 if self_participant.role == SessionRole::Observer {
                     if let Ok(meta) = state.storage.registry().build_metadata(
                         state.next_seq(),

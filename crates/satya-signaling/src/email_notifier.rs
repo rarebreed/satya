@@ -60,9 +60,21 @@ impl LocalOutboxEmailNotifier {
     }
 }
 
+/// Sanitizes an email subject to prevent CRLF header or log injection.
+fn sanitize_email_subject(raw: &str) -> String {
+    raw.chars()
+        .map(|c| if c == '\r' || c == '\n' || c.is_control() { ' ' } else { c })
+        .collect::<String>()
+        .trim()
+        .chars()
+        .take(240)
+        .collect()
+}
+
 #[async_trait]
 impl EmailNotifier for LocalOutboxEmailNotifier {
     async fn send_email(&self, msg: &OutboundEmail) -> anyhow::Result<EmailDeliveryResult> {
+        let safe_subject = sanitize_email_subject(&msg.subject);
         let outbox_id = format!("mail_{}", Uuid::now_v7());
         let now_us = Utc::now().timestamp_micros();
         sqlx::query(
@@ -73,7 +85,7 @@ impl EmailNotifier for LocalOutboxEmailNotifier {
         )
         .bind(&outbox_id)
         .bind(&msg.to_email)
-        .bind(&msg.subject)
+        .bind(&safe_subject)
         .bind(&msg.body_text)
         .bind(&msg.request_id)
         .bind(now_us)
@@ -83,7 +95,7 @@ impl EmailNotifier for LocalOutboxEmailNotifier {
         info!(
             outbox_id = %outbox_id,
             request_id = %msg.request_id,
-            subject = %msg.subject,
+            subject = %safe_subject,
             "Recorded offline GM join-request email in local email_outbox"
         );
 
@@ -142,6 +154,10 @@ impl HttpEmailNotifier {
 #[async_trait]
 impl EmailNotifier for HttpEmailNotifier {
     async fn send_email(&self, msg: &OutboundEmail) -> anyhow::Result<EmailDeliveryResult> {
+        let mut sanitized_msg = msg.clone();
+        sanitized_msg.subject = sanitize_email_subject(&msg.subject);
+        let msg = &sanitized_msg;
+
         if !self.config.enabled || self.config.provider == EmailProviderKind::LocalOutbox {
             return self.fallback.send_email(msg).await;
         }

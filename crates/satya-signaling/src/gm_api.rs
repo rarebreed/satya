@@ -27,10 +27,43 @@ use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Resolves the active internal AI GM / AI Player service token from environment or config.
+///
+/// Production deployments must configure `SATYA_AI_GM_SERVICE_TOKEN` / `SATYA_GM_SERVICE_TOKEN`
+/// or `ai_gm.service_token`. The legacy dev token is accepted only in `#[cfg(test)]` or when
+/// `ai_gm.allow_dev_service_token_fallback == Some(true)`.
+pub(crate) fn resolve_effective_gm_service_token(state: &SignalingAppState) -> Option<String> {
+    for env_key in ["SATYA_AI_GM_SERVICE_TOKEN", "SATYA_GM_SERVICE_TOKEN"] {
+        if let Ok(val) = std::env::var(env_key) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    let cfg = &state.storage.config().ai_gm;
+    let cfg_tok = cfg.service_token.trim();
+    if !cfg_tok.is_empty() {
+        return Some(cfg_tok.to_string());
+    }
+    let allow_fallback = cfg.allow_dev_service_token_fallback.unwrap_or(cfg!(test));
+    if allow_fallback {
+        Some("satya_gm_secret_dev_token".to_string())
+    } else {
+        None
+    }
+}
+
 pub(crate) fn verify_gm_service_header(
     state: &SignalingAppState,
     headers: &HeaderMap,
 ) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let Some(expected) = resolve_effective_gm_service_token(state) else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "AI GM service token is not configured" })),
+        ));
+    };
     let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
         return Err((
             StatusCode::UNAUTHORIZED,
@@ -38,8 +71,7 @@ pub(crate) fn verify_gm_service_header(
         ));
     };
     let clean = auth_hdr.strip_prefix("Bearer ").unwrap_or(auth_hdr).trim();
-    let expected = state.storage.config().ai_gm.service_token.trim();
-    if clean.is_empty() || clean != expected {
+    if clean.is_empty() || !crate::rate_limit::ct_eq_str(clean, &expected) {
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "Invalid AI GM service_token" })),
@@ -53,7 +85,7 @@ pub async fn update_session_gm_config_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
     headers: HeaderMap,
-    Json(req): Json<AiGmProviderConfig>,
+    Json(mut req): Json<AiGmProviderConfig>,
 ) -> impl IntoResponse {
     let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
         return (
@@ -75,6 +107,33 @@ pub async fn update_session_gm_config_handler(
             Json(json!({ "error": "Only the session GM or host can configure the AI GM" })),
         )
             .into_response();
+    }
+
+    if let Some(ref key) = req.api_key
+        && !key.trim().is_empty()
+    {
+        match crate::security::validate_api_key_header_safe(key) {
+            Ok(clean) => req.api_key = Some(clean),
+            Err(msg) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        }
+    }
+    if let Some(ref raw_url) = req.base_url
+        && !raw_url.trim().is_empty()
+    {
+        let ai_cfg = &state.storage.config().ai_gm;
+        match crate::security::validate_provider_base_url(
+            &req.provider,
+            raw_url,
+            &ai_cfg.ollama_base_url,
+            &ai_cfg.allowed_provider_base_urls,
+        ) {
+            Ok(safe_url) => req.base_url = Some(safe_url),
+            Err(msg) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        }
     }
 
     match state
@@ -626,6 +685,9 @@ pub async fn gm_session_map_handler(
     if req.cell_size_cm <= 0 {
         req.cell_size_cm = 100;
     }
+    if let Err(msg) = crate::map_vault::sanitize_and_validate_map(&mut req) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+    }
     if !req.tiles.is_empty() {
         satya_maps::tactical_map_geom::migrate_legacy_tiles_to_vector(
             &req.tiles,
@@ -1116,8 +1178,6 @@ pub async fn post_ai_gm_event_to_fastapi_with_timeouts(
     connect_timeout_ms: u64,
     request_timeout_secs: u64,
 ) -> anyhow::Result<()> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
     let effective_connect_ms = std::env::var("SATYA_AI_GM_CONNECT_TIMEOUT_MS")
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
@@ -1129,28 +1189,30 @@ pub async fn post_ai_gm_event_to_fastapi_with_timeouts(
         .unwrap_or(request_timeout_secs)
         .max(1);
 
-    let trimmed = service_url
-        .trim()
-        .strip_prefix("http://")
-        .or_else(|| service_url.trim().strip_prefix("https://"))
-        .unwrap_or(service_url.trim());
-    let host_port = trimmed.split('/').next().unwrap_or("127.0.0.1:8090");
-    let connect_addr = if host_port.contains(':') {
-        host_port.to_string()
+    let base = service_url.trim().trim_end_matches('/');
+    let endpoint = if base.starts_with("http://") || base.starts_with("https://") {
+        format!("{base}/internal/ai-gm/events")
     } else {
-        format!("{host_port}:80")
+        format!("http://{base}/internal/ai-gm/events")
     };
 
-    let body_bytes = serde_json::to_vec(payload)?;
-    let mut extra_hdrs = String::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_millis(effective_connect_ms))
+        .timeout(std::time::Duration::from_secs(effective_request_secs))
+        .build()?;
+
+    let mut req_builder = client
+        .post(&endpoint)
+        .bearer_auth(service_token.trim())
+        .json(payload);
     if let Some(k) = ephemeral_api_key.filter(|s| !s.trim().is_empty()) {
-        extra_hdrs.push_str(&format!("X-Satya-Provider-Key: {}\r\n", k.trim()));
+        req_builder = req_builder.header("X-Satya-Provider-Key", k.trim());
     }
     if let (Some(tid), Some(psid)) = (
         payload.trace_id.as_deref().filter(|s| !s.is_empty()),
         payload.parent_span_id.as_deref().filter(|s| !s.is_empty()),
     ) {
-        extra_hdrs.push_str(&format!("traceparent: 00-{tid}-{psid}-01\r\n"));
+        req_builder = req_builder.header("traceparent", format!("00-{tid}-{psid}-01"));
     }
     if let Some(lid) = payload
         .lineage_id
@@ -1158,48 +1220,23 @@ pub async fn post_ai_gm_event_to_fastapi_with_timeouts(
         .or(Some(payload.trigger_event_id.as_str()))
         .filter(|s| !s.is_empty())
     {
-        extra_hdrs.push_str(&format!("X-Satya-Lineage-Id: {lid}\r\n"));
+        req_builder = req_builder.header("X-Satya-Lineage-Id", lid);
     }
 
-    let req_bytes = format!(
-        "POST /internal/ai-gm/events HTTP/1.1\r\n\
-         Host: {host_port}\r\n\
-         Authorization: Bearer {service_token}\r\n\
-         {extra_hdrs}\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\r\n",
-        body_bytes.len()
-    );
+    let resp = req_builder.send().await.map_err(|err| {
+        if err.is_timeout() {
+            anyhow::anyhow!(
+                "Timed out after {effective_request_secs}s awaiting response from AI GM service at {endpoint}"
+            )
+        } else {
+            anyhow::anyhow!("Connection to AI GM service at {endpoint} failed: {err}")
+        }
+    })?;
 
-    let mut stream = tokio::time::timeout(
-        std::time::Duration::from_millis(effective_connect_ms),
-        tokio::net::TcpStream::connect(&connect_addr),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("Connection to AI GM service at {connect_addr} timed out"))??;
-
-    stream.write_all(req_bytes.as_bytes()).await?;
-    stream.write_all(&body_bytes).await?;
-    stream.flush().await?;
-
-    let mut resp_buf = vec![0u8; 512];
-    let n = tokio::time::timeout(
-        std::time::Duration::from_secs(effective_request_secs),
-        stream.read(&mut resp_buf),
-    )
-    .await
-    .map_err(|_| {
-        anyhow::anyhow!(
-            "Timed out after {effective_request_secs}s awaiting response from AI GM service at {connect_addr}"
-        )
-    })??;
-
-    let status_line = String::from_utf8_lossy(&resp_buf[..n]);
-    if !status_line.starts_with("HTTP/1.1 2") && !status_line.starts_with("HTTP/1.0 2") {
+    if !resp.status().is_success() {
         anyhow::bail!(
-            "AI GM service at {connect_addr} returned non-2xx response: {}",
-            status_line.lines().next().unwrap_or("empty response")
+            "AI GM service at {endpoint} returned non-2xx response: {}",
+            resp.status()
         );
     }
 
@@ -1322,16 +1359,21 @@ pub async fn trigger_ai_gm_chat_reply(
         lineage_id: Some(trigger_event_id.to_string()),
     };
 
-    match post_ai_gm_event_to_fastapi_with_timeouts(
-        &ai_cfg.service_url,
-        &ai_cfg.service_token,
-        ephemeral_key.as_deref(),
-        &trigger_payload,
-        ai_cfg.connect_timeout_ms,
-        ai_cfg.request_timeout_secs,
-    )
-    .await
-    {
+    let service_token = resolve_effective_gm_service_token(state).unwrap_or_default();
+    let dispatch_res = if service_token.is_empty() {
+        Err(anyhow::anyhow!("AI GM service token is not configured"))
+    } else {
+        post_ai_gm_event_to_fastapi_with_timeouts(
+            &ai_cfg.service_url,
+            &service_token,
+            ephemeral_key.as_deref(),
+            &trigger_payload,
+            ai_cfg.connect_timeout_ms,
+            ai_cfg.request_timeout_secs,
+        )
+        .await
+    };
+    match dispatch_res {
         Ok(()) => return,
         Err(err) => {
             if ai_cfg.fail_fast_when_offline {

@@ -633,7 +633,7 @@ impl AuthAndSessionManager {
         }
     }
 
-    /// Queries SQLite for all historical chat and mechanics events in `session_id` visible to `participant`.
+    /// Queries SQLite for historical chat and mechanics events in `session_id` visible to `participant` (bounded to latest 2000 rows).
     pub async fn load_visible_events_from_db(
         &self,
         session_id: &str,
@@ -641,18 +641,20 @@ impl AuthAndSessionManager {
         role: SessionRole,
         has_human_gm: bool,
     ) -> (Vec<ChatMessageEvent>, Vec<TtrpgMechanicsEvent>) {
-        let rows = sqlx::query(
+        let mut rows = sqlx::query(
             r#"
             SELECT event_kind, payload_json
             FROM session_event_history
             WHERE session_id = ?1
-            ORDER BY sequence_num ASC, timestamp_us ASC
+            ORDER BY sequence_num DESC, timestamp_us DESC
+            LIMIT 2000
             "#,
         )
         .bind(session_id.trim())
         .fetch_all(&self.db_pool)
         .await
         .unwrap_or_default();
+        rows.reverse();
 
         let mut chat_events = Vec::new();
         let mut mechanics_events = Vec::new();
@@ -863,6 +865,14 @@ impl AuthAndSessionManager {
         if sid.is_empty() {
             anyhow::bail!("session_id cannot be empty");
         }
+        if let Some(pwd) = req.session_password.as_deref() {
+            crate::security::validate_password_upper_bound(pwd)
+                .map_err(|e| anyhow::anyhow!(e))?;
+        }
+        if let Some(dname) = req.display_name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            crate::security::validate_display_name(dname)
+                .map_err(|e| anyhow::anyhow!(e))?;
+        }
 
         if !self.sessions.read().await.contains_key(sid) {
             self.rehydrate_session_from_db(sid)
@@ -900,40 +910,47 @@ impl AuthAndSessionManager {
             .map(str::trim)
             .filter(|s| !s.is_empty())
         {
-            self.join_tokens
-                .read()
+            self.verify_join_token(jtok)
                 .await
-                .get(jtok)
-                .map(|c| c.session_id == sid && c.participant.user_id == user.user_id)
-                .unwrap_or(false)
+                .is_some_and(|c| c.session_id == sid && c.participant.user_id == user.user_id)
         } else {
             false
         };
+
+        let (needs_pw_check, stored_pw_hash) = {
+            let guard = self.sessions.read().await;
+            let session = guard
+                .get(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            let is_known_member = session.host_user_id == user.user_id
+                || saved_part_row.is_some()
+                || session.roster.contains_key(&user.user_id);
+            (
+                !has_valid_join_token && !is_known_member,
+                session.password_hash.clone(),
+            )
+        };
+
+        if needs_pw_check {
+            match req.session_password.as_deref().filter(|s| !s.is_empty()) {
+                Some(pwd) => {
+                    if !Self::verify_secret_async(pwd.to_string(), stored_pw_hash).await {
+                        anyhow::bail!("Invalid session password for session '{sid}'");
+                    }
+                }
+                None => {
+                    anyhow::bail!(
+                        "Session password is required to join session '{sid}' for the first time"
+                    );
+                }
+            }
+        }
 
         let (mode, self_participant, roster_vec) = {
             let mut guard = self.sessions.write().await;
             let session = guard
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
-
-            let is_known_member = session.host_user_id == user.user_id
-                || saved_part_row.is_some()
-                || session.roster.contains_key(&user.user_id);
-
-            if !has_valid_join_token && !is_known_member {
-                match req.session_password.as_deref().filter(|s| !s.is_empty()) {
-                    Some(pwd) => {
-                        if !Self::verify_secret(pwd, &session.password_hash) {
-                            anyhow::bail!("Invalid session password for session '{sid}'");
-                        }
-                    }
-                    None => {
-                        anyhow::bail!(
-                            "Session password is required to join session '{sid}' for the first time"
-                        );
-                    }
-                }
-            }
 
             let resolved_role = req.role.or(saved_role).unwrap_or_else(|| {
                 if session.host_user_id == user.user_id {
@@ -950,6 +967,12 @@ impl AuthAndSessionManager {
             });
             if resolved_role == SessionRole::AiGm {
                 anyhow::bail!("Human participants cannot resume with the AI_GM role");
+            }
+            if saved_role == Some(SessionRole::Observer)
+                && resolved_role != SessionRole::Observer
+                && session.host_user_id != user.user_id
+            {
+                anyhow::bail!("Observers cannot escalate their role on session resume");
             }
             if matches!(resolved_role, SessionRole::Gm | SessionRole::Host)
                 && !matches!(saved_role, Some(SessionRole::Gm | SessionRole::Host))
@@ -1006,12 +1029,15 @@ impl AuthAndSessionManager {
             .await;
 
         let join_token = format!("join_{}", Uuid::new_v4());
+        let join_expires_at_us = Utc::now().timestamp_micros()
+            + (self.quotas.join_token_ttl_secs as i64).saturating_mul(1_000_000);
         self.join_tokens.write().await.insert(
             join_token.clone(),
             JoinTokenClaims {
                 session_id: sid.to_string(),
                 session_mode: mode,
                 participant: self_participant.clone(),
+                expires_at_us: join_expires_at_us,
             },
         );
 
@@ -1106,6 +1132,36 @@ pub async fn resume_session_handler(
         )
             .into_response();
     };
+
+    let resume_limit = state
+        .storage
+        .config()
+        .quotas
+        .max_session_resumes_per_user_per_min;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "session_resume",
+            &user.user_id,
+            resume_limit,
+            std::time::Duration::from_secs(60),
+        )
+        .await
+    {
+        let mut resp = (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": format!("Session resume rate limit exceeded; retry in {retry_secs}s"),
+                "retry_after_secs": retry_secs
+            })),
+        )
+            .into_response();
+        if let Ok(val) = axum::http::HeaderValue::from_str(&retry_secs.to_string()) {
+            resp.headers_mut()
+                .insert(axum::http::header::RETRY_AFTER, val);
+        }
+        return resp;
+    }
 
     match state.auth.resume_session(&user, &req).await {
         Ok((join_token, session_mode, self_participant, roster, history)) => {

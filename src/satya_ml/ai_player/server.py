@@ -2,7 +2,7 @@
 
 Can run either:
 1. Mounted inside `satya_ml.ai_gm.server:app` (`/internal/ai-player/events`) with isolated checkpointer and lock state, or
-2. As an independent process (`pixi run serve-ai-player` on port `8091` or on another LAN PC via `SATYA_AI_PLAYER_HOST=0.0.0.0`).
+2. As an independent process (`pixi run serve-ai-player` on loopback `127.0.0.1:8091`; use a TLS-terminating reverse proxy for any non-loopback deployment).
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from pydantic import Field
 
 from satya_ml.agent_server import (
     BaseTurnEventPayload,
+    BodySizeLimitMiddleware,
     SessionLockPool,
     resolve_turn_llm_config,
     verify_service_auth,
@@ -214,6 +215,7 @@ app = FastAPI(
     version="0.1.0",
     description="Isolated AI Player LangGraph service for Satya multi-player and combat testing.",
 )
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=4 * 1024 * 1024)
 app.include_router(router)
 app.include_router(debug_router)
 

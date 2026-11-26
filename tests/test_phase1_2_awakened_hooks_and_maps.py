@@ -9,6 +9,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _bridge_service_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SATYA_AI_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = str(REPO_ROOT / "src")
 if SRC_DIR not in sys.path:

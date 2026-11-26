@@ -135,6 +135,8 @@ pub struct PeerEntry {
     pub remote_desc_set: bool,
     /// Remote ICE candidate JSON payloads received before `setRemoteDescription` completed.
     pub pending_ice_candidates: Vec<String>,
+    /// Client timestamp (`Date::now()`) of the last accepted `SignalingOffer` from this peer.
+    pub last_offer_at_ms: f64,
 }
 
 /// Client-side state managed in Rust/Wasm across the session lifecycle.

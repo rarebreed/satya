@@ -281,14 +281,20 @@ pub async fn create_campaign_handler(
             .into_response();
     }
 
-    let title = req.title.trim().to_string();
-    if title.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Campaign title cannot be empty" })),
-        )
-            .into_response();
-    }
+    let title = match crate::security::validate_title("Campaign title", &req.title, 128) {
+        Ok(t) => t,
+        Err(msg) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+        }
+    };
+    let description =
+        match crate::security::validate_description("Campaign description", &req.description, 2048)
+        {
+            Ok(d) => d,
+            Err(msg) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        };
 
     let quota = state.auth.compute_account_quota_usage(&user).await;
     if quota.campaigns_used >= quota.campaigns_limit {
@@ -340,7 +346,6 @@ pub async fn create_campaign_handler(
         .filter(|s| !s.is_empty())
         .unwrap_or(&state.campaign_pack)
         .to_string();
-    let description = req.description.trim().to_string();
     let now_us = Utc::now().timestamp_micros();
 
     let insert_res = sqlx::query(
@@ -515,19 +520,29 @@ pub async fn update_campaign_handler(
     }
 
     let slug: String = row.try_get("slug").unwrap_or_default();
-    let title = req
+    let title = match req
         .title
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| row.try_get("title").unwrap_or_default());
-    let description = req
-        .description
-        .as_deref()
-        .map(str::trim)
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| row.try_get("description").unwrap_or_default());
+    {
+        Some(t) => match crate::security::validate_title("Campaign title", t, 128) {
+            Ok(valid) => valid,
+            Err(msg) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        },
+        None => row.try_get("title").unwrap_or_default(),
+    };
+    let description = match req.description.as_deref() {
+        Some(d) => match crate::security::validate_description("Campaign description", d, 2048) {
+            Ok(valid) => valid,
+            Err(msg) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        },
+        None => row.try_get("description").unwrap_or_default(),
+    };
     let setting_pack: String = row.try_get("setting_pack").unwrap_or_default();
     let is_discoverable = req
         .is_discoverable
@@ -713,6 +728,8 @@ async fn purge_session_records(state: &SignalingAppState, sid: &str) {
         .await
         .retain(|_, claims| claims.session_id != sid);
     state.active_sockets.write().await.remove(sid);
+    state.ai_players.write().await.remove(sid);
+    state.ai_rally_counters.write().await.remove(sid);
     for sql in [
         "DELETE FROM session_join_requests WHERE session_id = ?1",
         "DELETE FROM session_participants WHERE session_id = ?1",
@@ -720,6 +737,9 @@ async fn purge_session_records(state: &SignalingAppState, sid: &str) {
         "DELETE FROM session_combat_state WHERE session_id = ?1",
         "DELETE FROM session_world_ledger WHERE session_id = ?1",
         "DELETE FROM session_ai_players WHERE session_id = ?1",
+        "DELETE FROM session_npcs WHERE session_id = ?1 AND is_persistent = 0",
+        "DELETE FROM gm_documents WHERE session_id = ?1",
+        "DELETE FROM gm_memories WHERE session_id = ?1 AND is_persistent = 0",
         "DELETE FROM saved_sessions WHERE session_id = ?1",
     ] {
         let _ = sqlx::query(sql)
@@ -799,6 +819,19 @@ pub struct DirectorySearchQuery {
     /// GM's exact email address OR `@username` handle (exact or prefix).
     #[serde(default)]
     pub q: String,
+}
+
+fn escape_sqlite_like(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '%' => out.push_str("\\%"),
+            '_' => out.push_str("\\_"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Privacy-preserving user/campaign directory search at `GET /api/directory/search?q=...`.
@@ -887,15 +920,15 @@ pub async fn search_gm_directory_handler(
         .unwrap_or_default()
     } else {
         let handle = raw_query.strip_prefix('@').unwrap_or(&raw_query).trim().to_lowercase();
-        if handle.is_empty() {
+        if handle.chars().count() < 3 {
             Vec::new()
         } else {
-            let prefix_pat = format!("{handle}%");
+            let prefix_pat = format!("{}%", escape_sqlite_like(&handle));
             sqlx::query(
                 r#"
                 SELECT user_id, username, display_name
                 FROM users
-                WHERE username = ?1 COLLATE NOCASE OR username LIKE ?2 COLLATE NOCASE
+                WHERE username = ?1 COLLATE NOCASE OR username LIKE ?2 ESCAPE '\' COLLATE NOCASE
                 ORDER BY CASE WHEN username = ?1 COLLATE NOCASE THEN 0 ELSE 1 END, username ASC
                 LIMIT 10
                 "#,
@@ -1107,6 +1140,10 @@ pub async fn search_gm_directory_handler(
                 setting_pack: state.campaign_pack.clone(),
                 sessions: uncategorized_sessions,
             });
+        }
+
+        if gm_uid != user.user_id && campaigns.is_empty() {
+            continue;
         }
 
         let is_online = state.is_user_online(&gm_uid).await;
@@ -1517,6 +1554,7 @@ pub async fn create_join_request_handler(
                COALESCE(NULLIF(s.owner_user_id, ''), s.host_user_id) AS owner_user_id,
                s.campaign_id,
                s.title AS session_title,
+               s.is_discoverable,
                s.allow_join_requests,
                c.title AS campaign_title,
                u.username AS owner_username,
@@ -1553,8 +1591,26 @@ pub async fn create_join_request_handler(
     let campaign_id: Option<String> = sess_row.try_get("campaign_id").ok().flatten();
     let campaign_title: Option<String> = sess_row.try_get("campaign_title").ok().flatten();
     let session_title: Option<String> = sess_row.try_get("session_title").ok().flatten();
+    let is_discoverable = sess_row.try_get::<i64, _>("is_discoverable").unwrap_or(1) != 0;
     let allow_join_requests = sess_row.try_get::<i64, _>("allow_join_requests").unwrap_or(1) != 0;
 
+    if !is_discoverable {
+        let is_participant: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM session_participants WHERE session_id = ?1 AND user_id = ?2",
+        )
+        .bind(&sid)
+        .bind(&user.user_id)
+        .fetch_one(state.auth.db_pool())
+        .await
+        .unwrap_or(0);
+        if is_participant == 0 {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "This session is private and does not accept join requests" })),
+            )
+                .into_response();
+        }
+    }
     if !allow_join_requests {
         return (
             StatusCode::FORBIDDEN,
@@ -1646,14 +1702,12 @@ pub async fn create_campaign_session_request_handler(
     if let Err(resp) = validate_requested_member_role(req.requested_role) {
         return resp.into_response();
     }
-    let session_title = req.session_title.trim().to_string();
-    if session_title.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Proposed session title cannot be empty" })),
-        )
-            .into_response();
-    }
+    let session_title = match crate::security::validate_title("Proposed session title", &req.session_title, 128) {
+        Ok(t) => t,
+        Err(msg) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+        }
+    };
     let cid = campaign_id.trim().to_string();
     let actor = actor_from_user(&user, req.requested_role);
 
@@ -2333,11 +2387,11 @@ pub async fn cancel_join_request_handler(
         .into_response()
 }
 
-/// Query string parameters for `GET /ws/notifications?auth_token=...`.
-#[derive(Debug, Deserialize)]
+/// Query string parameters for `GET /ws/notifications?ticket=...`.
+#[derive(Debug, Default, Deserialize)]
 pub struct WsNotificationsQuery {
-    /// Bearer account token (`satya_tok_*`) authenticating the notification stream.
-    pub auth_token: String,
+    /// Single-use WebSocket ticket returned by `POST /api/ws/ticket`.
+    pub ticket: Option<String>,
 }
 
 /// Upgrades an authenticated lobby/user connection to `/ws/notifications` for real-time
@@ -2345,12 +2399,48 @@ pub struct WsNotificationsQuery {
 pub async fn ws_notifications_handler(
     ws: WebSocketUpgrade,
     Query(query): Query<WsNotificationsQuery>,
+    headers: HeaderMap,
     State(state): State<Arc<SignalingAppState>>,
 ) -> impl IntoResponse {
-    let Some(user) = state.auth.verify_auth_token(&query.auth_token).await else {
-        return (StatusCode::UNAUTHORIZED, "Invalid auth_token").into_response();
+    if let Err(err_resp) = crate::security::verify_ws_origin(&headers) {
+        return err_resp.into_response();
+    }
+    let Some(ticket_str) = query
+        .ticket
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return (StatusCode::UNAUTHORIZED, "Missing WebSocket ticket").into_response();
     };
-    ws.on_upgrade(move |socket| handle_notifications_socket(socket, user, state))
+    let now_us = Utc::now().timestamp_micros();
+    let entry_opt = state.ws_tickets.write().await.remove(ticket_str);
+    let Some(entry) = entry_opt else {
+        return (StatusCode::UNAUTHORIZED, "Invalid or already used ticket").into_response();
+    };
+    if entry.expires_at_us <= now_us {
+        return (StatusCode::UNAUTHORIZED, "Expired WebSocket ticket").into_response();
+    }
+    let crate::state::WsTicketKind::Notifications(user) = entry.kind else {
+        return (StatusCode::UNAUTHORIZED, "Invalid ticket kind").into_response();
+    };
+    let open_count = state
+        .account_sockets
+        .read()
+        .await
+        .get(&user.user_id)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    if open_count >= crate::state::MAX_WS_SOCKETS_PER_ACCOUNT {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many concurrent notification WebSocket connections",
+        )
+            .into_response();
+    }
+    ws.max_message_size(64 * 1024)
+        .max_frame_size(16 * 1024)
+        .on_upgrade(move |socket| handle_notifications_socket(socket, user, state))
 }
 
 async fn handle_notifications_socket(
@@ -2359,7 +2449,7 @@ async fn handle_notifications_socket(
     state: Arc<SignalingAppState>,
 ) {
     let (mut ws_tx, mut ws_rx) = socket.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let (tx, mut rx) = mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
     let conn_id = state
         .next_conn_id
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -2369,7 +2459,7 @@ async fn handle_notifications_socket(
         user_id: user.user_id.clone(),
         pending_incoming_count,
     }) {
-        let _ = tx.send(hello);
+        let _ = tx.try_send(hello);
     }
 
     {
@@ -2391,6 +2481,9 @@ async fn handle_notifications_socket(
         let _ = closed_tx.send(());
     });
 
+    let mut inbound_frames: std::collections::VecDeque<std::time::Instant> =
+        std::collections::VecDeque::with_capacity(24);
+
     loop {
         tokio::select! {
             _ = &mut closed_rx => break,
@@ -2399,6 +2492,21 @@ async fn handle_notifications_socket(
                     if matches!(msg, WsMessage::Close(_)) {
                         break;
                     }
+                    let now_inst = std::time::Instant::now();
+                    let cutoff = now_inst
+                        .checked_sub(Duration::from_secs(10))
+                        .unwrap_or(now_inst);
+                    while let Some(&front) = inbound_frames.front() {
+                        if front <= cutoff {
+                            inbound_frames.pop_front();
+                        } else {
+                            break;
+                        }
+                    }
+                    if inbound_frames.len() >= 20 {
+                        break;
+                    }
+                    inbound_frames.push_back(now_inst);
                 }
                 _ => break,
             }

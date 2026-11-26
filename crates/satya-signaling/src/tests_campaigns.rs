@@ -457,7 +457,7 @@ async fn test_directory_search_join_requests_offline_email_live_ws_and_passwordl
     );
 
     // 4. Register an online /ws/notifications channel for GM, then Marcus submits a request -> live WS push, NO email!
-    let (gm_tx, mut gm_rx) = mpsc::unbounded_channel::<String>();
+    let (gm_tx, mut gm_rx) = mpsc::channel::<String>(crate::state::WS_OUTBOUND_CHANNEL_CAP);
     state
         .account_sockets
         .write()

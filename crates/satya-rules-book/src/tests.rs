@@ -357,3 +357,26 @@ fn test_rules_book_ttrpg_layout_directives_and_sidebars() {
     assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
     assert!(html.contains("&lt;!-- raw comment --&gt;"));
 }
+
+#[test]
+fn test_markdown_url_sanitization_blocks_javascript_and_data_uris() {
+    let md = concat!(
+        "[bad](javascript:alert(1)) ",
+        "[bad2](DATA:text/html,<script>alert(1)</script>) ",
+        "![img](javascript:alert(2)) ",
+        "[ok-ext](https://example.com/rules?a=1&b=2) ",
+        "[ok-anchor](#combat-basics)"
+    );
+    let html = crate::rules_book_html::render_rules_markdown_to_html(md);
+    assert!(!html.contains("javascript:"), "unsafe javascript: URI leaked: {html}");
+    assert!(!html.contains("data:text/html"), "unsafe data: URI leaked: {html}");
+    assert!(!html.contains("DATA:text/html"), "unsafe DATA: URI leaked: {html}");
+    assert!(
+        html.contains(r#"href="https://example.com/rules?a=1&amp;b=2" target="_blank" rel="noopener noreferrer""#),
+        "external https link should retain rel=noopener noreferrer: {html}"
+    );
+    assert!(
+        html.contains(r##"href="#combat-basics""##),
+        "relative anchor link should be preserved: {html}"
+    );
+}

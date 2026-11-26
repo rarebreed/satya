@@ -27,9 +27,40 @@ use sqlx::{
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use uuid::Uuid;
+
+static ARGON2_SEMAPHORE: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static DUMMY_ARGON2_HASH: OnceLock<String> = OnceLock::new();
+
+fn argon2_semaphore() -> &'static Arc<Semaphore> {
+    ARGON2_SEMAPHORE.get_or_init(|| {
+        let permits = std::thread::available_parallelism()
+            .map(|n| n.get().clamp(2, 4))
+            .unwrap_or(2);
+        Arc::new(Semaphore::new(permits))
+    })
+}
+
+fn dummy_argon2_hash() -> &'static str {
+    DUMMY_ARGON2_HASH.get_or_init(|| {
+        AuthAndSessionManager::hash_secret("satya-dummy-timing-equalizer-secret")
+            .unwrap_or_default()
+    })
+}
+
+fn should_seed_demo_accounts(auth_config: &AuthConfig) -> bool {
+    if let Some(explicit) = auth_config.seed_demo_accounts {
+        return explicit;
+    }
+    if let Ok(raw) = std::env::var("SATYA_ENABLE_DEMO_ACCOUNTS") {
+        let norm = raw.trim().to_ascii_lowercase();
+        return matches!(norm.as_str(), "1" | "true" | "yes" | "on");
+    }
+    cfg!(test)
+}
 
 /// Persistent user account record stored in the SQLite `users` table (`data/auth/users.db`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +156,17 @@ pub struct JoinTokenClaims {
     pub session_mode: SessionMode,
     /// Authenticated [`Participant`] identity associated with the join token.
     pub participant: Participant,
+    /// UTC microsecond expiration timestamp.
+    pub expires_at_us: i64,
+}
+
+/// Stored bearer authentication token entry paired with its expiration timestamp.
+#[derive(Debug, Clone)]
+pub struct AuthTokenEntry {
+    /// Authenticated user account snapshot.
+    pub account: UserAccount,
+    /// UTC microsecond expiration timestamp.
+    pub expires_at_us: i64,
 }
 
 /// Summary of a participant's departure from an active session, used to emit
@@ -156,7 +198,7 @@ pub struct AuthAndSessionManager {
     google_oauth_client_id: Option<String>,
     google_picker_api_key: Option<String>,
     pub(crate) users_by_username: RwLock<HashMap<String, UserAccount>>,
-    pub(crate) auth_tokens: RwLock<HashMap<String, UserAccount>>,
+    pub(crate) auth_tokens: RwLock<HashMap<String, AuthTokenEntry>>,
     google_links: RwLock<HashMap<String, (String, Option<String>)>>,
     pub(crate) sessions: RwLock<HashMap<String, ProtectedSession>>,
     pub(crate) join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
@@ -300,7 +342,8 @@ impl AuthAndSessionManager {
             CREATE TABLE IF NOT EXISTS auth_tokens (
                 token         TEXT PRIMARY KEY NOT NULL,
                 user_id       TEXT NOT NULL,
-                created_at_us INTEGER NOT NULL
+                created_at_us INTEGER NOT NULL,
+                expires_at_us INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS campaigns (
                 campaign_id     TEXT PRIMARY KEY NOT NULL,
@@ -442,6 +485,7 @@ impl AuthAndSessionManager {
         // Idempotent column migrations for pre-existing SQLite databases
         for alter_sql in [
             "ALTER TABLE users ADD COLUMN email TEXT",
+            "ALTER TABLE auth_tokens ADD COLUMN expires_at_us INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE saved_sessions ADD COLUMN owner_user_id TEXT",
             "ALTER TABLE saved_sessions ADD COLUMN campaign_id TEXT",
             "ALTER TABLE saved_sessions ADD COLUMN title TEXT",
@@ -485,7 +529,7 @@ impl AuthAndSessionManager {
             .fetch_one(&db_pool)
             .await?;
 
-        if existing_count == 0 {
+        if existing_count == 0 && should_seed_demo_accounts(auth_config) {
             let defaults = [
                 ("u-demo-gm-sean", "gm_sean", "Sean (GM)", "gm_sean@satya.local"),
                 ("u-demo-sara", "sara_valkyrie", "Sara (Valkyrie)", "sara@satya.local"),
@@ -570,18 +614,42 @@ impl AuthAndSessionManager {
             initial_users.insert(uname, acct);
         }
 
-        let token_rows = sqlx::query("SELECT token, user_id FROM auth_tokens")
-            .fetch_all(&db_pool)
-            .await
-            .unwrap_or_default();
+        let now_us = Utc::now().timestamp_micros();
+        let default_ttl_us = (quotas.auth_token_ttl_hours as i64).saturating_mul(3_600_000_000);
+        let token_rows =
+            sqlx::query("SELECT token, user_id, created_at_us, expires_at_us FROM auth_tokens")
+                .fetch_all(&db_pool)
+                .await
+                .unwrap_or_default();
         let mut initial_tokens = HashMap::with_capacity(token_rows.len());
         for row in token_rows {
             if let (Ok(tok), Ok(uid)) = (
                 row.try_get::<String, _>("token"),
                 row.try_get::<String, _>("user_id"),
-            ) && let Some(acct) = users_by_id.get(&uid)
-            {
-                initial_tokens.insert(tok, acct.clone());
+            ) {
+                let created_at_us = row.try_get::<i64, _>("created_at_us").unwrap_or(now_us);
+                let raw_exp = row.try_get::<i64, _>("expires_at_us").unwrap_or(0);
+                let expires_at_us = if raw_exp > 0 {
+                    raw_exp
+                } else {
+                    created_at_us.saturating_add(default_ttl_us)
+                };
+                if expires_at_us <= now_us {
+                    let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?1")
+                        .bind(&tok)
+                        .execute(&db_pool)
+                        .await;
+                    continue;
+                }
+                if let Some(acct) = users_by_id.get(&uid) {
+                    initial_tokens.insert(
+                        tok,
+                        AuthTokenEntry {
+                            account: acct.clone(),
+                            expires_at_us,
+                        },
+                    );
+                }
             }
         }
 
@@ -658,6 +726,17 @@ impl AuthAndSessionManager {
         Ok(hash)
     }
 
+    /// Offloads Argon2id password hashing onto `tokio::task::spawn_blocking` gated by a bounded semaphore.
+    pub async fn hash_secret_async(secret: String) -> anyhow::Result<String> {
+        let _permit = argon2_semaphore()
+            .acquire()
+            .await
+            .map_err(|_| anyhow::anyhow!("Argon2 semaphore closed"))?;
+        tokio::task::spawn_blocking(move || Self::hash_secret(&secret))
+            .await
+            .map_err(|e| anyhow::anyhow!("Argon2 task panicked: {e}"))?
+    }
+
     /// Verifies a plaintext secret against an Argon2id PHC string hash.
     pub fn verify_secret(secret: &str, encoded_hash: &str) -> bool {
         let Ok(parsed_hash) = PasswordHash::new(encoded_hash) else {
@@ -666,6 +745,16 @@ impl AuthAndSessionManager {
         Argon2::default()
             .verify_password(secret.as_bytes(), &parsed_hash)
             .is_ok()
+    }
+
+    /// Offloads Argon2id password verification onto `tokio::task::spawn_blocking` gated by a bounded semaphore.
+    pub async fn verify_secret_async(secret: String, encoded_hash: String) -> bool {
+        let Ok(_permit) = argon2_semaphore().acquire().await else {
+            return false;
+        };
+        tokio::task::spawn_blocking(move || Self::verify_secret(&secret, &encoded_hash))
+            .await
+            .unwrap_or(false)
     }
 
     /// Validates and normalizes an optional email address (`None` when blank).
@@ -712,12 +801,38 @@ impl AuthAndSessionManager {
         display_name: &str,
         email: Option<&str>,
     ) -> anyhow::Result<AuthSuccessResponse> {
-        let uname = username.trim().to_lowercase();
-        if uname.is_empty() || password.len() < 4 {
-            anyhow::bail!("Username cannot be empty and password must be at least 4 characters");
-        }
+        let uname = crate::security::validate_and_normalize_username(username)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        crate::security::validate_account_password(password)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let clean_display_name = if display_name.trim().is_empty() {
+            uname.clone()
+        } else {
+            crate::security::validate_display_name(display_name)
+                .map_err(|e| anyhow::anyhow!(e))?
+        };
         let clean_email = Self::normalize_and_validate_email(email)?;
 
+        {
+            let guard = self.users_by_username.read().await;
+            if guard.contains_key(&uname) {
+                anyhow::bail!("Username '{uname}' is already registered");
+            }
+        }
+        if let Some(ref em) = clean_email {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM users WHERE email = ?1 COLLATE NOCASE",
+            )
+            .bind(em)
+            .fetch_one(&self.db_pool)
+            .await
+            .unwrap_or(0);
+            if exists > 0 {
+                anyhow::bail!("Email '{em}' is already registered");
+            }
+        }
+
+        let password_hash = Self::hash_secret_async(password.to_string()).await?;
         let account = {
             let mut guard = self.users_by_username.write().await;
             if guard.contains_key(&uname) {
@@ -735,7 +850,6 @@ impl AuthAndSessionManager {
                     anyhow::bail!("Email '{em}' is already registered");
                 }
             }
-            let password_hash = Self::hash_secret(password)?;
             let account_role = if self.bootstrap_admins.contains(&uname) {
                 AccountRole::Admin
             } else if self.bootstrap_gms.contains(&uname) {
@@ -746,11 +860,7 @@ impl AuthAndSessionManager {
             let acct = UserAccount {
                 user_id: Uuid::now_v7().to_string(),
                 username: uname.clone(),
-                display_name: if display_name.trim().is_empty() {
-                    uname.clone()
-                } else {
-                    display_name.trim().to_string()
-                },
+                display_name: clean_display_name,
                 email: clean_email.clone(),
                 password_hash,
                 account_role,
@@ -787,6 +897,12 @@ impl AuthAndSessionManager {
         display_name: Option<&str>,
         email: Option<&str>,
     ) -> anyhow::Result<UserAccount> {
+        let clean_dname = match display_name.map(str::trim).filter(|s| !s.is_empty()) {
+            Some(d) => Some(
+                crate::security::validate_display_name(d).map_err(|e| anyhow::anyhow!(e))?,
+            ),
+            None => None,
+        };
         let next_email_opt = match email {
             Some(raw) => Some(Self::normalize_and_validate_email(Some(raw))?),
             None => None,
@@ -811,8 +927,8 @@ impl AuthAndSessionManager {
                 .values_mut()
                 .find(|u| u.user_id == user_id)
                 .ok_or_else(|| anyhow::anyhow!("Unknown user_id '{user_id}'"))?;
-            if let Some(dname) = display_name.map(str::trim).filter(|s| !s.is_empty()) {
-                acct.display_name = dname.to_string();
+            if let Some(dname) = clean_dname {
+                acct.display_name = dname;
             }
             if let Some(em_val) = next_email_opt {
                 acct.email = em_val;
@@ -827,10 +943,10 @@ impl AuthAndSessionManager {
         };
 
         let mut tokens = self.auth_tokens.write().await;
-        for acct in tokens.values_mut() {
-            if acct.user_id == user_id {
-                acct.display_name = updated.display_name.clone();
-                acct.email = updated.email.clone();
+        for entry in tokens.values_mut() {
+            if entry.account.user_id == user_id {
+                entry.account.display_name = updated.display_name.clone();
+                entry.account.email = updated.email.clone();
             }
         }
 
@@ -859,9 +975,9 @@ impl AuthAndSessionManager {
         };
 
         let mut tokens = self.auth_tokens.write().await;
-        for acct in tokens.values_mut() {
-            if acct.username == uname {
-                acct.account_role = role;
+        for entry in tokens.values_mut() {
+            if entry.account.username == uname {
+                entry.account.account_role = role;
             }
         }
 
@@ -874,17 +990,26 @@ impl AuthAndSessionManager {
         username: &str,
         password: &str,
     ) -> anyhow::Result<AuthSuccessResponse> {
+        if crate::security::validate_password_upper_bound(password).is_err() {
+            anyhow::bail!("Invalid username or password");
+        }
         let uname = username.trim().to_lowercase();
-        let account = {
+        let account_opt = {
             let guard = self.users_by_username.read().await;
-            guard
-                .get(&uname)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("Unknown username '{uname}'"))?
+            guard.get(&uname).cloned()
         };
 
-        if !Self::verify_secret(password, &account.password_hash) {
-            anyhow::bail!("Invalid password for user '{uname}'");
+        let Some(account) = account_opt else {
+            let _ = Self::verify_secret_async(
+                password.to_string(),
+                dummy_argon2_hash().to_string(),
+            )
+            .await;
+            anyhow::bail!("Invalid username or password");
+        };
+
+        if !Self::verify_secret_async(password.to_string(), account.password_hash.clone()).await {
+            anyhow::bail!("Invalid username or password");
         }
 
         self.issue_auth_token(account).await
@@ -896,19 +1021,25 @@ impl AuthAndSessionManager {
     ) -> anyhow::Result<AuthSuccessResponse> {
         let token = format!("satya_tok_{}", Uuid::new_v4());
         let now_us = Utc::now().timestamp_micros();
+        let ttl_us = (self.quotas.auth_token_ttl_hours as i64).saturating_mul(3_600_000_000);
+        let expires_at_us = now_us.saturating_add(ttl_us);
         let _ = sqlx::query(
-            "INSERT OR REPLACE INTO auth_tokens (token, user_id, created_at_us) VALUES (?1, ?2, ?3)",
+            "INSERT OR REPLACE INTO auth_tokens (token, user_id, created_at_us, expires_at_us) VALUES (?1, ?2, ?3, ?4)",
         )
         .bind(&token)
         .bind(&account.user_id)
         .bind(now_us)
+        .bind(expires_at_us)
         .execute(&self.db_pool)
         .await;
 
-        self.auth_tokens
-            .write()
-            .await
-            .insert(token.clone(), account.clone());
+        self.auth_tokens.write().await.insert(
+            token.clone(),
+            AuthTokenEntry {
+                account: account.clone(),
+                expires_at_us,
+            },
+        );
 
         Ok(AuthSuccessResponse {
             auth_token: token,
@@ -923,7 +1054,17 @@ impl AuthAndSessionManager {
     /// Verifies a bearer token (with or without a `"Bearer "` prefix) and returns the associated [`UserAccount`].
     pub async fn verify_auth_token(&self, token: &str) -> Option<UserAccount> {
         let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
-        self.auth_tokens.read().await.get(clean).cloned()
+        let now_us = Utc::now().timestamp_micros();
+        let entry = self.auth_tokens.read().await.get(clean).cloned()?;
+        if entry.expires_at_us <= now_us {
+            self.auth_tokens.write().await.remove(clean);
+            let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?1")
+                .bind(clean)
+                .execute(&self.db_pool)
+                .await;
+            return None;
+        }
+        Some(entry.account)
     }
 
     /// Computes live quota usage and effective limits for `user`.
@@ -1034,7 +1175,7 @@ impl AuthAndSessionManager {
         }
 
         let random_pw = format!("satya-aprv-{}", Uuid::new_v4());
-        let password_hash = Self::hash_secret(&random_pw)?;
+        let password_hash = Self::hash_secret_async(random_pw).await?;
         let now_us = Utc::now().timestamp_micros();
         let owner_role = match params.session_mode {
             SessionMode::Ttrpg => SessionRole::Gm,
@@ -1121,13 +1262,37 @@ impl AuthAndSessionManager {
             );
         }
 
-        let sid = params.session_id.trim();
-        if sid.is_empty() {
-            anyhow::bail!("session_id cannot be empty");
-        }
+        let sid = crate::security::validate_session_slug(params.session_id)
+            .map_err(|e| anyhow::anyhow!(e))?;
         if params.session_password.is_empty() {
             anyhow::bail!("session_password cannot be empty");
         }
+        crate::security::validate_password_upper_bound(params.session_password)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let clean_display_override = match params
+            .display_name_override
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(d) => Some(
+                crate::security::validate_display_name(d).map_err(|e| anyhow::anyhow!(e))?,
+            ),
+            None => None,
+        };
+        let clean_title = match params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(t) => Some(
+                crate::security::validate_title("Session title", t, 128)
+                    .map_err(|e| anyhow::anyhow!(e))?,
+            ),
+            None => None,
+        };
+        let sid = sid.as_str();
 
         // Validate role for session creation
         match params.session_mode {
@@ -1253,7 +1418,11 @@ impl AuthAndSessionManager {
 
         let (password_hash, saved_active_map, created_at_us) =
             if let Some((saved_host, saved_pw_hash, saved_map, saved_created_at)) = existing_meta {
-                let password_ok = Self::verify_secret(params.session_password, &saved_pw_hash);
+                let password_ok = Self::verify_secret_async(
+                    params.session_password.to_string(),
+                    saved_pw_hash.clone(),
+                )
+                .await;
                 let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
                 let role_ok = !params.role.is_human_gm_or_co_gm()
                     || saved_role.is_some_and(SessionRole::is_human_gm_or_co_gm)
@@ -1266,7 +1435,7 @@ impl AuthAndSessionManager {
                 (saved_pw_hash, saved_map, saved_created_at)
             } else {
                 (
-                    Self::hash_secret(params.session_password)?,
+                    Self::hash_secret_async(params.session_password.to_string()).await?,
                     None,
                     Utc::now().timestamp_micros(),
                 )
@@ -1275,9 +1444,7 @@ impl AuthAndSessionManager {
         let mut self_participant = Participant::human(
             &user.user_id,
             &user.username,
-            params
-                .display_name_override
-                .unwrap_or_else(|| user.display_name.clone()),
+            clean_display_override.unwrap_or_else(|| user.display_name.clone()),
             params.role,
         );
         if let Some(bound_cid) = self
@@ -1327,12 +1494,6 @@ impl AuthAndSessionManager {
             }
         }
         let combat_tracker = self.load_or_init_combat_tracker(sid, &roster_vec).await;
-        let clean_title = params
-            .title
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(ToOwned::to_owned);
 
         let session_obj = ProtectedSession {
             session_id: sid.to_string(),
@@ -1365,12 +1526,15 @@ impl AuthAndSessionManager {
         }
 
         let join_token = format!("join_{}", Uuid::new_v4());
+        let join_expires_at_us = Utc::now().timestamp_micros()
+            + (self.quotas.join_token_ttl_secs as i64).saturating_mul(1_000_000);
         self.join_tokens.write().await.insert(
             join_token.clone(),
             JoinTokenClaims {
                 session_id: sid.to_string(),
                 session_mode: params.session_mode,
                 participant: self_participant.clone(),
+                expires_at_us: join_expires_at_us,
             },
         );
 
@@ -1419,6 +1583,18 @@ impl AuthAndSessionManager {
         if role == SessionRole::AiGm {
             anyhow::bail!("Human participants cannot join with the AI_GM role");
         }
+        crate::security::validate_password_upper_bound(session_password)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let clean_display_override = match display_name_override
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(d) => Some(
+                crate::security::validate_display_name(d).map_err(|e| anyhow::anyhow!(e))?,
+            ),
+            None => None,
+        };
         let sid = session_id.trim();
         if !self.sessions.read().await.contains_key(sid) {
             let _ = self.rehydrate_session_from_db(sid).await;
@@ -1499,19 +1675,29 @@ impl AuthAndSessionManager {
             consumed_request_id = Some(req_id);
         }
 
+        let password_hash_opt = {
+            let sessions = self.sessions.read().await;
+            let session = sessions
+                .get(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            let is_session_owner = session.host_user_id == user.user_id;
+            if consumed_request_id.is_none() && !is_session_owner {
+                Some(session.password_hash.clone())
+            } else {
+                None
+            }
+        };
+        if let Some(pw_hash) = password_hash_opt
+            && !Self::verify_secret_async(session_password.to_string(), pw_hash).await
+        {
+            anyhow::bail!("Invalid session password for session '{sid}'");
+        }
+
         let (mode, self_participant, roster_vec) = {
             let mut sessions = self.sessions.write().await;
             let session = sessions
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
-
-            let is_session_owner = session.host_user_id == user.user_id;
-            if consumed_request_id.is_none()
-                && !is_session_owner
-                && !Self::verify_secret(session_password, &session.password_hash)
-            {
-                anyhow::bail!("Invalid session password for session '{sid}'");
-            }
 
             let has_other_solo_gm = session.roster.values().any(|p| {
                 p.user_id != user.user_id
@@ -1559,7 +1745,7 @@ impl AuthAndSessionManager {
             let mut self_participant = Participant::human(
                 &user.user_id,
                 &user.username,
-                display_name_override.unwrap_or_else(|| user.display_name.clone()),
+                clean_display_override.unwrap_or_else(|| user.display_name.clone()),
                 role,
             );
             if let Some(cid) = saved_cid {
@@ -1579,12 +1765,15 @@ impl AuthAndSessionManager {
             .await;
 
         let join_token = format!("join_{}", Uuid::new_v4());
+        let join_expires_at_us = Utc::now().timestamp_micros()
+            + (self.quotas.join_token_ttl_secs as i64).saturating_mul(1_000_000);
         self.join_tokens.write().await.insert(
             join_token.clone(),
             JoinTokenClaims {
                 session_id: sid.to_string(),
                 session_mode: mode,
                 participant: self_participant.clone(),
+                expires_at_us: join_expires_at_us,
             },
         );
 
@@ -1597,9 +1786,15 @@ impl AuthAndSessionManager {
         ))
     }
 
-    /// Verifies a WebSocket `join_token` and returns its [`JoinTokenClaims`] if valid.
+    /// Verifies a WebSocket `join_token` and returns its [`JoinTokenClaims`] if valid and unexpired.
     pub async fn verify_join_token(&self, join_token: &str) -> Option<JoinTokenClaims> {
-        self.join_tokens.read().await.get(join_token).cloned()
+        let now_us = Utc::now().timestamp_micros();
+        let claims = self.join_tokens.read().await.get(join_token).cloned()?;
+        if claims.expires_at_us <= now_us {
+            self.join_tokens.write().await.remove(join_token);
+            return None;
+        }
+        Some(claims)
     }
 
     /// Returns a snapshot of all current [`Participant`]s in `session_id`.
@@ -1664,7 +1859,9 @@ impl AuthAndSessionManager {
             .map(str::trim)
             .filter(|s| !s.is_empty())
         {
-            Some(explicit_key.to_string())
+            let safe_key = crate::security::validate_api_key_header_safe(explicit_key)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            Some(safe_key)
         } else if cfg.clear_api_key {
             None
         } else {
@@ -2050,7 +2247,8 @@ impl AuthAndSessionManager {
         token: &str,
     ) -> Option<(UserAccount, Vec<SessionDisconnectSummary>)> {
         let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
-        let account = self.auth_tokens.write().await.remove(clean)?;
+        let entry = self.auth_tokens.write().await.remove(clean)?;
+        let account = entry.account;
         let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?1")
             .bind(clean)
             .execute(&self.db_pool)
@@ -2076,6 +2274,60 @@ impl AuthAndSessionManager {
         }
 
         Some((account, disconnected))
+    }
+
+    /// Revokes ALL active `auth_tokens` and `join_tokens` belonging to `user_id` and leaves all sessions.
+    pub async fn revoke_all_user_tokens(&self, user_id: &str) -> Vec<SessionDisconnectSummary> {
+        self.auth_tokens
+            .write()
+            .await
+            .retain(|_, entry| entry.account.user_id != user_id);
+        let _ = sqlx::query("DELETE FROM auth_tokens WHERE user_id = ?1")
+            .bind(user_id)
+            .execute(&self.db_pool)
+            .await;
+        self.join_tokens
+            .write()
+            .await
+            .retain(|_, claims| claims.participant.user_id != user_id);
+        if let Some(entry) = self.google_links.write().await.get_mut(user_id) {
+            entry.1 = None;
+        }
+
+        let session_ids: Vec<String> = {
+            let sessions = self.sessions.read().await;
+            sessions
+                .values()
+                .filter(|s| s.roster.contains_key(user_id))
+                .map(|s| s.session_id.clone())
+                .collect()
+        };
+        let mut disconnected = Vec::new();
+        for sid in session_ids {
+            if let Some(summary) = self.leave_session(&sid, user_id).await {
+                disconnected.push(summary);
+            }
+        }
+        disconnected
+    }
+
+    /// Removes expired `auth_tokens` and `join_tokens` from memory and SQLite.
+    pub async fn prune_expired_tokens(&self) {
+        let now_us = Utc::now().timestamp_micros();
+        self.auth_tokens
+            .write()
+            .await
+            .retain(|_, entry| entry.expires_at_us > now_us);
+        let _ = sqlx::query(
+            "DELETE FROM auth_tokens WHERE expires_at_us > 0 AND expires_at_us <= ?1",
+        )
+        .bind(now_us)
+        .execute(&self.db_pool)
+        .await;
+        self.join_tokens
+            .write()
+            .await
+            .retain(|_, claims| claims.expires_at_us > now_us);
     }
 
     /// Drains all active sessions for graceful shutdown lifecycle logging.

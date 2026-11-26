@@ -49,14 +49,27 @@ def test_zombie_websockets_close_on_logout_and_session_delete(
         "player connected to ws-revoke-room",
     )
 
-    # Open probe sockets using the active auth_token & join_token to verify server-side close
+    # Open probe sockets via single-use /api/ws/ticket tokens to verify server-side close
     gm.page.evaluate(
-        """() => {
+        """async () => {
             const tok = localStorage.getItem("satya.auth.token");
             const active = JSON.parse(localStorage.getItem("satya.session.active"));
             const proto = location.protocol === "https:" ? "wss:" : "ws:";
-            window.__probeSessWs = new WebSocket(`${proto}//${location.host}/ws/session?join_token=${encodeURIComponent(active.join_token)}`);
-            window.__probeNotifWs = new WebSocket(`${proto}//${location.host}/ws/notifications?auth_token=${encodeURIComponent(tok)}`);
+            const mkTicket = async (body) => {
+                const r = await fetch("/api/ws/ticket", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${tok}` },
+                    body: JSON.stringify(body),
+                });
+                const j = await r.json();
+                return j.ticket;
+            };
+            const [sTick, nTick] = await Promise.all([
+                mkTicket({ kind: "session", join_token: active.join_token }),
+                mkTicket({ kind: "notifications" }),
+            ]);
+            window.__probeSessWs = new WebSocket(`${proto}//${location.host}/ws/session?ticket=${encodeURIComponent(sTick)}`);
+            window.__probeNotifWs = new WebSocket(`${proto}//${location.host}/ws/notifications?ticket=${encodeURIComponent(nTick)}`);
         }"""
     )
     gm.page.wait_for_function(
@@ -65,10 +78,17 @@ def test_zombie_websockets_close_on_logout_and_session_delete(
     )
 
     player.page.evaluate(
-        """() => {
+        """async () => {
+            const tok = localStorage.getItem("satya.auth.token");
             const active = JSON.parse(localStorage.getItem("satya.session.active"));
             const proto = location.protocol === "https:" ? "wss:" : "ws:";
-            window.__probePlayerWs = new WebSocket(`${proto}//${location.host}/ws/session?join_token=${encodeURIComponent(active.join_token)}`);
+            const r = await fetch("/api/ws/ticket", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${tok}` },
+                body: JSON.stringify({ kind: "session", join_token: active.join_token }),
+            });
+            const j = await r.json();
+            window.__probePlayerWs = new WebSocket(`${proto}//${location.host}/ws/session?ticket=${encodeURIComponent(j.ticket)}`);
         }"""
     )
     player.page.wait_for_function("() => window.__probePlayerWs.readyState === 1", timeout=10_000)

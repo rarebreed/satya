@@ -379,7 +379,7 @@ impl AuthAndSessionManager {
             }
         }
 
-        let password_hash = Self::hash_secret(&req.session_password)?;
+        let password_hash = Self::hash_secret_async(req.session_password.clone()).await?;
         let session_mode = req.bundle.session_mode;
         let role = req.role.unwrap_or(match session_mode {
             SessionMode::Ttrpg => SessionRole::Gm,
@@ -495,6 +495,11 @@ impl AuthAndSessionManager {
 
         let mut gm_memories = req.bundle.gm_memories;
         for mem in &mut gm_memories {
+            let (clean_title, clean_content, _) =
+                crate::gm_docs::sanitize_and_guard_gm_document(&mem.title, &mem.content)
+                    .map_err(|msg| anyhow::anyhow!("{msg}"))?;
+            mem.title = clean_title;
+            mem.content = clean_content;
             mem.session_id = target_sid.clone();
             mem.campaign_tag = target_sid.clone();
             mem.author_user_id = user.user_id.clone();
@@ -537,6 +542,12 @@ impl AuthAndSessionManager {
             }
         }
 
+        let mut active_map = req.bundle.active_map;
+        if let Some(ref mut map) = active_map {
+            crate::map_vault::sanitize_and_validate_map(map)
+                .map_err(|msg| anyhow::anyhow!("{msg}"))?;
+        }
+
         let has_ai_gm = roster.values().any(|p| p.role == SessionRole::AiGm);
         let session_obj = ProtectedSession {
             session_id: target_sid.clone(),
@@ -550,7 +561,7 @@ impl AuthAndSessionManager {
             allow_join_requests: true,
             roster,
             ai_gm_vault: None,
-            active_map: req.bundle.active_map,
+            active_map,
             gm_documents,
             campaign_tag: target_sid.clone(),
             gm_memories,
@@ -579,12 +590,15 @@ impl AuthAndSessionManager {
         }
 
         let join_token = format!("join_{}", Uuid::new_v4());
+        let join_expires_at_us = Utc::now().timestamp_micros()
+            + (self.quotas.join_token_ttl_secs as i64).saturating_mul(1_000_000);
         self.join_tokens.write().await.insert(
             join_token.clone(),
             JoinTokenClaims {
                 session_id: target_sid.clone(),
                 session_mode,
                 participant: self_participant.clone(),
+                expires_at_us: join_expires_at_us,
             },
         );
 

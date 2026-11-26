@@ -1,7 +1,7 @@
 //! Shared application state (`SignalingAppState`), message target routing, WebSocket fanout,
 //! and session disconnect lifecycle processing for the Satya signaling server.
 
-use crate::auth::{AuthAndSessionManager, SessionDisconnectSummary};
+use crate::auth::{AuthAndSessionManager, JoinTokenClaims, SessionDisconnectSummary, UserAccount};
 use crate::email_notifier::{EmailNotifier, build_email_notifier};
 use crate::player_ai_api::SessionAiPlayerEntry;
 use crate::rate_limit::RateLimiter;
@@ -21,6 +21,31 @@ use tokio::sync::{RwLock, mpsc};
 
 /// Hard ceiling on consecutive autonomous AI-to-AI rally rounds before pausing for human input.
 pub const MAX_AUTONOMOUS_RALLY_ROUNDS: u32 = 10;
+/// Bounded per-socket outbound WebSocket channel capacity to prevent slow-consumer OOM.
+pub const WS_OUTBOUND_CHANNEL_CAP: usize = 256;
+/// Maximum concurrent WebSocket connections per account per endpoint.
+pub const MAX_WS_SOCKETS_PER_ACCOUNT: usize = 8;
+
+/// Single-use, short-lived WebSocket upgrade ticket payload.
+#[derive(Debug, Clone)]
+pub enum WsTicketKind {
+    /// Ticket authorizing `/ws/notifications` for `user`.
+    Notifications(UserAccount),
+    /// Ticket authorizing `/ws/session` for `claims` + underlying `join_token`.
+    Session {
+        claims: JoinTokenClaims,
+        join_token: String,
+    },
+}
+
+/// Stored WebSocket ticket entry with expiration timestamp.
+#[derive(Debug, Clone)]
+pub struct WsTicketEntry {
+    /// Target WebSocket stream and authenticated identity/claims.
+    pub kind: WsTicketKind,
+    /// UTC microsecond expiration timestamp.
+    pub expires_at_us: i64,
+}
 
 /// Per-session autonomous AI Player rally scheduler state.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -43,8 +68,8 @@ impl Default for SessionRallyState {
     }
 }
 
-/// Monotonic connection token paired with a WebSocket outbound channel (`(conn_id, tx)`).
-pub type SessionSocketEntry = (u64, mpsc::UnboundedSender<String>);
+/// Monotonic connection token paired with a bounded WebSocket outbound channel (`(conn_id, tx)`).
+pub type SessionSocketEntry = (u64, mpsc::Sender<String>);
 
 /// Active WebSocket map keyed by `session_id -> (user_id -> (conn_id, tx))`.
 pub type SessionSocketMap = HashMap<String, HashMap<String, SessionSocketEntry>>;
@@ -57,6 +82,8 @@ pub struct SignalingAppState {
     pub storage: Arc<EventLogRouter>,
     /// Active default campaign pack configured via `config/ai.toml` / `config/campaign.toml`.
     pub campaign_pack: String,
+    /// Whether native TLS (`SATYA_TLS_CERT`/`SATYA_TLS_KEY`) is enabled on this server instance.
+    pub tls_enabled: bool,
     /// Monotonically increasing sequence counter for emitted Avro event envelopes.
     pub sequence_counter: AtomicI64,
     /// Monotonically increasing WebSocket connection identifier to prevent reload disconnect races.
@@ -64,7 +91,9 @@ pub struct SignalingAppState {
     /// Active WebSocket connections per `session_id -> (user_id -> (conn_id, tx))`.
     pub active_sockets: RwLock<SessionSocketMap>,
     /// Account-level notification WebSocket connections keyed by `user_id -> (conn_id -> tx)`.
-    pub account_sockets: RwLock<HashMap<String, HashMap<u64, mpsc::UnboundedSender<String>>>>,
+    pub account_sockets: RwLock<HashMap<String, HashMap<u64, mpsc::Sender<String>>>>,
+    /// Short-lived single-use WebSocket upgrade tickets keyed by `wst_<uuid>`.
+    pub ws_tickets: RwLock<HashMap<String, WsTicketEntry>>,
     /// Sliding-window anti-bot rate limiter.
     pub rate_limiter: RateLimiter,
     /// Outbound email notifier for offline GM join-request alerts.
@@ -90,19 +119,43 @@ impl SignalingAppState {
         let email_notifier = build_email_notifier(&config.email, auth.db_pool().clone());
         let storage = Arc::new(EventLogRouter::new(config, &base_dir).await?);
 
-        Ok(Arc::new(Self {
+        let app_state = Arc::new(Self {
             auth,
             storage,
             campaign_pack,
+            tls_enabled: false,
             sequence_counter: AtomicI64::new(start_seq),
             next_conn_id: AtomicU64::new(1),
             active_sockets: RwLock::new(HashMap::new()),
             account_sockets: RwLock::new(HashMap::new()),
+            ws_tickets: RwLock::new(HashMap::new()),
             rate_limiter: RateLimiter::new(),
             email_notifier,
             ai_players: RwLock::new(HashMap::new()),
             ai_rally_counters: RwLock::new(HashMap::new()),
-        }))
+        });
+
+        let weak_state = Arc::downgrade(&app_state);
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(600));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    let Some(st) = weak_state.upgrade() else {
+                        break;
+                    };
+                    st.auth.prune_expired_tokens().await;
+                    let now_us = chrono::Utc::now().timestamp_micros();
+                    st.ws_tickets
+                        .write()
+                        .await
+                        .retain(|_, entry| entry.expires_at_us > now_us);
+                }
+            });
+        }
+
+        Ok(app_state)
     }
 
     /// Returns `true` if `user_id` currently has an open `/ws/notifications` or `/ws/session` socket.
@@ -128,7 +181,7 @@ impl SignalingAppState {
         let guard = self.account_sockets.read().await;
         if let Some(conns) = guard.get(user_id) {
             for tx in conns.values() {
-                let _ = tx.send(payload.clone());
+                let _ = tx.try_send(payload.clone());
             }
         }
     }
@@ -136,6 +189,14 @@ impl SignalingAppState {
     /// Drops all active `/ws/notifications` outbound channels for `user_id` (closing those sockets).
     pub async fn disconnect_account_sockets(&self, user_id: &str) {
         self.account_sockets.write().await.remove(user_id);
+    }
+
+    /// Drops all active `/ws/session` sockets belonging to `user_id` across all rooms.
+    pub async fn disconnect_user_session_sockets(&self, user_id: &str) {
+        let mut guard = self.active_sockets.write().await;
+        for room_map in guard.values_mut() {
+            room_map.remove(user_id);
+        }
     }
 
     /// Pushes a [`ServerWsPacket`] to `owner_user_id` across any active `/ws/session` room they are in.
@@ -146,7 +207,7 @@ impl SignalingAppState {
         let guard = self.active_sockets.read().await;
         for room_map in guard.values() {
             if let Some((_, tx)) = room_map.get(user_id) {
-                let _ = tx.send(payload.clone());
+                let _ = tx.try_send(payload.clone());
             }
         }
     }
@@ -222,7 +283,7 @@ impl SignalingAppState {
         if let Some(room_map) = guard.get(session_id) {
             for uid in target_user_ids {
                 if let Some((_, tx)) = room_map.get(uid) {
-                    let _ = tx.send(payload_json.to_string());
+                    let _ = tx.try_send(payload_json.to_string());
                 }
             }
         }
@@ -233,7 +294,7 @@ impl SignalingAppState {
         let guard = self.active_sockets.read().await;
         if let Some(room_map) = guard.get(session_id) {
             for (_, tx) in room_map.values() {
-                let _ = tx.send(payload_json.to_string());
+                let _ = tx.try_send(payload_json.to_string());
             }
         }
     }

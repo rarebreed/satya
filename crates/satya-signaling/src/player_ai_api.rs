@@ -17,9 +17,9 @@ use rand::Rng;
 use satya_engine::{CascadeTaskParams, evaluate_satya_cascade_task};
 use satya_schema::{
     AiPlayerConfig, CanvasEventType, ChannelContext, ChatMessageEvent, MessageVisibility,
-    Participant, PlayerAiChatRequest, PlayerAiRollRequest, ServerWsPacket, SessionMode,
-    SessionRole, StepAiPlayerRequest, TabletopCanvasEvent, UpdateAiRallyRequest, WgpuDiceSpec,
-    subjects,
+    Participant, ParticipantKind, PlayerAiChatRequest, PlayerAiRollRequest, ServerWsPacket,
+    SessionMode, SessionRole, StepAiPlayerRequest, TabletopCanvasEvent, UpdateAiRallyRequest,
+    WgpuDiceSpec, subjects,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -90,6 +90,30 @@ pub(crate) fn validate_ai_player_service_url(
         anyhow::bail!(
             "Untrusted AI Player service_url host '{host}'; only loopback or configured allowlist origins are permitted"
         );
+    }
+    if is_loopback && !in_allowlist {
+        let self_port: u16 = std::env::var("PORT")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(3000);
+        let req_port: u16 = if let Some(rest) = host_port.strip_prefix('[') {
+            rest.split(']')
+                .nth(1)
+                .and_then(|s| s.strip_prefix(':'))
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(if trimmed.starts_with("https://") { 443 } else { 80 })
+        } else {
+            host_port
+                .split(':')
+                .nth(1)
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(if trimmed.starts_with("https://") { 443 } else { 80 })
+        };
+        if req_port == self_port {
+            anyhow::bail!(
+                "AI Player service_url cannot target the signaling server's own port ({self_port})"
+            );
+        }
     }
     Ok(trimmed.to_string())
 }
@@ -405,6 +429,13 @@ pub async fn upsert_session_ai_player_handler(
         .map(str::trim)
         .unwrap_or("Tactical recon scout; favors disciplined Tempo/Control fire and teamwork.")
         .to_string();
+    if persona_prompt.chars().count() > 4096 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "persona_prompt must not exceed 4096 characters" })),
+        )
+            .into_response();
+    }
     let char_id = req
         .character_id
         .as_deref()
@@ -434,7 +465,21 @@ pub async fn upsert_session_ai_player_handler(
     let roster_res: Result<Vec<satya_schema::Participant>, (StatusCode, String)> = {
         let mut sessions_guard = state.auth.sessions.write().await;
         if let Some(session) = sessions_guard.get_mut(&sid) {
-            if let Some(existing) = session.roster.get(&uid)
+            let ai_player_count = session
+                .roster
+                .values()
+                .filter(|p| {
+                    p.participant_kind == satya_schema::ParticipantKind::AiAgent
+                        && p.role == SessionRole::Player
+                        && p.user_id != uid
+                })
+                .count();
+            if ai_player_count >= 6 {
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    "Maximum 6 AI Players per session allowed".to_string(),
+                ))
+            } else if let Some(existing) = session.roster.get(&uid)
                 && (existing.participant_kind == satya_schema::ParticipantKind::Human
                     || existing.role == SessionRole::AiGm)
             {
@@ -542,6 +587,24 @@ pub async fn remove_session_ai_player_handler(
             .into_response();
     }
     let uid = player_user_id.trim();
+    if !uid.starts_with("ai-player-") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "player_user_id must refer to an AI Player ('ai-player-*')" })),
+        )
+            .into_response();
+    }
+    if let Some(session) = state.auth.sessions.read().await.get(sid)
+        && let Some(existing) = session.roster.get(uid)
+        && (existing.participant_kind != ParticipantKind::AiAgent
+            || existing.role != SessionRole::Player)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Cannot remove a human participant or AI GM via ai-players endpoint" })),
+        )
+            .into_response();
+    }
     if let Some(map) = state.ai_players.write().await.get_mut(sid) {
         map.remove(uid);
     }
@@ -1246,16 +1309,21 @@ pub async fn trigger_ai_player_turn(
         "model_id": entry.model_id,
     });
 
-    match post_ai_player_event_to_fastapi(
-        &target_url,
-        &ai_cfg.service_token,
-        ephemeral_key.as_deref(),
-        &payload,
-        ai_cfg.connect_timeout_ms,
-        ai_cfg.request_timeout_secs,
-    )
-    .await
-    {
+    let service_token = crate::gm_api::resolve_effective_gm_service_token(state).unwrap_or_default();
+    let dispatch_res = if service_token.is_empty() {
+        Err(anyhow::anyhow!("AI Player service token is not configured"))
+    } else {
+        post_ai_player_event_to_fastapi(
+            &target_url,
+            &service_token,
+            ephemeral_key.as_deref(),
+            &payload,
+            ai_cfg.connect_timeout_ms,
+            ai_cfg.request_timeout_secs,
+        )
+        .await
+    };
+    match dispatch_res {
         Ok(()) => return,
         Err(err) => {
             if ai_cfg.fail_fast_when_offline {
@@ -1404,63 +1472,38 @@ async fn post_ai_player_event_to_fastapi(
     connect_timeout_ms: u64,
     request_timeout_secs: u64,
 ) -> anyhow::Result<()> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let trimmed = service_url
-        .trim()
-        .strip_prefix("http://")
-        .or_else(|| service_url.trim().strip_prefix("https://"))
-        .unwrap_or(service_url.trim());
-    let host_port = trimmed.split('/').next().unwrap_or("127.0.0.1:8090");
-    let connect_addr = if host_port.contains(':') {
-        host_port.to_string()
+    let base = service_url.trim().trim_end_matches('/');
+    let endpoint = if base.starts_with("http://") || base.starts_with("https://") {
+        format!("{base}/internal/ai-player/events")
     } else {
-        format!("{host_port}:80")
+        format!("http://{base}/internal/ai-player/events")
     };
 
-    let body_bytes = serde_json::to_vec(payload)?;
-    let mut extra_hdrs = String::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_millis(connect_timeout_ms.max(100)))
+        .timeout(std::time::Duration::from_secs(request_timeout_secs.max(1)))
+        .build()?;
+
+    let mut req_builder = client
+        .post(&endpoint)
+        .bearer_auth(service_token.trim())
+        .json(payload);
     if let Some(k) = ephemeral_api_key.filter(|s| !s.trim().is_empty()) {
-        extra_hdrs.push_str(&format!("X-Satya-Provider-Key: {}\r\n", k.trim()));
+        req_builder = req_builder.header("X-Satya-Provider-Key", k.trim());
     }
 
-    let req_bytes = format!(
-        "POST /internal/ai-player/events HTTP/1.1\r\n\
-         Host: {host_port}\r\n\
-         Authorization: Bearer {service_token}\r\n\
-         {extra_hdrs}\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         Connection: close\r\n\r\n",
-        body_bytes.len()
-    );
+    let resp = req_builder.send().await.map_err(|err| {
+        if err.is_timeout() {
+            anyhow::anyhow!("Timed out awaiting AI Player response from {endpoint}")
+        } else {
+            anyhow::anyhow!("Connection to AI Player service at {endpoint} failed: {err}")
+        }
+    })?;
 
-    let mut stream = tokio::time::timeout(
-        std::time::Duration::from_millis(connect_timeout_ms.max(100)),
-        tokio::net::TcpStream::connect(&connect_addr),
-    )
-    .await
-    .map_err(|_| {
-        anyhow::anyhow!("Connection to AI Player service at {connect_addr} timed out")
-    })??;
-
-    stream.write_all(req_bytes.as_bytes()).await?;
-    stream.write_all(&body_bytes).await?;
-    stream.flush().await?;
-
-    let mut resp_buf = vec![0u8; 512];
-    let n = tokio::time::timeout(
-        std::time::Duration::from_secs(request_timeout_secs.max(1)),
-        stream.read(&mut resp_buf),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("Timed out awaiting AI Player response from {connect_addr}"))??;
-
-    let status_line = String::from_utf8_lossy(&resp_buf[..n]);
-    if !status_line.starts_with("HTTP/1.1 2") && !status_line.starts_with("HTTP/1.0 2") {
+    if !resp.status().is_success() {
         anyhow::bail!(
-            "AI Player service at {connect_addr} returned non-2xx response: {}",
-            status_line.lines().next().unwrap_or("empty response")
+            "AI Player service at {endpoint} returned non-2xx response: {}",
+            resp.status()
         );
     }
     Ok(())

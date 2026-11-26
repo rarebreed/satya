@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+import hmac
 import json
 import os
 from pathlib import Path
 from typing import Any, Final
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -31,7 +33,7 @@ from satya_ml.debug_dashboard.scenarios import (
     seed_offline_session,
 )
 from satya_ml.session_store import GM_SESSION_REGISTRY, PLAYER_SESSION_REGISTRY
-from satya_ml.signaling_client import load_ai_gm_toml_config, signaling_base_url
+from satya_ml.signaling_client import gm_service_token, load_ai_gm_toml_config, signaling_base_url
 
 _LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost", "::1"})
 _STATIC_DIR: Final[Path] = Path(__file__).resolve().parent / "static"
@@ -40,8 +42,19 @@ _STATIC_ALLOWLIST: Final[dict[str, tuple[str, str]]] = {
     "app.js": ("app.js", "application/javascript; charset=utf-8"),
     "debug-brain.svg": ("debug-brain.svg", "image/svg+xml; charset=utf-8"),
 }
+_DEBUG_SECURITY_HEADERS: Final[dict[str, str]] = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'"
+    ),
+}
 
 router = APIRouter(prefix="/debug", tags=["debug-dashboard"])
+_api_router = APIRouter(prefix="/api")
 
 
 def is_debug_ui_enabled() -> bool:
@@ -62,6 +75,43 @@ def _require_debug_enabled() -> None:
             status_code=403,
             detail="Debug UI is disabled on non-loopback hosts (set SATYA_AI_DEBUG_UI=1 to enable).",
         )
+
+
+def _require_debug_api_auth(request: Request) -> None:
+    """Enforce bridge token auth and same-origin CSRF checks on `/debug/api/*`."""
+    _require_debug_enabled()
+    expected = gm_service_token().strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Internal debug token is not configured (set SATYA_AI_GM_SERVICE_TOKEN).",
+        )
+
+    auth_hdr = (request.headers.get("authorization") or "").strip()
+    debug_hdr = (request.headers.get("x-satya-debug-token") or "").strip()
+    valid_bearer = auth_hdr.startswith("Bearer ") and hmac.compare_digest(
+        auth_hdr[7:].strip().encode("utf-8"),
+        expected.encode("utf-8"),
+    )
+    valid_debug_hdr = bool(debug_hdr) and hmac.compare_digest(
+        debug_hdr.encode("utf-8"),
+        expected.encode("utf-8"),
+    )
+    if not (valid_bearer or valid_debug_hdr):
+        raise HTTPException(status_code=401, detail="Unauthorized debug API access")
+
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        sec_fetch = (request.headers.get("sec-fetch-site") or "").strip().lower()
+        if sec_fetch and sec_fetch not in {"same-origin", "same-site", "none"}:
+            raise HTTPException(status_code=403, detail="Cross-site debug API mutation rejected")
+        origin = (request.headers.get("origin") or "").strip()
+        if origin:
+            if origin.lower() == "null":
+                raise HTTPException(status_code=403, detail="Null Origin debug API mutation rejected")
+            origin_netloc = (urlparse(origin).netloc or "").lower()
+            req_host = (request.headers.get("host") or request.url.netloc or "").strip().lower()
+            if not origin_netloc or (req_host and origin_netloc != req_host):
+                raise HTTPException(status_code=403, detail="Cross-origin debug API mutation rejected")
 
 
 class DebugGmInvokePayload(BaseModel):
@@ -241,7 +291,7 @@ def debug_index() -> HTMLResponse:
         raise HTTPException(status_code=404, detail="Debug UI index.html missing")
     return HTMLResponse(
         content=html_path.read_text(encoding="utf-8"),
-        headers={"Cache-Control": "no-store"},
+        headers=dict(_DEBUG_SECURITY_HEADERS),
     )
 
 
@@ -258,11 +308,11 @@ def debug_static_asset(asset_name: str) -> Response:
     return Response(
         content=target.read_bytes(),
         media_type=media_type,
-        headers={"Cache-Control": "no-store"},
+        headers=dict(_DEBUG_SECURITY_HEADERS),
     )
 
 
-@router.get("/api/topology", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/topology", dependencies=[Depends(_require_debug_api_auth)])
 def get_debug_topology() -> dict[str, Any]:
     """Return canonical AI GM & AI Player graph topologies plus server defaults."""
     file_cfg = load_ai_gm_toml_config()
@@ -280,7 +330,7 @@ def get_debug_topology() -> dict[str, Any]:
     }
 
 
-@router.get("/api/runs", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/runs", dependencies=[Depends(_require_debug_api_auth)])
 def list_debug_runs(
     session_id: str | None = None,
     agent_kind: str | None = None,
@@ -292,7 +342,7 @@ def list_debug_runs(
     }
 
 
-@router.get("/api/runs/{run_id}", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/runs/{run_id}", dependencies=[Depends(_require_debug_api_auth)])
 def get_debug_run(run_id: str) -> dict[str, Any]:
     """Return full step-by-step execution detail for `run_id`."""
     run = GRAPH_HUB.get_run(run_id)
@@ -301,7 +351,7 @@ def get_debug_run(run_id: str) -> dict[str, Any]:
     return {"run": run.to_detail_dict()}
 
 
-@router.get("/api/runs/{run_id}/download", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/runs/{run_id}/download", dependencies=[Depends(_require_debug_api_auth)])
 def download_debug_run(run_id: str) -> Response:
     """Download a redacted JSON trace file for `run_id`."""
     run = GRAPH_HUB.get_run(run_id)
@@ -317,7 +367,7 @@ def download_debug_run(run_id: str) -> Response:
     )
 
 
-@router.post("/api/runs/{run_id}/resume", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/runs/{run_id}/resume", dependencies=[Depends(_require_debug_api_auth)])
 def resume_debug_run(run_id: str, payload: DebugResumePayload) -> dict[str, Any]:
     """Resume or single-step a paused `interrupt_before` run from its checkpoint."""
     try:
@@ -336,7 +386,7 @@ def resume_debug_run(run_id: str, payload: DebugResumePayload) -> dict[str, Any]
     }
 
 
-@router.post("/api/runs/{run_id}/abort", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/runs/{run_id}/abort", dependencies=[Depends(_require_debug_api_auth)])
 def abort_debug_run(run_id: str) -> dict[str, Any]:
     """Abort a paused `interrupt_before` run."""
     try:
@@ -346,17 +396,20 @@ def abort_debug_run(run_id: str) -> dict[str, Any]:
     return {"status": "ok", "run": run.to_detail_dict()}
 
 
-@router.delete("/api/traces", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.delete("/traces", dependencies=[Depends(_require_debug_api_auth)])
 def clear_debug_traces(delete_files: bool = False) -> dict[str, Any]:
     """Clear in-memory run history (and optionally persisted JSON trace files)."""
     cleared = GRAPH_HUB.clear_traces(delete_files=delete_files)
     return {"status": "ok", "cleared": cleared, "delete_files": delete_files}
 
 
-@router.get("/api/stream", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/stream", dependencies=[Depends(_require_debug_api_auth)])
 async def stream_debug_events() -> StreamingResponse:
     """Server-Sent Events stream pushing live node progress, deltas, pauses, and scenario updates."""
-    sub_id, queue = GRAPH_HUB.subscribe()
+    try:
+        sub_id, queue = GRAPH_HUB.subscribe()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
 
     async def _event_generator() -> AsyncIterator[str]:
         try:
@@ -387,26 +440,26 @@ async def stream_debug_events() -> StreamingResponse:
     )
 
 
-@router.get("/api/sessions", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/sessions", dependencies=[Depends(_require_debug_api_auth)])
 def list_debug_sessions() -> dict[str, Any]:
     """Return known active/observed `session_id`s."""
     return {"sessions": _collect_known_sessions()}
 
 
-@router.get("/api/sessions/{session_id}/state", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/sessions/{session_id}/state", dependencies=[Depends(_require_debug_api_auth)])
 def get_debug_session_state(session_id: str) -> dict[str, Any]:
     """Inspect live in-memory GM & AI Player stores and checkpointer threads for `session_id`."""
     return _collect_session_state_snapshot(session_id)
 
 
-@router.post("/api/sessions/{session_id}/seed", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/sessions/{session_id}/seed", dependencies=[Depends(_require_debug_api_auth)])
 def seed_debug_session(session_id: str, payload: DebugSeedSessionPayload) -> dict[str, Any]:
     """Seed offline session stores for standalone debugging without `satya-signaling`."""
     summary = seed_offline_session(session_id, payload.seed_config)
     return {"status": "ok", **summary, "state": _collect_session_state_snapshot(session_id)}
 
 
-@router.post("/api/sessions/{session_id}/reset", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/sessions/{session_id}/reset", dependencies=[Depends(_require_debug_api_auth)])
 def reset_debug_session(session_id: str) -> dict[str, Any]:
     """Reset in-memory GM/Player stores and checkpointer threads for `session_id`."""
     from satya_ml.ai_gm.server import clear_gm_checkpointer_session
@@ -420,7 +473,7 @@ def reset_debug_session(session_id: str) -> dict[str, Any]:
     return {"status": "ok", "session_id": session_id}
 
 
-@router.post("/api/invoke/gm", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/invoke/gm", dependencies=[Depends(_require_debug_api_auth)])
 def invoke_gm_from_debug(payload: DebugGmInvokePayload) -> dict[str, Any]:
     """Invoke the AI GM LangGraph directly from the Debug UI."""
     result, run = invoke_gm_debug_turn(
@@ -449,7 +502,7 @@ def invoke_gm_from_debug(payload: DebugGmInvokePayload) -> dict[str, Any]:
     }
 
 
-@router.post("/api/invoke/player", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/invoke/player", dependencies=[Depends(_require_debug_api_auth)])
 def invoke_player_from_debug(payload: DebugPlayerInvokePayload) -> dict[str, Any]:
     """Invoke the AI Player LangGraph directly from the Debug UI."""
     result, run = invoke_player_debug_turn(
@@ -474,7 +527,7 @@ def invoke_player_from_debug(payload: DebugPlayerInvokePayload) -> dict[str, Any
     }
 
 
-@router.post("/api/invoke/scenario-beat", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/invoke/scenario-beat", dependencies=[Depends(_require_debug_api_auth)])
 def invoke_scenario_beat_from_debug(payload: DebugScenarioBeatPayload) -> dict[str, Any]:
     """Trigger a proactive Scenario Director beat directly from the Debug UI."""
     result, run = invoke_scenario_beat_debug_turn(
@@ -496,7 +549,7 @@ def invoke_scenario_beat_from_debug(payload: DebugScenarioBeatPayload) -> dict[s
     }
 
 
-@router.get("/api/scenarios", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/scenarios", dependencies=[Depends(_require_debug_api_auth)])
 def list_debug_scenarios() -> dict[str, Any]:
     """Return all built-in integration scenario presets."""
     return {
@@ -504,7 +557,7 @@ def list_debug_scenarios() -> dict[str, Any]:
     }
 
 
-@router.post("/api/scenarios/run", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.post("/scenarios/run", dependencies=[Depends(_require_debug_api_auth)])
 def run_debug_scenario(payload: DebugScenarioRunPayload) -> JSONResponse:
     """Execute a built-in or custom `ScenarioSpec` and return the assertion scorecard."""
     if payload.scenario is not None:
@@ -530,11 +583,13 @@ def run_debug_scenario(payload: DebugScenarioRunPayload) -> JSONResponse:
     return JSONResponse(content=result)
 
 
-@router.get("/api/ollama-logs", dependencies=[Depends(_require_debug_enabled)])
+@_api_router.get("/ollama-logs", dependencies=[Depends(_require_debug_api_auth)])
 def get_debug_ollama_logs(lines: int = 120, high_signal_only: bool = False) -> dict[str, Any]:
     """Return recent `ollama serve` slot telemetry logs."""
     return get_recent_ollama_logs(limit=lines, high_signal_only=high_signal_only)
 
+
+router.include_router(_api_router)
 
 __all__ = [
     "is_debug_ui_enabled",

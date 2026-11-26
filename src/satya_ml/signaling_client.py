@@ -61,8 +61,11 @@ def signaling_base_url() -> str:
 
 
 def is_loopback_url(url: str) -> bool:
-    """Return `True` if `url` targets loopback (`127.0.0.1` or `localhost`)."""
-    return "127.0.0.1" in url or "localhost" in url
+    """Return `True` if `url` resolves strictly to loopback (`127.0.0.1`, `localhost`, or `::1`)."""
+    from urllib.parse import urlparse
+
+    host = (urlparse((url or "").strip()).hostname or "").strip().lower()
+    return host in {"127.0.0.1", "localhost", "::1"}
 
 
 def httpx_timeout(url: str, timeout: float) -> Any:
@@ -73,12 +76,13 @@ def httpx_timeout(url: str, timeout: float) -> Any:
 
 
 def gm_service_token() -> str:
-    """Resolve the shared internal GM/Player signaling service bearer token."""
-    env_tok = os.environ.get("SATYA_GM_SERVICE_TOKEN")
-    if env_tok:
-        return env_tok
-    cfg_tok = load_ai_gm_toml_config().get("service_token")
-    return str(cfg_tok) if cfg_tok else "satya_gm_secret_dev_token"
+    """Resolve the shared internal GM/Player signaling service bearer token (empty if unconfigured)."""
+    for env_key in ("SATYA_AI_GM_SERVICE_TOKEN", "SATYA_GM_SERVICE_TOKEN"):
+        env_tok = os.environ.get(env_key, "").strip()
+        if env_tok:
+            return env_tok
+    cfg_tok = str(load_ai_gm_toml_config().get("service_token") or "").strip()
+    return cfg_tok
 
 
 def service_auth_headers(*, include_trace: bool = True) -> dict[str, str]:

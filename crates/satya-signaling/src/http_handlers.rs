@@ -5,8 +5,8 @@ use crate::rate_limit::extract_client_ip;
 use crate::state::SignalingAppState;
 use axum::{
     Json,
-    extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    extract::{ConnectInfo, Path, Query, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse},
 };
 use satya_rules_book::{build_rules_catalog_response, get_rules_chapter};
@@ -21,8 +21,24 @@ use satya_storage::TopicMetricsSnapshot;
 use satya_web::render_satya_app_html;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+
+fn too_many_requests_response(msg: String, retry_secs: u64) -> axum::response::Response {
+    let mut resp = (
+        StatusCode::TOO_MANY_REQUESTS,
+        Json(json!({
+            "error": msg,
+            "retry_after_secs": retry_secs
+        })),
+    )
+        .into_response();
+    if let Ok(val) = HeaderValue::from_str(&retry_secs.to_string()) {
+        resp.headers_mut().insert(header::RETRY_AFTER, val);
+    }
+    resp
+}
 
 /// Renders the Leptos SSR HTML application shell at `GET /`.
 pub async fn index_handler() -> Html<String> {
@@ -32,24 +48,21 @@ pub async fn index_handler() -> Html<String> {
 /// Registers a new user account at `POST /api/auth/register`.
 pub async fn register_handler(
     State(state): State<Arc<SignalingAppState>>,
+    peer: Option<ConnectInfo<SocketAddr>>,
     headers: HeaderMap,
     Json(req): Json<RegisterRequest>,
 ) -> impl IntoResponse {
-    let ip = extract_client_ip(&headers);
+    let ip = extract_client_ip(&headers, peer.map(|c| c.0.ip()));
     let reg_limit = state.storage.config().quotas.max_registrations_per_ip_per_hour;
     if let Err(retry_secs) = state
         .rate_limiter
         .check_and_record("register_ip", &ip, reg_limit, Duration::from_secs(3600))
         .await
     {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({
-                "error": format!("Registration rate limit exceeded; retry in {retry_secs}s"),
-                "retry_after_secs": retry_secs
-            })),
-        )
-            .into_response();
+        return too_many_requests_response(
+            format!("Registration rate limit exceeded; retry in {retry_secs}s"),
+            retry_secs,
+        );
     }
 
     match state
@@ -74,8 +87,46 @@ pub async fn register_handler(
 /// Authenticates an existing user account at `POST /api/auth/login`.
 pub async fn login_handler(
     State(state): State<Arc<SignalingAppState>>,
+    peer: Option<ConnectInfo<SocketAddr>>,
+    headers: HeaderMap,
     Json(req): Json<LoginRequest>,
 ) -> impl IntoResponse {
+    let ip = extract_client_ip(&headers, peer.map(|c| c.0.ip()));
+    let quotas = &state.storage.config().quotas;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "login_ip",
+            &ip,
+            quotas.max_logins_per_ip_per_min,
+            Duration::from_secs(60),
+        )
+        .await
+    {
+        return too_many_requests_response(
+            format!("Login rate limit exceeded; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+
+    let norm_user = req.username.trim().to_lowercase();
+    if !norm_user.is_empty()
+        && let Err(retry_secs) = state
+            .rate_limiter
+            .check_and_record(
+                "login_user",
+                &norm_user,
+                quotas.max_logins_per_username_per_min,
+                Duration::from_secs(60),
+            )
+            .await
+    {
+        return too_many_requests_response(
+            format!("Too many login attempts for this account; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+
     match state
         .auth
         .authenticate_user(&req.username, &req.password)
@@ -170,6 +221,53 @@ pub async fn logout_handler(
         .into_response()
 }
 
+/// Revokes ALL active auth tokens and join tokens for the authenticated user and closes all sockets (`POST /api/auth/logout-all`).
+pub async fn logout_all_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+
+    let disconnected_sessions = state.auth.revoke_all_user_tokens(&user.user_id).await;
+    state.disconnect_account_sockets(&user.user_id).await;
+    state.disconnect_user_session_sockets(&user.user_id).await;
+
+    let mut disconnected_ids = Vec::new();
+    for summary in &disconnected_sessions {
+        disconnected_ids.push(summary.session_id.clone());
+        state
+            .process_session_disconnect(
+                summary,
+                LifecycleEventType::ParticipantLeft,
+                "All sessions revoked by user",
+            )
+            .await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "revoked_all",
+            "user_id": user.user_id,
+            "disconnected_sessions": disconnected_ids,
+        })),
+    )
+        .into_response()
+}
+
 /// Creates a new password-protected session at `POST /api/sessions/create`.
 pub async fn create_session_handler(
     State(state): State<Arc<SignalingAppState>>,
@@ -256,14 +354,10 @@ pub async fn create_session_handler(
             };
             let _ = state.storage.log_session_access(&ev).await;
         }
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({
-                "error": format!("Session creation rate limit exceeded; retry in {retry_secs}s"),
-                "retry_after_secs": retry_secs
-            })),
-        )
-            .into_response();
+        return too_many_requests_response(
+            format!("Session creation rate limit exceeded; retry in {retry_secs}s"),
+            retry_secs,
+        );
     }
 
     let params = crate::auth::CreateSessionParams {
@@ -282,7 +376,7 @@ pub async fn create_session_handler(
     match state.auth.create_session_with_params(&user, params).await {
         Ok((join_token, self_participant, mut roster)) => {
             if req.session_mode == SessionMode::Ttrpg && req.enable_ai_gm {
-                let ai_cfg = req.ai_gm_config.unwrap_or_else(|| {
+                let mut ai_cfg = req.ai_gm_config.unwrap_or_else(|| {
                     let defaults = &state.storage.config().ai_gm;
                     AiGmProviderConfig {
                         provider: defaults.default_provider.clone(),
@@ -295,6 +389,29 @@ pub async fn create_session_handler(
                         clear_api_key: false,
                     }
                 });
+                let ai_defaults = &state.storage.config().ai_gm;
+                if let Some(ref raw_key) = ai_cfg.api_key
+                    && !raw_key.trim().is_empty()
+                {
+                    if let Ok(clean_key) = crate::security::validate_api_key_header_safe(raw_key) {
+                        ai_cfg.api_key = Some(clean_key);
+                    } else {
+                        ai_cfg.api_key = None;
+                    }
+                }
+                if let Some(ref raw_url) = ai_cfg.base_url
+                    && !raw_url.trim().is_empty()
+                {
+                    match crate::security::validate_provider_base_url(
+                        &ai_cfg.provider,
+                        raw_url,
+                        &ai_defaults.ollama_base_url,
+                        &ai_defaults.allowed_provider_base_urls,
+                    ) {
+                        Ok(safe_url) => ai_cfg.base_url = Some(safe_url),
+                        Err(_) => ai_cfg.base_url = None,
+                    }
+                }
                 if let Ok((_, updated_roster)) = state
                     .auth
                     .configure_session_ai_gm(&req.session_id, &user.user_id, ai_cfg)
@@ -419,6 +536,43 @@ pub async fn join_session_handler(
         )
             .into_response();
     };
+
+    let join_limit = state
+        .storage
+        .config()
+        .quotas
+        .max_session_joins_per_user_per_min;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "session_join",
+            &user.user_id,
+            join_limit,
+            Duration::from_secs(60),
+        )
+        .await
+    {
+        return too_many_requests_response(
+            format!("Session join rate limit exceeded; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+    let join_sess_key = format!("{}:{}", user.user_id, req.session_id.trim());
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "session_join_pair",
+            &join_sess_key,
+            join_limit.min(10),
+            Duration::from_secs(60),
+        )
+        .await
+    {
+        return too_many_requests_response(
+            format!("Session join rate limit exceeded for this room; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
 
     match state
         .auth
