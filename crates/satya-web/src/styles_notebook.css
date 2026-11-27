@@ -230,67 +230,34 @@ input[type="file"]::file-selector-button:hover, input[type="file"]::-webkit-file
 
 .satya-rules-article .rules-mermaid {
     background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
-    max-inline-size: 100%; display: flex; flex-direction: column; gap: 10px;
+    max-inline-size: 100%; overflow-x: auto;
 }
-.satya-rules-article .mermaid-top-nodes {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+.satya-rules-article .mermaid-svg {
+    display: block; width: 100%; height: auto; margin: 0 auto;
 }
-.satya-rules-article .mermaid-flow-track {
-    display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px;
+.satya-rules-article .mermaid-subgraph-box { fill: var(--bg-1); stroke: var(--border); stroke-width: 1.25; }
+.satya-rules-article .mermaid-subgraph-header { fill: var(--bg-2); }
+.satya-rules-article .mermaid-subgraph-sep { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 3; }
+.satya-rules-article .mermaid-subgraph-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; fill: var(--accent);
 }
-.satya-rules-article .mermaid-dir-td > .mermaid-flow-track { flex-direction: column; }
-.satya-rules-article .mermaid-dir-td > .mermaid-flow-track.mermaid-flow-dag {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
-    align-items: start;
-    gap: 8px;
+.satya-rules-article .mermaid-node-box {
+    fill: var(--bg-2); stroke: rgba(56, 189, 248, 0.4); stroke-width: 1.25;
 }
-.satya-rules-article .mermaid-dir-td > .mermaid-flow-track > .mermaid-node,
-.satya-rules-article .mermaid-subgraph-nodes > .mermaid-node {
-    flex: 0 0 auto;
+.satya-rules-article .mermaid-node-accent { fill: var(--accent); }
+.satya-rules-article .mermaid-node-diamond .mermaid-node-box {
+    fill: rgba(245, 158, 11, 0.12); stroke: var(--amber); stroke-width: 1.5;
 }
-.satya-rules-article .mermaid-subgraphs-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 10px; align-items: start;
-}
-.satya-rules-article .mermaid-subgraph {
-    background: var(--bg-1); border: 1px solid var(--border); border-top: 2px solid var(--accent);
-    border-radius: 7px; padding: 9px; display: flex; flex-direction: column; gap: 8px;
-    min-inline-size: 0;
-}
-.satya-rules-article .mermaid-subgraph-title {
-    font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border);
-}
-.satya-rules-article .mermaid-subgraph-nodes {
-    display: flex; flex-direction: column; gap: 7px;
-}
-.satya-rules-article .mermaid-node {
-    flex: 1 1 170px; background: var(--bg-2); border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 6px; padding: 8px 10px; font-size: 0.77rem; line-height: 1.4;
-    color: var(--text-primary); display: flex; flex-direction: column;
-    justify-content: flex-start; gap: 6px; min-inline-size: 0;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-.satya-rules-article .mermaid-node-diamond { border-color: var(--amber); background: rgba(245, 158, 11, 0.1); }
-.satya-rules-article .mermaid-node-body strong { color: var(--text-heading); }
-.satya-rules-article .mermaid-connector {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    padding: 2px 4px; color: var(--accent); font-weight: 700; flex-shrink: 0;
-}
-.satya-rules-article .mermaid-arrow-glyph { font-size: 1.05rem; line-height: 1; }
-.satya-rules-article .mermaid-node-links {
-    display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px;
-    border-top: 1px dashed rgba(139, 155, 180, 0.25);
-}
-.satya-rules-article .mermaid-link-pill {
-    display: inline-flex; align-items: center; gap: 4px; background: var(--bg-0);
-    border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.7rem;
-    color: #94a3b8; max-inline-size: 100%; overflow-wrap: break-word;
-}
-.satya-rules-article .mermaid-edge-label {
-    color: var(--emerald); font-weight: 600; font-size: 0.7rem;
-}
+.satya-rules-article .mermaid-node-text { font-size: 11px; fill: var(--text-primary); }
+.satya-rules-article .mermaid-node-title { font-weight: 700; fill: var(--text-heading); }
+.satya-rules-article .mermaid-node-italic { font-style: italic; }
+.satya-rules-article .mermaid-edge { stroke: var(--accent); stroke-width: 1.45; opacity: 0.85; }
+.satya-rules-article .mermaid-edge--dashed { stroke-dasharray: 5 3.5; stroke: #94a3b8; }
+.satya-rules-article .mermaid-edge--back { stroke: var(--amber); stroke-dasharray: 4 3; opacity: 0.85; }
+.satya-rules-article .mermaid-arrow-head { fill: var(--accent); }
+.satya-rules-article .mermaid-arrow-head--dashed { fill: #94a3b8; }
+.satya-rules-article .mermaid-edge-bg { fill: var(--bg-0); stroke: var(--border); stroke-width: 1; }
+.satya-rules-article .mermaid-edge-text { font-size: 9.8px; font-weight: 600; fill: var(--emerald); }
 .gm-doc-preview {
     font-size: 0.75rem; color: var(--text-muted); white-space: pre-wrap;
     overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 3;

@@ -382,31 +382,57 @@ fn test_markdown_url_sanitization_blocks_javascript_and_data_uris() {
 }
 
 #[test]
-fn mermaid_backslash_n_renders_br_and_short_link_pills() {
+fn mermaid_renders_svg_flowchart_with_arrows_and_no_raw_newlines() {
     let src = concat!(
         "flowchart TD\n",
         "    A[\"First Line\\n(Second Line)\"] --> B[\"Target Title\\n(Extra Detail)\"]\n",
-        "    A --> C[\"Third Node\\n(More Detail)\"]\n",
+        "    A -->|\"Labeled\"| C[\"Third Node\\n(More Detail)\"]\n",
+        "    C --> A\n",
     );
     let html = render_mermaid_to_html(src);
     assert!(
-        html.contains("First Line<br/>(Second Line)"),
-        "expected \\n in node body to convert to <br/>: {html}"
+        html.contains(r#"<svg class="mermaid-svg""#),
+        "expected inline SVG flowchart element: {html}"
     );
     assert!(
-        html.contains("mermaid-flow-dag"),
-        "expected branching flowchart TD to tag mermaid-flow-dag: {html}"
+        html.contains(r#"<g class="mermaid-node">"#),
+        "expected SVG node groups: {html}"
+    );
+    assert!(
+        html.contains(r#"<path class="mermaid-edge""#),
+        "expected SVG edge paths: {html}"
+    );
+    assert!(
+        html.contains(r#"<marker id="m-arr-"#),
+        "expected SVG arrowhead marker definition: {html}"
+    );
+    assert!(
+        html.contains("First Line</tspan>"),
+        "expected wrapped/split tspan lines: {html}"
+    );
+    assert!(
+        html.contains("mermaid-edge--back"),
+        "expected cycle edge to be routed as back-edge: {html}"
+    );
+    assert!(
+        html.contains("Labeled"),
+        "expected edge label pill text: {html}"
     );
     assert!(
         !html.contains(r"\n"),
-        "literal \\n must not leak into rendered Mermaid HTML: {html}"
+        "literal \\n must not leak into rendered Mermaid SVG: {html}"
     );
-    assert!(
-        html.contains(r#"<span class="mermaid-link-pill">→ Target Title</span>"#),
-        "expected edge pill to show only first line before <br/>: {html}"
+
+    let sg_src = concat!(
+        "flowchart TD\n",
+        "    PRO[\"Prologue\"] --> S1\n",
+        "    subgraph S1[\"Group One\"]\n",
+        "        N1[\"Node One\"] --> N2[\"Node Two\"]\n",
+        "    end\n",
     );
+    let sg_html = render_mermaid_to_html(sg_src);
     assert!(
-        !html.contains("→ Target Title\\n(Extra Detail)"),
-        "edge pill must not include trailing lines: {html}"
+        sg_html.contains(r#"<g class="mermaid-subgraph">"#),
+        "expected subgraph SVG group: {sg_html}"
     );
 }
