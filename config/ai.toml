@@ -17,7 +17,7 @@ temperature = 0.35
 # Ollama context window size (`num_ctx`) and max generated tokens (`num_predict`).
 # Ollama defaults `n_ctx_slot` to 4096 when `num_ctx` is omitted, which causes models like `gemma4:12b`
 # to hit `n_tokens = 4095, truncated = 1` inside their thinking trace after tool calls and emit 0 chars of content.
-num_ctx = 16384
+num_ctx = 131072
 num_predict = 2048
 # Disable unbounded hidden thinking tokens (`think: false`) by default on local Ollama turns so `gemma4:12b`
 # emits tool calls and Markdown replies directly in `message.content` without starving the context window.
