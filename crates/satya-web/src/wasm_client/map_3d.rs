@@ -329,16 +329,12 @@ pub fn resolve_token_visual(
     let is_hostile = low.contains("sentry")
         || low.contains("secops")
         || low.contains("hostile")
+        || low.contains("daise")
         || tok.visibility == MessageVisibility::GmOnly;
-    let preset = if low.contains("valkyrie") || low.contains("sara") {
-        "valkyrie_rig"
-    } else if low.contains("recon") || low.contains("marcus") {
-        "recon_mk4"
-    } else if is_hostile {
-        "secops_sentry"
-    } else {
-        "operative_light"
-    };
+    let preset = satya_schema::infer_token_model_preset_str(
+        &tok.label,
+        tok.visibility == MessageVisibility::GmOnly,
+    );
     let color = if is_hostile { "#f87171" } else { "#38bdf8" };
     let facing = if is_hostile { 270.0 } else { 90.0 };
     (preset.to_string(), color.to_string(), facing)
@@ -448,6 +444,7 @@ pub fn refresh_map_dom_and_wgpu() {
         hud_html,
         battlemap_on,
         sel_preset,
+        sel_stance,
         sel_color,
         sel_wpn,
         edit_on,
@@ -463,21 +460,35 @@ pub fn refresh_map_dom_and_wgpu() {
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
         let floor_bar = format_map_floor_switcher_html(&ui.map, ui.selected_entity_id.as_deref());
-        let (preset, color) = ui
+        let (preset, stance, color) = ui
             .selected_entity_id
             .as_deref()
             .and_then(|id| ui.map.tokens.iter().find(|t| t.entity_id == id))
             .map(|tok| {
                 let (p, c, _) = resolve_token_visual(&ui.map, tok);
-                (p, c)
+                let s = ui
+                    .map
+                    .visual_for(&tok.entity_id)
+                    .map_or("standing", |v| v.stance_pose.as_str());
+                let norm_s = satya_schema::TokenStanceKind::from_stance_str(s)
+                    .as_wire_str()
+                    .to_string();
+                (p, norm_s, c)
             })
-            .unwrap_or_else(|| ("valkyrie_rig".to_string(), "#38bdf8".to_string()));
+            .unwrap_or_else(|| {
+                (
+                    "civilian_unarmed".to_string(),
+                    "standing".to_string(),
+                    "#38bdf8".to_string(),
+                )
+            });
         (
             pill,
             chips,
             hud,
             ui.view_battlemap,
             preset,
+            stance,
             color,
             ui.selected_weapon_id.clone(),
             ui.interaction_mode == "edit_terrain",
@@ -500,6 +511,7 @@ pub fn refresh_map_dom_and_wgpu() {
     );
     set_select_value("map-weapon-select", &sel_wpn);
     set_select_value("map-token-model-select", &sel_preset);
+    set_select_value("map-token-stance-select", &sel_stance);
     set_input_value("map-token-color", &sel_color);
     set_display(
         "map-prop-brush-wrap",

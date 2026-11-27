@@ -1282,7 +1282,7 @@ def build_eyes_brows_hair_and_skin(
             front_w = max(0.0, min(1.0, (0.025 - v.co.y) / 0.105))
             top_w = max(0.0, min(1.0, (v.co.z - (hairline_z + 0.015)) / 0.040))
             center_w = max(0.25, 1.0 - (abs(v.co.x) / 0.085) ** 2)
-            v.co.z += 0.009 * (front_w ** 1.2) * top_w * center_w
+            v.co.z += 0.005 * (front_w ** 1.2) * top_w * center_w
     hair_cap.data.update()
 
     # Snap open front boundary vertices onto one smooth hairline arch before Smooth/Solidify
@@ -1307,6 +1307,26 @@ def build_eyes_brows_hair_and_skin(
     sm_h = hair_cap.modifiers.new("Smooth", "SMOOTH")
     sm_h.factor = 0.48
     sm_h.iterations = 4
+    apply_all_modifiers(hair_cap, smooth=True, recalc_normals=False)
+
+    sub_h = hair_cap.modifiers.new("Subsurf", "SUBSURF")
+    sub_h.levels = 1
+    sub_h.render_levels = 1
+    apply_all_modifiers(hair_cap, smooth=True, recalc_normals=False)
+
+    # Subtle upward-and-angled surface fluting across front hair cap (fades smoothly to zero at edges)
+    for v in hair_cap.data.vertices:
+        if v.co.y < cap_cy - 0.010 and abs(v.co.x - cap_cx) < 0.058 and v.co.z > hairline_z + 0.007:
+            x_fade = max(0.0, 1.0 - (abs(v.co.x - cap_cx) / 0.058) ** 2)
+            z_fade = max(0.0, min(1.0, (v.co.z - (hairline_z + 0.007)) / 0.014))
+            y_fade = max(0.0, min(1.0, (cap_cy - 0.010 - v.co.y) / 0.055))
+            phase = ((v.co.x - cap_cx) - 0.24 * (v.co.z - hairline_z)) * 220.0
+            ridge = 0.0012 * (0.65 * math.sin(phase) + 0.35 * math.sin(phase * 1.85 + 0.9))
+            weight = x_fade * z_fade * y_fade
+            v.co.y -= ridge * weight
+            v.co.z += ridge * 0.45 * weight
+    hair_cap.data.update()
+
     sol_h = hair_cap.modifiers.new("Solidify", "SOLIDIFY")
     sol_h.thickness = 0.0056
     sol_h.offset = 1.0
@@ -1318,98 +1338,6 @@ def build_eyes_brows_hair_and_skin(
     h_ys = [v.co.y for v in hair_cap.data.vertices]
     cx = (min(h_xs) + max(h_xs)) * 0.5
     cy = (min(h_ys) + max(h_ys)) * 0.5
-    top_cap_z = max(v.co.z for v in hair_cap.data.vertices)
-    front_verts = [v.co for v in hair_cap.data.vertices if v.co.y < cy - 0.005]
-
-    def sample_front_cap_y(rel_x: float, abs_z: float) -> float:
-        """Return front surface Y of Head_Hair_Cap near `(cx + rel_x, abs_z)`."""
-        wx = cx + rel_x
-        wz = max(abs_z, hairline_z + 0.003)
-        near = sorted(
-            front_verts,
-            key=lambda co: (co.x - wx) ** 2 + ((co.z - wz) * 1.15) ** 2,
-        )[:6]
-        base_y = min(co.y for co in near)
-        if abs_z < hairline_z + 0.003:
-            base_y += min(0.0045, (hairline_z + 0.003 - abs_z) * 0.35)
-        return base_y
-
-    # Row 1 (9 front crest locks proud of the front cap surface, sweeping upward and angled gently back)
-    # Format: (dx0, z0_off, dx1, z1_below_cap, y1_off, dx2, z2_above_cap, y2_back, lock_w, lock_d)
-    front_mousse_specs = (
-        (-0.048, 0.010, -0.044, 0.016, -0.002, -0.039, 0.006, 0.011, 0.011, 0.0052),
-        (-0.036, 0.009, -0.031, 0.014, -0.003, -0.024, 0.010, 0.010, 0.012, 0.0056),
-        (-0.024, 0.008, -0.018, 0.012, -0.004, -0.010, 0.013, 0.009, 0.013, 0.0060),
-        (-0.012, 0.007, -0.005, 0.010, -0.004, 0.004, 0.016, 0.008, 0.014, 0.0064),
-        (0.000, 0.007, 0.008, 0.010, -0.004, 0.017, 0.015, 0.008, 0.014, 0.0064),
-        (0.012, 0.008, 0.019, 0.011, -0.004, 0.028, 0.015, 0.009, 0.014, 0.0062),
-        (0.024, 0.008, 0.031, 0.013, -0.003, 0.038, 0.012, 0.010, 0.013, 0.0058),
-        (0.036, 0.009, 0.042, 0.014, -0.003, 0.048, 0.009, 0.011, 0.012, 0.0056),
-        (0.048, 0.010, 0.052, 0.016, -0.002, 0.057, 0.006, 0.012, 0.011, 0.0052),
-    )
-    moussed_locks: list[tuple[Vector, Vector, Vector, float, float]] = []
-    for dx0, z0_o, dx1, z1_dn, y1_o, dx2, z2_up, y2_b, w, d in front_mousse_specs:
-        z0 = hairline_z + z0_o
-        z1 = top_cap_z - z1_dn
-        z2 = top_cap_z + z2_up
-        y0 = sample_front_cap_y(dx0, z0) + 0.004
-        y1 = sample_front_cap_y(dx1, min(z1, top_cap_z - 0.008)) + y1_o
-        y2 = y1 + y2_b
-        moussed_locks.append(
-            (Vector((cx + dx0, y0, z0)), Vector((cx + dx1, y1, z1)), Vector((cx + dx2, y2, z2)), w, d)
-        )
-
-    # Row 2 (7 mid-front textured locks) & Row 3 (5 mid-crown blend locks) for smooth side-view flow
-    # Format: (dx0, y0_depth, z1_below_cap, dx1_shift, y1_shift, dx2_shift, z2_above_cap, y2_shift, lock_w, lock_d)
-    layered_crown_specs = (
-        # Row 2: mid-front textured locks (y0_d = 0.020..0.026)
-        (-0.042, 0.020, 0.004, 0.004, 0.005, 0.007, 0.005, 0.013, 0.012, 0.0056),
-        (-0.028, 0.022, 0.004, 0.005, 0.005, 0.009, 0.008, 0.012, 0.013, 0.0062),
-        (-0.014, 0.024, 0.003, 0.006, 0.005, 0.010, 0.010, 0.012, 0.014, 0.0065),
-        (0.000, 0.026, 0.003, 0.006, 0.005, 0.011, 0.011, 0.013, 0.014, 0.0066),
-        (0.014, 0.024, 0.003, 0.006, 0.005, 0.010, 0.010, 0.013, 0.014, 0.0064),
-        (0.028, 0.022, 0.004, 0.005, 0.005, 0.008, 0.007, 0.014, 0.013, 0.0060),
-        (0.042, 0.020, 0.004, 0.004, 0.006, 0.006, 0.005, 0.016, 0.012, 0.0055),
-        # Row 3: mid-crown blend locks (y0_d = 0.040..0.046)
-        (-0.032, 0.040, 0.003, 0.004, 0.006, 0.006, 0.002, 0.016, 0.014, 0.0062),
-        (-0.016, 0.043, 0.003, 0.005, 0.006, 0.008, 0.005, 0.015, 0.015, 0.0066),
-        (0.000, 0.046, 0.003, 0.005, 0.006, 0.009, 0.006, 0.015, 0.015, 0.0068),
-        (0.016, 0.043, 0.003, 0.005, 0.006, 0.008, 0.004, 0.016, 0.015, 0.0066),
-        (0.032, 0.040, 0.003, 0.003, 0.007, 0.005, 0.001, 0.018, 0.013, 0.0060),
-    )
-    for dx0, y0_d, z1_dn, dx1_s, y1_s, dx2_s, z2_up, y2_s, w, d in layered_crown_specs:
-        z0 = top_cap_z - 0.020
-        z1 = top_cap_z - z1_dn
-        z2 = top_cap_z + z2_up
-        y0 = sample_front_cap_y(dx0, top_cap_z - 0.012) + y0_d
-        moussed_locks.append(
-            (
-                Vector((cx + dx0, y0, z0)),
-                Vector((cx + dx0 + dx1_s, y0 + y1_s, z1)),
-                Vector((cx + dx0 + dx2_s, y0 + y2_s, z2)),
-                w,
-                d,
-            )
-        )
-
-    up_ref = Vector((0.0, -1.0, 0.0))
-    for idx, (p0_vec, p1_vec, p2_vec, w, d) in enumerate(moussed_locks):
-        pts = [
-            (p0_vec, w * 0.60, d * 0.30),
-            (p1_vec, w * 1.02, d * 0.88),
-            (p2_vec, w * 0.28, d * 0.34),
-        ]
-        grouped["hair"].append(
-            loft_tube_along_points(
-                f"Head_Hair_Ruffle_{idx}",
-                pts,
-                segments=10,
-                collection=collection,
-                mat=atlas_mat,
-                subdiv=1,
-                ref_up=up_ref,
-            )
-        )
 
     tuft_specs = (
         # Rear crown / nape transition layers (top-middle crown kept clean & boxy via Head_Hair_Cap)
@@ -1616,7 +1544,34 @@ def assign_all_uvs_and_build_atlas(
 
     # --- 4. Q4 (u: 0.50..1.00, v: 0.00..0.50): Hair + Trail Shoes ---
     for h_obj in hair_objs:
-        assign_constant_uv_box(h_obj, 0.516, 0.262, 0.722, 0.484)
+        if h_obj.name.startswith("Head_Eyebrow"):
+            assign_constant_uv_box(h_obj, 0.504, 0.256, 0.520, 0.282)
+        elif h_obj.name.startswith("Head_Hair_Cap"):
+            hc_xs = [v.co.x for v in h_obj.data.vertices]
+            hc_ys = [v.co.y for v in h_obj.data.vertices]
+            hc_zs = [v.co.z for v in h_obj.data.vertices]
+            h_cx = 0.5 * (min(hc_xs) + max(hc_xs))
+            h_cy = 0.5 * (min(hc_ys) + max(hc_ys))
+            hc_z0, hc_z1 = min(hc_zs), max(hc_zs)
+
+            def hair_cap_uv_fn(face: bmesh.types.BMFace, co: Vector) -> tuple[float, float]:
+                cent = face.calc_center_median()
+                angle = math.atan2(co.x - h_cx, -(co.y - h_cy))
+                if cent.y > h_cy and (co.x - h_cx) * (cent.x - h_cx) < 0.0:
+                    angle = math.pi if cent.x >= h_cx else -math.pi
+                u = max(0.528, min(0.722, 0.625 + (angle / math.pi) * 0.095))
+                v = max(
+                    0.262,
+                    min(
+                        0.488,
+                        0.264 + max(0.0, min(1.0, (co.z - hc_z0) / max(0.04, hc_z1 - hc_z0))) * 0.222,
+                    ),
+                )
+                return u, v
+
+            assign_uv_loops(h_obj, hair_cap_uv_fn)
+        else:
+            assign_constant_uv_box(h_obj, 0.528, 0.264, 0.562, 0.340)
     for s_obj in shoe_groups["upper"]:
         assign_constant_uv_box(s_obj, 0.736, 0.256, 0.984, 0.484)
     for c_obj in shoe_groups["cap"]:
@@ -1870,13 +1825,63 @@ def assign_all_uvs_and_build_atlas(
 
     # ==== Paint Q4: Hair + Trail Shoes ====
     # Hair swatch (u: 0.50..0.728, v: 0.25..0.50)
-    fill_rect(0.500, 0.250, 0.728, 0.500, (0.045, 0.050, 0.062))
-    hair_strand = (0.028 * np.maximum(0.0, np.sin(u_grid[256:512, 512:745] * 140.0)))[..., None].astype(np.float32)
-    img_arr[256:512, 512:745, :3] = np.clip(
-        img_arr[256:512, 512:745, :3] + hair_strand * np.array([0.55, 0.65, 0.85], dtype=np.float32),
+    fill_rect(0.500, 0.250, 0.728, 0.500, (0.044, 0.048, 0.060))
+    # Isolated dark ink corner for eyebrows (never bleeds hair sheen strokes)
+    fill_rect(0.500, 0.250, 0.524, 0.290, (0.032, 0.035, 0.042))
+
+    # Fine brushed hair grain + directional striations across cap region (tilted ~up-right in front)
+    hx0, hx1 = int(0.526 * ATLAS_SIZE), int(0.724 * ATLAS_SIZE)
+    hy0, hy1 = int(0.260 * ATLAS_SIZE), int(0.492 * ATLAS_SIZE)
+    hu = u_grid[hy0:hy1, hx0:hx1]
+    hv = v_grid[hy0:hy1, hx0:hx1]
+    front_zone = np.clip(1.0 - np.abs(hu - 0.625) / 0.056, 0.0, 1.0)
+    u_tilted = hu - (0.14 * front_zone) * (hv - 0.34)
+    hair_grain = (
+        0.022 * np.sin(u_tilted * 460.0)
+        + 0.014 * np.cos(u_tilted * 920.0 + hv * 18.0)
+    )[..., None].astype(np.float32)
+    img_arr[hy0:hy1, hx0:hx1, :3] = np.clip(
+        img_arr[hy0:hy1, hx0:hx1, :3]
+        + hair_grain * np.array([0.55, 0.65, 0.85], dtype=np.float32),
         0.0,
         1.0,
     )
+
+    # Explicit upward-brushed front hair strands (18 alternating deep-ink grooves & slate sheen strokes)
+    for i in range(18):
+        t = i / 17.0
+        u_base = 0.576 + t * 0.098
+        side_tilt = (u_base - 0.625) * 0.14
+        du = 0.011 + 0.004 * math.sin(i * 1.7) + side_tilt
+        v0_s = 0.335 + 0.008 * ((i * 3) % 3)
+        v1_s = 0.470 + 0.012 * ((i + 1) % 2)
+        vm_s = 0.5 * (v0_s + v1_s)
+        pts_s = (
+            (u_base, v0_s),
+            (u_base + du * 0.42, vm_s),
+            (u_base + du, v1_s),
+        )
+        if i % 2 == 0:
+            draw_ink_curve(pts_s, 1.6, (0.012, 0.014, 0.020), 0.80)
+        else:
+            col_hi = (0.22, 0.25, 0.31) if i % 4 == 1 else (0.14, 0.16, 0.21)
+            draw_ink_curve(pts_s, 1.3, col_hi, 0.64)
+
+    # Broken graphic-novel brushed sheen band along upper-front crest (v: 0.42..0.465)
+    for k in range(7):
+        uk = 0.587 + k * 0.0125
+        vk = 0.434 + 0.008 * math.sin(k * 1.4)
+        draw_soft_ellipse(uk, vk, 0.0042, 0.016, (0.19, 0.22, 0.28), alpha=0.40, feather=0.45)
+        draw_ink_curve(
+            ((uk + 0.004, vk - 0.014), (uk + 0.007, vk + 0.016)),
+            1.2,
+            (0.014, 0.016, 0.022),
+            0.72,
+        )
+
+    # Subtle darker vertical grain strokes on sides & rear so sides stay neat
+    for u_s in (0.538, 0.548, 0.558, 0.566, 0.684, 0.692, 0.702, 0.712):
+        draw_ink_curve(((u_s, 0.280), (u_s, 0.435)), 1.0, (0.018, 0.020, 0.028), 0.50)
 
     # Trail Shoe Suede Upper (u: 0.728..1.000, v: 0.25..0.50)
     fill_rect(0.728, 0.250, 1.000, 0.500, (0.50, 0.36, 0.24))

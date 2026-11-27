@@ -74,20 +74,7 @@ fn normalize_wall_edges_and_props(container: &mut Map<String, Value>) {
 }
 
 fn infer_model_preset(label: &str, is_hidden: bool) -> &'static str {
-    let low = label.to_ascii_lowercase();
-    if low.contains("valkyrie") || low.contains("sara") {
-        "valkyrie_rig"
-    } else if low.contains("recon") || low.contains("marcus") || low.contains("vance") {
-        "recon_mk4"
-    } else if is_hidden
-        || low.contains("sentry")
-        || low.contains("secops")
-        || low.contains("hostile")
-    {
-        "secops_sentry"
-    } else {
-        "operative_light"
-    }
+    satya_schema::infer_token_model_preset_str(label, is_hidden)
 }
 
 fn strip_null_fields(map: &mut Map<String, Value>, keys: &[&str]) {

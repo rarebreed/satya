@@ -140,7 +140,10 @@ impl CoverGrade {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenVisualSpec {
     pub entity_id: String,
-    /// Built-in low-poly `.glb` preset (`"valkyrie_rig"`, `"recon_mk4"`, `"secops_sentry"`, `"operative_light"`) or `"custom_glb"`.
+    /// Built-in 2D/3D character or drone preset (e.g., `"civilian_unarmed"`, `"civilian_handgun"`,
+    /// `"civilian_rifle"`, `"civilian_knife"`, `"security_handgun"`, `"soldier_rifle"`, `"sniper_rifle"`,
+    /// `"drone_quad"`, `"drone_aero"`, `"android_domestic"`, `"android_industrial"`, `"android_security"`,
+    /// or legacy `"valkyrie_rig"`, `"recon_mk4"`, `"secops_sentry"`, `"operative_light"`, `"custom_glb"`).
     #[serde(default = "default_token_model_preset")]
     pub model_preset: String,
     /// Primary armor/faction hex color (`"#38bdf8"` player cyan, `"#f87171"` hostile red, `"#fbbf24"` neutral amber).
@@ -152,7 +155,7 @@ pub struct TokenVisualSpec {
     /// Base elevation offset in centimeters (`0` floor, `150` elevated catwalk).
     #[serde(default)]
     pub elevation_cm: i32,
-    /// Miniature pose tag (`"idle"`, `"aimed"`, `"crouched"`, `"prone"`).
+    /// Miniature pose tag (`"standing"` / `"idle"`, `"crouched"` / `"kneeling"`, `"prone"`).
     #[serde(default = "default_token_pose")]
     pub stance_pose: String,
     /// Optional safe portrait image URL/path rendered inside the 2D battlemap token disc.
@@ -222,6 +225,270 @@ impl Default for TokenVisualSpec {
             pos_y_cm: None,
             floor_index: 0,
         }
+    }
+}
+
+/// Normalized tactical miniature posture for 2D/3D battlemap token rendering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum TokenStanceKind {
+    #[default]
+    Standing,
+    WalkingHolstered,
+    TacticalAdvance,
+    Sprinting,
+    Kneeling,
+    Prone,
+}
+
+impl TokenStanceKind {
+    /// All canonical tactical token stances in UI dropdown order.
+    pub const ALL: [Self; 6] = [
+        Self::Standing,
+        Self::WalkingHolstered,
+        Self::TacticalAdvance,
+        Self::Sprinting,
+        Self::Kneeling,
+        Self::Prone,
+    ];
+
+    /// Parses loose wire strings (`"standing"`, `"walking_holstered"`, `"tactical_advance"`,
+    /// `"sprinting"`, `"crouched"`, `"kneeling"`, `"prone"`, etc.).
+    #[must_use]
+    pub fn from_stance_str(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "prone" => Self::Prone,
+            "crouched" | "kneeling" | "crouch" | "kneel" => Self::Kneeling,
+            "walking_holstered" | "walking" | "walk" | "holstered" => Self::WalkingHolstered,
+            "tactical_advance" | "tactical" | "bounding" | "bounding_overwatch" | "overwatch"
+            | "cautious" => Self::TacticalAdvance,
+            "sprinting" | "sprint" | "running" | "run" => Self::Sprinting,
+            _ => Self::Standing,
+        }
+    }
+
+    /// Canonical wire string persisted on [`TokenVisualSpec::stance_pose`].
+    #[must_use]
+    pub const fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::Standing => "standing",
+            Self::WalkingHolstered => "walking_holstered",
+            Self::TacticalAdvance => "tactical_advance",
+            Self::Sprinting => "sprinting",
+            Self::Kneeling => "crouched",
+            Self::Prone => "prone",
+        }
+    }
+
+    /// Human-readable UI label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Standing => "Standing",
+            Self::WalkingHolstered => "Walking (Holstered)",
+            Self::TacticalAdvance => "Tactical / Bounding",
+            Self::Sprinting => "Sprinting",
+            Self::Kneeling => "Kneeling",
+            Self::Prone => "Prone",
+        }
+    }
+
+    /// Short corner badge tag for non-standing postures (`"WK"`, `"TA"`, `"SP"`, `"KN"`, `"PR"`).
+    #[must_use]
+    pub const fn short_badge(self) -> Option<&'static str> {
+        match self {
+            Self::Standing => None,
+            Self::WalkingHolstered => Some("WK"),
+            Self::TacticalAdvance => Some("TA"),
+            Self::Sprinting => Some("SP"),
+            Self::Kneeling => Some("KN"),
+            Self::Prone => Some("PR"),
+        }
+    }
+}
+
+/// Static catalog descriptor for one top-down 2035 character, drone, or android figure preset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenFigureMeta {
+    pub preset: &'static str,
+    pub group: &'static str,
+    pub label: &'static str,
+    pub supports_kneeling: bool,
+    pub supports_prone: bool,
+    pub supports_movement_poses: bool,
+}
+
+/// UI optgroup headings for [`TOKEN_FIGURE_PRESETS`].
+pub const TOKEN_FIGURE_GROUPS: &[&str] = &[
+    "Civilians",
+    "Police, Security & Military",
+    "Drones",
+    "Biped Androids",
+];
+
+/// Canonical 12 top-down 2035 figure presets shared across UI dropdowns, 2D sprites, and PyO3 inference.
+pub const TOKEN_FIGURE_PRESETS: &[TokenFigureMeta] = &[
+    TokenFigureMeta {
+        preset: "civilian_unarmed",
+        group: "Civilians",
+        label: "Civilian (Empty-Handed)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "civilian_handgun",
+        group: "Civilians",
+        label: "Civilian (Handgun)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "civilian_rifle",
+        group: "Civilians",
+        label: "Civilian (Rifle)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "civilian_knife",
+        group: "Civilians",
+        label: "Civilian (Knife)",
+        supports_kneeling: true,
+        supports_prone: false,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "security_handgun",
+        group: "Police, Security & Military",
+        label: "Police / Security (Handgun)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "soldier_rifle",
+        group: "Police, Security & Military",
+        label: "Security / Soldier (Rifle)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "sniper_rifle",
+        group: "Police, Security & Military",
+        label: "Military / Security (Sniper)",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "drone_quad",
+        group: "Drones",
+        label: "Quadruped Drone (Echo-9)",
+        supports_kneeling: false,
+        supports_prone: false,
+        supports_movement_poses: false,
+    },
+    TokenFigureMeta {
+        preset: "drone_aero",
+        group: "Drones",
+        label: "Aero Drone (Quadrotor UAV)",
+        supports_kneeling: false,
+        supports_prone: false,
+        supports_movement_poses: false,
+    },
+    TokenFigureMeta {
+        preset: "android_domestic",
+        group: "Biped Androids",
+        label: "Android — Domestic",
+        supports_kneeling: true,
+        supports_prone: false,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "android_industrial",
+        group: "Biped Androids",
+        label: "Android — Industrial",
+        supports_kneeling: true,
+        supports_prone: false,
+        supports_movement_poses: true,
+    },
+    TokenFigureMeta {
+        preset: "android_security",
+        group: "Biped Androids",
+        label: "Android — Military / Security",
+        supports_kneeling: true,
+        supports_prone: true,
+        supports_movement_poses: true,
+    },
+];
+
+/// Infers a canonical `model_preset` slug from a token label and hidden/hostile flag.
+#[must_use]
+pub fn infer_token_model_preset_str(label: &str, is_hidden: bool) -> &'static str {
+    let low = label.to_ascii_lowercase();
+    if low.contains("echo-9")
+        || low.contains("echo 9")
+        || low.contains("quadruped")
+        || low.contains("quad drone")
+        || low.contains("spot")
+    {
+        "drone_quad"
+    } else if low.contains("aero")
+        || low.contains("uav")
+        || low.contains("quadcopter")
+        || low.contains("quadrotor")
+        || low.contains("drone")
+    {
+        "drone_aero"
+    } else if low.contains("domestic") || low.contains("caregiver") || low.contains("mimic") {
+        "android_domestic"
+    } else if low.contains("industrial") || low.contains("loader") || low.contains("atlas") {
+        "android_industrial"
+    } else if low.contains("android") || low.contains("robot") || low.contains("synth") {
+        "android_security"
+    } else if low.contains("valkyrie") || low.contains("sara") {
+        "valkyrie_rig"
+    } else if low.contains("recon") || low.contains("marcus") || low.contains("vance") {
+        "recon_mk4"
+    } else if low.contains("sniper") || low.contains("marksman") || low.contains("sharpshooter") {
+        "sniper_rifle"
+    } else if low.contains("bandajara")
+        || low.contains("kerambit")
+        || low.contains("knife")
+        || low.contains("blade")
+        || low.contains("silat")
+    {
+        "civilian_knife"
+    } else if low.contains("police")
+        || low.contains("officer")
+        || low.contains("detective")
+        || low.contains("marshal")
+        || low.contains("guard")
+        || low.contains("investigator")
+        || low.contains("security")
+    {
+        "security_handgun"
+    } else if is_hidden
+        || low.contains("soldier")
+        || low.contains("daise")
+        || low.contains("trooper")
+        || low.contains("breach")
+        || low.contains("military")
+        || low.contains("rifle")
+        || low.contains("sentry")
+        || low.contains("secops")
+        || low.contains("hostile")
+    {
+        "soldier_rifle"
+    } else if low.contains("ranger") || low.contains("hunter") {
+        "civilian_rifle"
+    } else if low.contains("pistol") || low.contains("handgun") || low.contains("fixer") {
+        "civilian_handgun"
+    } else {
+        "civilian_unarmed"
     }
 }
 
@@ -849,5 +1116,55 @@ mod tests {
         assert!(load_json.contains(r#""load_map""#));
         let load_dec: GenerateSessionMapRequest = serde_json::from_str(&load_json).unwrap();
         assert_eq!(load_dec, load_req);
+    }
+
+    #[test]
+    fn token_stance_presets_and_inference_cover_all_12_figures() {
+        assert_eq!(TOKEN_FIGURE_PRESETS.len(), 12);
+        let slugs: std::collections::BTreeSet<&str> =
+            TOKEN_FIGURE_PRESETS.iter().map(|m| m.preset).collect();
+        assert_eq!(slugs.len(), 12);
+
+        assert_eq!(TokenStanceKind::from_stance_str("idle"), TokenStanceKind::Standing);
+        assert_eq!(TokenStanceKind::from_stance_str("aimed"), TokenStanceKind::Standing);
+        assert_eq!(
+            TokenStanceKind::from_stance_str("walking_holstered"),
+            TokenStanceKind::WalkingHolstered
+        );
+        assert_eq!(
+            TokenStanceKind::from_stance_str("bounding"),
+            TokenStanceKind::TacticalAdvance
+        );
+        assert_eq!(
+            TokenStanceKind::from_stance_str("sprint"),
+            TokenStanceKind::Sprinting
+        );
+        assert_eq!(TokenStanceKind::from_stance_str("kneeling"), TokenStanceKind::Kneeling);
+        assert_eq!(TokenStanceKind::from_stance_str("crouched"), TokenStanceKind::Kneeling);
+        assert_eq!(TokenStanceKind::from_stance_str("PRONE"), TokenStanceKind::Prone);
+        assert_eq!(TokenStanceKind::Kneeling.as_wire_str(), "crouched");
+        assert_eq!(TokenStanceKind::WalkingHolstered.short_badge(), Some("WK"));
+        assert_eq!(TokenStanceKind::TacticalAdvance.short_badge(), Some("TA"));
+        assert_eq!(TokenStanceKind::Sprinting.short_badge(), Some("SP"));
+        assert_eq!(TokenStanceKind::Kneeling.short_badge(), Some("KN"));
+        assert_eq!(TokenStanceKind::Prone.short_badge(), Some("PR"));
+        assert_eq!(
+            TOKEN_FIGURE_PRESETS
+                .iter()
+                .filter(|m| m.supports_movement_poses)
+                .count(),
+            10
+        );
+
+        assert_eq!(infer_token_model_preset_str("Dr. Bandajara", false), "civilian_knife");
+        assert_eq!(infer_token_model_preset_str("DAISE Sniper", false), "sniper_rifle");
+        assert_eq!(infer_token_model_preset_str("Echo-9 Quadruped", false), "drone_quad");
+        assert_eq!(infer_token_model_preset_str("Aero Recon UAV", false), "drone_aero");
+        assert_eq!(infer_token_model_preset_str("Domestic Android", false), "android_domestic");
+        assert_eq!(infer_token_model_preset_str("Industrial Atlas Bot", false), "android_industrial");
+        assert_eq!(infer_token_model_preset_str("Security Android", false), "android_security");
+        assert_eq!(infer_token_model_preset_str("Security Guard", false), "security_handgun");
+        assert_eq!(infer_token_model_preset_str("DAISE Trooper", true), "soldier_rifle");
+        assert_eq!(infer_token_model_preset_str("Clinic Nurse", false), "civilian_unarmed");
     }
 }

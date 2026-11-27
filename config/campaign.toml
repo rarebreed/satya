@@ -34,14 +34,14 @@ planned_beats = [
 token_id = "tok-ally-1"
 entity_id = "dr_bandajara"
 label = "Dr. Bandajara"
-model_preset = "operative_light"
+model_preset = "civilian_knife"
 color_hex = "#38bdf8"
 
 [packs.awakened.default_hostile_token]
 token_id = "tok-hostile-1"
 entity_id = "npc-secops-1"
 label = "DAISE Tactical Agent"
-model_preset = "secops_sentry"
+model_preset = "soldier_rifle"
 color_hex = "#f87171"
 
 [packs.awakened.default_combat_spawn]

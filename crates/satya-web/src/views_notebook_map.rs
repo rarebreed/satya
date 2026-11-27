@@ -961,20 +961,55 @@ pub fn NotebookMapPane() -> impl IntoView {
                     "Snap: Free"
                 </button>
                 <label class="inline-label" for="map-token-model-select">
-                    <span>"Mini"</span>
+                    <span>"Figure"</span>
                     <select
                         id="map-token-model-select"
                         onchange="window.satyaUpdateSelectedTokenVisual()"
                         on:change=move |_| wasm_client::satya_update_selected_token_visual()
                     >
-                        {MODEL_RIG_OPTIONS
+                        {satya_schema::TOKEN_FIGURE_GROUPS
                             .iter()
                             .copied()
-                            .map(|(val, short_label, _)| {
-                                view! { <option value=val>{short_label}</option> }
+                            .map(|group_label| {
+                                view! {
+                                    <optgroup label=group_label>
+                                        {satya_schema::TOKEN_FIGURE_PRESETS
+                                            .iter()
+                                            .filter(|m| m.group == group_label)
+                                            .map(|meta| {
+                                                view! { <option value=meta.preset>{meta.label}</option> }
+                                            })
+                                            .collect_view()}
+                                    </optgroup>
+                                }
                             })
                             .collect_view()}
-                        <option value="custom_glb">"Custom .glb"</option>
+                        <optgroup label="Legacy / 3D Rigs">
+                            {MODEL_RIG_OPTIONS
+                                .iter()
+                                .copied()
+                                .map(|(val, short_label, _)| {
+                                    view! { <option value=val>{short_label}</option> }
+                                })
+                                .collect_view()}
+                            <option value="custom_glb">"Custom .glb"</option>
+                        </optgroup>
+                    </select>
+                </label>
+                <label class="inline-label" for="map-token-stance-select">
+                    <span>"Stance"</span>
+                    <select
+                        id="map-token-stance-select"
+                        title="Selected token posture (Standing, Kneeling, or Prone)"
+                        onchange="window.satyaUpdateSelectedTokenVisual()"
+                        on:change=move |_| wasm_client::satya_update_selected_token_visual()
+                    >
+                        {satya_schema::TokenStanceKind::ALL
+                            .iter()
+                            .map(|stance| {
+                                view! { <option value=stance.as_wire_str()>{stance.label()}</option> }
+                            })
+                            .collect_view()}
                     </select>
                 </label>
                 <label class="inline-label" for="map-token-color">

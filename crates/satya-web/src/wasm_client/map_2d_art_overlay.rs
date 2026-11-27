@@ -15,7 +15,7 @@ use crate::wasm_client::map_2d_art::{
 };
 use crate::wasm_client::map_2d_art_textures::load_persisted_texture_mode_pref;
 use crate::wasm_client::map_2d_tokens::{
-    load_persisted_ink_style_pref, push_token_portrait_disc_svg,
+    TokenRenderInput, load_persisted_ink_style_pref, push_token_2d_svg,
 };
 use crate::wasm_client::map_3d::{
     TacticalMapUiState, mark_map_wgpu_dirty, refresh_map_wgpu_if_active, resolve_token_visual,
@@ -358,22 +358,25 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
             continue;
         }
         let (preset, col, facing) = resolve_token_visual(&ui.map, tok);
-        let portrait_url = ui
-            .map
-            .visual_for(&tok.entity_id)
-            .and_then(|v| v.portrait_url.as_deref());
+        let vis = ui.map.visual_for(&tok.entity_id);
+        let portrait_url = vis.and_then(|v| v.portrait_url.as_deref());
+        let stance_pose = vis.map_or("standing", |v| v.stance_pose.as_str());
         let is_sel = ui.selected_entity_id.as_deref() == Some(tok.entity_id.as_str());
-        push_token_portrait_disc_svg(
+        push_token_2d_svg(
             &mut out,
-            idx,
-            tok,
-            ui.map.token_pos_m(tok),
-            &preset,
-            &col,
-            facing,
-            portrait_url,
-            is_sel,
-            c,
+            &TokenRenderInput {
+                idx,
+                tok,
+                pos_m: ui.map.token_pos_m(tok),
+                preset: &preset,
+                stance_pose,
+                color_hex: &col,
+                facing_deg: facing,
+                portrait_url,
+                is_selected: is_sel,
+                cell_px: c,
+                texture_mode: ui.texture_mode,
+            },
         );
     }
     out

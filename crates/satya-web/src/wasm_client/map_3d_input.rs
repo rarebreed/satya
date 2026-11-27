@@ -477,6 +477,7 @@ pub fn satya_update_selected_token_visual() {
         return;
     }
     let model_preset = select_value("map-token-model-select");
+    let stance_raw = select_value("map-token-stance-select");
     let color_hex = input_value("map-token-color");
     let mut sync_req: Option<MoveMapTokenRequest> = None;
 
@@ -494,10 +495,13 @@ pub fn satya_update_selected_token_visual() {
             return;
         };
         let p_eff = if model_preset.is_empty() {
-            "valkyrie_rig".to_string()
+            "civilian_unarmed".to_string()
         } else {
             model_preset.clone()
         };
+        let stance_eff = satya_schema::TokenStanceKind::from_stance_str(&stance_raw)
+            .as_wire_str()
+            .to_string();
         let c_eff = if color_hex.is_empty() {
             "#38bdf8".to_string()
         } else {
@@ -513,6 +517,7 @@ pub fn satya_update_selected_token_visual() {
         {
             vis.model_preset = p_eff.clone();
             vis.color_hex = c_eff.clone();
+            vis.stance_pose = stance_eff.clone();
             vis.pos_x_cm = Some(px_cm);
             vis.pos_y_cm = Some(py_cm);
             existing_portrait = vis.portrait_url.clone();
@@ -525,7 +530,7 @@ pub fn satya_update_selected_token_visual() {
                 facing_deg: 90,
                 elevation_cm: ui.map.floor_elevation_cm(tok_fl),
                 floor_index: tok_fl,
-                stance_pose: "idle".to_string(),
+                stance_pose: stance_eff.clone(),
                 portrait_url: None,
                 pos_x_cm: Some(px_cm),
                 pos_y_cm: Some(py_cm),
@@ -542,7 +547,7 @@ pub fn satya_update_selected_token_visual() {
             facing_deg: None,
             model_preset: Some(p_eff),
             color_hex: Some(c_eff),
-            stance_pose: None,
+            stance_pose: Some(stance_eff),
             portrait_url: existing_portrait,
             visibility: Some(tok.visibility),
             remove: false,
@@ -709,7 +714,7 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
         let (p_default, c_default, _) = resolve_token_visual(&ui.map, &ui.map.tokens[tok_idx]);
         ui.map.set_token_pos_cm(&sel_id, nx_cm, ny_cm);
 
-        let (preset, color, existing_portrait) = if let Some(v) = ui
+        let (preset, color, existing_stance, existing_portrait) = if let Some(v) = ui
             .map
             .token_visuals
             .iter_mut()
@@ -719,6 +724,7 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
             (
                 v.model_preset.clone(),
                 v.color_hex.clone(),
+                v.stance_pose.clone(),
                 v.portrait_url.clone(),
             )
         } else {
@@ -729,12 +735,12 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
                 facing_deg: facing,
                 elevation_cm: ui.map.floor_elevation_cm(ui.map.active_floor),
                 floor_index: ui.map.active_floor,
-                stance_pose: "idle".to_string(),
+                stance_pose: "standing".to_string(),
                 portrait_url: None,
                 pos_x_cm: Some(nx_cm),
                 pos_y_cm: Some(ny_cm),
             });
-            (p_default, c_default, None)
+            (p_default, c_default, "standing".to_string(), None)
         };
 
         let nm = (nx_cm as f32 / 100.0, ny_cm as f32 / 100.0);
@@ -754,7 +760,7 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
             facing_deg: Some(facing),
             model_preset: Some(preset),
             color_hex: Some(color),
-            stance_pose: None,
+            stance_pose: Some(existing_stance),
             portrait_url: existing_portrait,
             visibility: Some(vis),
             remove: false,

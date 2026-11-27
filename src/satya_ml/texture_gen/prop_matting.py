@@ -3,11 +3,30 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable, Sequence
+from typing import Any, Protocol
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from satya_ml.texture_gen.prop_catalog import PropSpriteSpec
+
+class SpriteSpecLike(Protocol):
+    """Minimal structural contract shared by prop and token sprite specs."""
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def target_w_px(self) -> int: ...
+
+    @property
+    def target_h_px(self) -> int: ...
+
+    @property
+    def key_color(self) -> str: ...
+
+    @property
+    def pad_frac(self) -> float: ...
 
 
 def estimate_border_key_rgb(rgb: np.ndarray, border_px: int = 8) -> np.ndarray:
@@ -263,7 +282,7 @@ def crop_and_fit_rgba(
     return canvas
 
 
-def matte_prop_sprite(raw_rgb: np.ndarray, spec: PropSpriteSpec) -> np.ndarray:
+def matte_prop_sprite(raw_rgb: np.ndarray, spec: SpriteSpecLike) -> np.ndarray:
     """Run full chroma extraction, edge despill, crop, and fit for one prop sprite."""
     alpha, bg_rgb = extract_chroma_alpha(raw_rgb, key_color=spec.key_color)
     clean_rgb = despill_edges(raw_rgb, alpha, bg_rgb, key_color=spec.key_color)
@@ -301,8 +320,19 @@ def verify_sprite_alpha_quality(
     }
 
 
-def render_prop_contact_sheet(
-    sprites: list[tuple[PropSpriteSpec, np.ndarray]], *, cols: int = 4
+def _default_contact_label(spec: Any) -> str:
+    base_w = getattr(spec, "base_w_cells", None)
+    base_h = getattr(spec, "base_h_cells", None)
+    if base_w is not None and base_h is not None:
+        return f"{spec.id} ({base_w}x{base_h}m)"
+    return str(getattr(spec, "id", "sprite"))
+
+
+def render_prop_contact_sheet[S: SpriteSpecLike](
+    sprites: Sequence[tuple[S, np.ndarray]],
+    *,
+    cols: int = 4,
+    label_fn: Callable[[S], str] | None = None,
 ) -> np.ndarray:
     """Render a labeled 3-strip (vinyl / terrazzo / dark slate) inspection grid."""
     cols = max(1, cols)
@@ -336,17 +366,18 @@ def render_prop_contact_sheet(
         py = y0 + (box_h - dh) // 2
         sheet.paste(sprite_img, (px, py), sprite_img)
         draw.rectangle([x0, y0, x0 + box_w, y0 + box_h], outline=(90, 98, 110), width=1)
+        caption = label_fn(spec) if label_fn is not None else _default_contact_label(spec)
         draw.text(
             (x0 + 4, y0 + box_h + 6),
-            f"{spec.id} ({spec.base_w_cells}x{spec.base_h_cells}m)",
+            caption,
             fill=(232, 236, 242),
         )
 
     return np.asarray(sheet, dtype=np.uint8)
 
 
-def render_prop_variants_contact_sheet(
-    rows: list[tuple[PropSpriteSpec, list[np.ndarray]]], *, props_per_row: int = 2
+def render_prop_variants_contact_sheet[S: SpriteSpecLike](
+    rows: Sequence[tuple[S, list[np.ndarray]]], *, props_per_row: int = 2
 ) -> np.ndarray:
     """Render a compact sheet showing each prop's 3 variants side-by-side on 3-strip backdrops."""
     props_per_row = max(1, props_per_row)

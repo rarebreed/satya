@@ -54,14 +54,20 @@ Alongside the ink filter, `#btn-map-tex-mode` toggles `BattlemapTextureMode` (`T
 
 ---
 
-## 4. Token Portrait Discs (`push_token_portrait_disc_svg`)
+## 4. Top-Down 2D Token Figures, Stances & Style C Sprites (`map_2d_tokens`, `map_2d_token_sprites`)
 
-Each token in `ui.map.tokens` renders as a layered medallion inside `#battlemap-overlay`:
-- **Compass & Selection Rings**: Directional facing wedge rotated by `facing_deg`, translucent `.55` opacity for `MessageVisibility::GmOnly` ambush tokens, and dashed amber ring (`r="29"`) when selected.
-- **Clipped Portrait Well**: `<clipPath id="bm-tok-clip-{idx}">` (`r="17"`) frames either:
-  - an allowlisted `<image href="..." preserveAspectRatio="xMidYMid slice"/>` from `TokenVisualSpec.portrait_url` (validated by `satya_schema::sanitize_portrait_url`, permitting `/api/characters/*`, `/maps/*`, `/pkg/*`, `/assets/*`, `https://`, and raster `png`/`jpeg`/`webp` base64 URIs while blocking `javascript:` and `data:image/svg+xml`), or
-  - a distinct top-down/bust SVG operator silhouette matched to `model_preset` (`valkyrie_rig`, `recon_mk4`, `secops_sentry`, `operative_light`, `custom_glb`).
-- **Callsign Badge**: High-contrast corner initials pill (`2`-letter abbreviation from `tok.label`) ensures immediate legibility even when portraits are similar colors.
+Each token in `ui.map.tokens` renders inside `#battlemap-overlay` at continuous `(pos_x_cm, pos_y_cm)` coordinates rotated by `facing_deg` (`0° = North/-Y`):
+- **12 Near-Future 2035 Figures (`TOKEN_FIGURE_PRESETS` / `#map-token-model-select`)**:
+  - *Civilians*: `civilian_unarmed`, `civilian_handgun`, `civilian_rifle`, `civilian_knife`
+  - *Police, Security & Military*: `security_handgun`, `soldier_rifle`, `sniper_rifle`
+  - *Drones*: `drone_quad` (*Echo-9* quadruped ground robot), `drone_aero` (hovering quadrotor UAV with offset ground shadow)
+  - *Biped Androids*: `android_domestic`, `android_industrial`, `android_security`
+  - Legacy `.glb` slugs (`valkyrie_rig`, `recon_mk4`, `secops_sentry`, `operative_light`, `custom_glb`) map deterministically onto 2D equivalents while retaining their 3D diorama meshes.
+- **Posture / Stance Selector (`#map-token-stance-select`)**: `Standing`, `Walking (Holstered)` (`walking_holstered`), `Tactical / Bounding` (`tactical_advance`), `Sprinting` (`sprinting`), `Kneeling` (`crouched`), and `Prone` (`prone`), with graceful stance fallback (`Prone -> Kneeling -> Standing`, movement poses -> `Standing` for drones) and upright corner stance pills (`WK` / `TA` / `SP` / `KN` / `PR`).
+- **Painted Style C Sprites vs. Procedural Vector Figures**:
+  - `BattlemapTextureMode::Painted`: renders `59` pose entries × `3` deterministic entity-hashed variants (`177` alpha-matted 90° top-down Style C WebP sprites) from `/assets/sprites/tokens/*.webp` (cataloged in `src/satya_ml/texture_gen/token_catalog.py`), framed inside a subtle faction-colored tactical ring and directional facing chevron.
+  - `BattlemapTextureMode::ProceduralVector`: renders bespoke top-down SVG silhouettes per `(archetype, stance)` with zero external bitmap fetches.
+- **Custom Portrait Medallions & Callsign Badges**: Tokens with an allowlisted `TokenVisualSpec.portrait_url` (validated by `satya_schema::sanitize_portrait_url`) render inside a circular `<clipPath id="bm-tok-clip-{idx}">` medallion; all tokens display an upright corner initials pill (`2`-letter callsign from `tok.label`) and a dashed amber selection ring when active.
 
 ---
 

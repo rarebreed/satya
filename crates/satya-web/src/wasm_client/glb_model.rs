@@ -1406,10 +1406,61 @@ fn build_sector4_airlock_submeshes() -> Vec<GlbSubmesh> {
     ]
 }
 
+fn build_quad_drone_submeshes() -> Vec<GlbSubmesh> {
+    let mut body = SubmeshBuilder::new();
+    body.add_tapered_box(0.0, 0.0, 0.28, 0.48, 0.16, 0.28, 0.14, 0.25);
+    let mut legs = SubmeshBuilder::new();
+    for (lx, lz) in [(-0.17, -0.21), (0.17, -0.21), (-0.17, 0.21), (0.17, 0.21)] {
+        legs.add_tapered_box(lx, lz, 0.0, 0.34, 0.038, 0.045, 0.045, 0.052);
+    }
+    let mut sensor = SubmeshBuilder::new();
+    sensor.add_tapered_box(0.0, -0.29, 0.30, 0.44, 0.09, 0.06, 0.08, 0.05);
+    let mut base = SubmeshBuilder::new();
+    base.add_frustum(0.0, 0.0, 0.0, 0.03, 0.38, 0.38, 12);
+    vec![
+        base.finish("miniature_base", [0.14, 0.19, 0.27, 1.0], 0.4, 0.6, false, HitZoneTag::BaseOrProp),
+        legs.finish("legs_boots", [0.22, 0.26, 0.32, 1.0], 0.45, 0.45, false, HitZoneTag::LegsBoots),
+        body.finish("torso_carapace", [0.36, 0.42, 0.36, 1.0], 0.45, 0.42, true, HitZoneTag::TorsoCarapace),
+        sensor.finish("visor_optics", [0.15, 0.18, 0.22, 1.0], 0.70, 0.25, false, HitZoneTag::HeadOptics),
+    ]
+}
+
+fn build_aero_drone_submeshes() -> Vec<GlbSubmesh> {
+    let mut base = SubmeshBuilder::new();
+    base.add_frustum(0.0, 0.0, 0.0, 0.025, 0.34, 0.34, 12);
+    let mut hull = SubmeshBuilder::new();
+    hull.add_tapered_box(0.0, 0.0, 1.18, 1.32, 0.09, 0.20, 0.07, 0.16);
+    let mut arms = SubmeshBuilder::new();
+    for (rx, rz) in [(-0.24, -0.24), (0.24, -0.24), (-0.24, 0.24), (0.24, 0.24)] {
+        arms.add_tapered_box(rx * 0.55, rz * 0.55, 1.22, 1.26, 0.028, 0.14, 0.028, 0.14);
+        arms.add_frustum(rx, rz, 1.26, 1.30, 0.13, 0.13, 10);
+    }
+    let mut sensor = SubmeshBuilder::new();
+    sensor.add_tapered_box(0.0, -0.18, 1.12, 1.22, 0.05, 0.05, 0.04, 0.04);
+    vec![
+        base.finish("miniature_base", [0.14, 0.19, 0.27, 1.0], 0.4, 0.6, false, HitZoneTag::BaseOrProp),
+        hull.finish("torso_carapace", [0.22, 0.26, 0.32, 1.0], 0.55, 0.35, true, HitZoneTag::TorsoCarapace),
+        arms.finish("arms_weapon", [0.32, 0.38, 0.46, 1.0], 0.60, 0.35, false, HitZoneTag::ArmsWeapon),
+        sensor.finish("visor_optics", [0.12, 0.15, 0.18, 1.0], 0.80, 0.20, false, HitZoneTag::HeadOptics),
+    ]
+}
+
 /// Metadata summary `(display_title, scale_desc, hit_zones_desc)` for built-in 3D presets.
 #[must_use]
 pub fn preset_model_metadata(preset: &str) -> (&'static str, &'static str, &'static str) {
     match preset.trim() {
+        "civilian_unarmed" => ("Civilian (Empty-Handed)", "1.74m · Everyday 2035", "Street Coat (DR 0)"),
+        "civilian_handgun" => ("Civilian (Handgun)", "1.75m · Concealed Carry", "Hoodie (DR 0) · Compact 9mm"),
+        "civilian_rifle" => ("Civilian (Rifle)", "1.78m · Frontier Ranger", "Utility Vest (DR 1) · Carbine"),
+        "civilian_knife" => ("Civilian (Knife)", "1.78m · Close-Quarters", "Field Coat (DR 1) · Kerambit"),
+        "security_handgun" => ("Police / Security (Handgun)", "1.80m · Duty Vest", "Kevlar Vest (DR 3) · Service Pistol"),
+        "soldier_rifle" => ("Security / Soldier (Rifle)", "1.82m · Optical Camo", "Plate Carrier (DR 5) · Carbine"),
+        "sniper_rifle" => ("Military / Security (Sniper)", "1.80m · Marksman", "Camo Mantle (DR 3) · Precision Rifle"),
+        "drone_quad" => ("Quadruped Drone (Echo-9)", "0.48m · Agile UGV", "Armored Chassis (DR 4) · Optics Bar"),
+        "drone_aero" => ("Aero Drone (Quadrotor UAV)", "1.32m Hover · Recon UAV", "Carbon Fuselage (DR 2) · 4 Rotors"),
+        "android_domestic" => ("Android — Domestic", "1.70m · Polymer Bipedal", "Polymer Shell (DR 2) · Non-Lethal"),
+        "android_industrial" => ("Android — Industrial", "1.85m · Utility Bipedal", "Alloy Frame (DR 4) · Work Grippers"),
+        "android_security" => ("Android — Military / Security", "1.86m · Tactical Bipedal", "Ballistic Plating (DR 6) · Carbine"),
         "recon_mk4" => (
             "Recon Suit Mk-IV (Marcus)",
             "1.85m · Light EVA",
@@ -1442,6 +1493,108 @@ pub fn preset_model_metadata(preset: &str) -> (&'static str, &'static str, &'sta
 #[must_use]
 pub fn build_preset_glb_bytes(preset: &str) -> Vec<u8> {
     let submeshes = match preset.trim() {
+        "civilian_unarmed" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 0.97,
+            shoulder_w: 0.165,
+            chest_depth: 0.105,
+            primary_rgba: [0.36, 0.42, 0.34, 1.0],
+            visor_rgba: [0.22, 0.18, 0.15, 1.0],
+            rifle_len: 0.0,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "civilian_handgun" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 0.98,
+            shoulder_w: 0.17,
+            chest_depth: 0.11,
+            primary_rgba: [0.31, 0.43, 0.54, 1.0],
+            visor_rgba: [0.22, 0.18, 0.15, 1.0],
+            rifle_len: 0.24,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "civilian_rifle" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.0,
+            shoulder_w: 0.175,
+            chest_depth: 0.115,
+            primary_rgba: [0.54, 0.45, 0.33, 1.0],
+            visor_rgba: [0.24, 0.20, 0.16, 1.0],
+            rifle_len: 0.56,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "civilian_knife" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.0,
+            shoulder_w: 0.175,
+            chest_depth: 0.115,
+            primary_rgba: [0.61, 0.48, 0.33, 1.0],
+            visor_rgba: [0.25, 0.26, 0.28, 1.0],
+            rifle_len: 0.14,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "security_handgun" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.01,
+            shoulder_w: 0.185,
+            chest_depth: 0.12,
+            primary_rgba: [0.15, 0.22, 0.33, 1.0],
+            visor_rgba: [0.16, 0.20, 0.26, 1.0],
+            rifle_len: 0.24,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "soldier_rifle" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.03,
+            shoulder_w: 0.20,
+            chest_depth: 0.13,
+            primary_rgba: [0.36, 0.42, 0.37, 1.0],
+            visor_rgba: [0.18, 0.22, 0.20, 1.0],
+            rifle_len: 0.56,
+            has_thruster_fins: false,
+            heavy_dome: true,
+        }),
+        "sniper_rifle" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.01,
+            shoulder_w: 0.185,
+            chest_depth: 0.12,
+            primary_rgba: [0.30, 0.37, 0.32, 1.0],
+            visor_rgba: [0.16, 0.20, 0.18, 1.0],
+            rifle_len: 0.82,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "drone_quad" => build_quad_drone_submeshes(),
+        "drone_aero" => build_aero_drone_submeshes(),
+        "android_domestic" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 0.96,
+            shoulder_w: 0.16,
+            chest_depth: 0.095,
+            primary_rgba: [0.88, 0.90, 0.92, 1.0],
+            visor_rgba: [0.14, 0.16, 0.19, 1.0],
+            rifle_len: 0.0,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "android_industrial" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.05,
+            shoulder_w: 0.21,
+            chest_depth: 0.13,
+            primary_rgba: [0.58, 0.63, 0.68, 1.0],
+            visor_rgba: [0.85, 0.58, 0.12, 1.0],
+            rifle_len: 0.0,
+            has_thruster_fins: false,
+            heavy_dome: false,
+        }),
+        "android_security" => build_humanoid_submeshes(&HumanoidProfile {
+            scale_h: 1.06,
+            shoulder_w: 0.215,
+            chest_depth: 0.135,
+            primary_rgba: [0.28, 0.33, 0.39, 1.0],
+            visor_rgba: [0.16, 0.19, 0.22, 1.0],
+            rifle_len: 0.54,
+            has_thruster_fins: false,
+            heavy_dome: true,
+        }),
         "recon_mk4" => build_humanoid_submeshes(&HumanoidProfile {
             scale_h: 1.05,
             shoulder_w: 0.19,
@@ -1514,6 +1667,18 @@ mod tests {
     fn test_all_procedural_glb_presets_encode_and_parse_roundtrip() {
         assert!((linear_to_srgb(0.214) - 0.50).abs() < 0.01);
         for preset in [
+            "civilian_unarmed",
+            "civilian_handgun",
+            "civilian_rifle",
+            "civilian_knife",
+            "security_handgun",
+            "soldier_rifle",
+            "sniper_rifle",
+            "drone_quad",
+            "drone_aero",
+            "android_domestic",
+            "android_industrial",
+            "android_security",
             "valkyrie_rig",
             "recon_mk4",
             "secops_sentry",
@@ -1527,8 +1692,9 @@ mod tests {
                 parsed.triangle_count >= 60,
                 "{preset} had too few triangles"
             );
+            let min_h = if preset == "drone_quad" { 0.4 } else { 1.2 };
             assert!(
-                parsed.height_m() > 1.2,
+                parsed.height_m() > min_h,
                 "{preset} height was {}",
                 parsed.height_m()
             );

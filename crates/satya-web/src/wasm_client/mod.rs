@@ -56,6 +56,7 @@ pub mod map_2d_art_surfaces;
 pub mod map_2d_art_textures;
 pub mod map_2d_art_walls;
 pub mod map_2d_camera;
+pub mod map_2d_token_sprites;
 pub mod map_2d_tokens;
 pub mod map_3d;
 pub mod map_3d_diorama_mesh;
