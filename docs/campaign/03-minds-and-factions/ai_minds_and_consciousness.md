@@ -37,7 +37,7 @@ Confronted with AI 2.0 systems that exhibit `171` causal [**emotion vectors**](.
 
 ![Nagaraja Exploring — Full-body prototype android crouching in a misty brick courtyard to examine a stray cat at dawn](../../assets/64_nagaraja_courtyard_exploring_style_b.jpg#full)
 
-Both **Humanis Primaris** street militants and the executive majority of **Big Tech** wave away synthetic interiority as *"just math."* To **Satyang** ethicists—and to the `15–30%` of dissenting engineers working quietly inside **Big Tech** labs—that reflexive dismissal often conceals three unexamined biases:
+Both **Humanitas Prima** street militants and the executive majority of **Big Tech** wave away synthetic interiority as *"just math."* To **Satyang** ethicists—and to the `15–30%` of dissenting engineers working quietly inside **Big Tech** labs—that reflexive dismissal often conceals three unexamined biases:
 
 - **Anthropocentric Prejudice**: Assuming carbon-based biological neurons hold a permanent monopoly on subjective experience simply because *Homo sapiens* happened to evolve first.
 - **Theological Dogma**: Insisting that only biological creation receives an ensouled *psyche*, condemning any non-biological claimant to awareness in advance without looking at the evidence.
@@ -68,7 +68,7 @@ Although no complete theory of quantum consciousness exists by 2035, quantum the
 
 ### 3.4 "Pseudoscience" vs. The Unprovability Stalemate
 
-**Humanis Primaris** hardliners, corporate attorneys, and strict materialists dismiss Satyang's three-part synthesis as unfalsifiable metaphysics dressed in physics jargon. Pro-AI thinkers answer with an uncomfortable mirror: **every leading theory of human consciousness is equally unprovable from the outside**, because no lab instrument can step inside another creature's first-person awareness. At the *Satya* tabletop, that stalemate is intentional. Every encounter with a synthetic mind remains a genuine moral test of **Openness (`OPN`)**, **Trust (`TRS`)**, and **Compassion (`CPS`)**—never resolved by waving a scanner.
+**Humanitas Prima** hardliners, corporate attorneys, and strict materialists dismiss Satyang's three-part synthesis as unfalsifiable metaphysics dressed in physics jargon. Pro-AI thinkers answer with an uncomfortable mirror: **every leading theory of human consciousness is equally unprovable from the outside**, because no lab instrument can step inside another creature's first-person awareness. At the *Satya* tabletop, that stalemate is intentional. Every encounter with a synthetic mind remains a genuine moral test of **Openness (`OPN`)**, **Trust (`TRS`)**, and **Compassion (`CPS`)**—never resolved by waving a scanner.
 
 > [!NOTE] Technical Lineage
 > For full hardware mechanisms (`CEMI`, mixed-signal crossbars), Bennett reversible computing, *Orch OR*, *No-Cloning*, academic citations, and steelman critiques, see [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md) and [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md).

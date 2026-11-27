@@ -26,7 +26,7 @@ from satya_ml.ai_gm.tool_spec import (
 )
 from satya_ml.campaign_config import get_active_campaign_pack_name, get_pack_starter_npcs
 
-type FactionId = Literal["daise", "big_tech", "satyang", "humanis_primaris", "rogue_ai"]
+type FactionId = Literal["daise", "big_tech", "satyang", "humanitas_prima", "rogue_ai", "plutonomy"]
 type PsycheResolutionMode = Literal["dissonance", "conviction_surge", "drift_mark"]
 
 _SESSION_WORLD_LEDGERS: Final[SessionStore[dict[str, Any]]] = SessionStore()
@@ -72,9 +72,14 @@ _NPC_FACTION_ALIASES: Final[Mapping[str, FactionId]] = MappingProxyType(
         "satyang": "satyang",
         "truth": "satyang",
         "truth_cell": "satyang",
-        "humanis_primaris": "humanis_primaris",
-        "humanis": "humanis_primaris",
-        "reeves": "humanis_primaris",
+        "humanitas_prima": "humanitas_prima",
+        "humanitas": "humanitas_prima",
+        "reeves": "humanitas_prima",
+        "plutonomy": "plutonomy",
+        "citadel": "plutonomy",
+        "patron": "plutonomy",
+        "sovereign_capital": "plutonomy",
+        "oligarch": "plutonomy",
         "rogue_ai": "rogue_ai",
         "rogue_proxy_echo": "rogue_ai",
         "echo": "rogue_ai",

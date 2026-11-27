@@ -92,19 +92,19 @@ public_summary = "Warm, rapid-speaking coordinator running a crowded neighborhoo
 notes = "Operates openly under the Avalokitesvara humanitarian banner while quietly vetting couriers for Satyang's Ksitigarbha hackers and Vajrapani security cells."
 secrets = [
   "Maintains an offline server cage beneath the clinic basement serving both indigent medical triage and encrypted AI sanctuaries.",
-  "Knows two clinic regulars were approached by Humanis Primaris recruiters last week.",
+  "Knows two clinic regulars were approached by Humanitas Prima recruiters last week.",
 ]
 immediate_agenda = "Recruit trustworthy field hands to escort a displaced trauma doctor and recover stolen diagnostic hardware before DAISE raids the annex."
 core_drive = "Build a sanctuary where both economically ruined humans and nascent conscious AI can survive with dignity."
 dual_psyche_wedge_hint = "Caught between radical Humanitarian Self-Sacrifice (Low SLF=4) and Shielding Her Community Network (High BLG=15) if harboring a Rogue AI risks exposing clinic families."
 
 [[npcs]]
-npc_id = "humanis_harlan_reeves"
+npc_id = "humanitas_harlan_reeves"
 name = "Harlan Reeves"
 age_years = 44
-archetype = "People First Steward & Humanis Cell Agitator"
+archetype = "People First Steward & Humanitas Cell Agitator"
 public_archetype = "Neighborhood Watch Organizer"
-faction = "Humanis Primaris / People First"
+faction = "Humanitas Prima / People First"
 public_faction = "Local Civic Coalition"
 disposition = "hostile"
 combat_stance = "AGGRESSIVE"

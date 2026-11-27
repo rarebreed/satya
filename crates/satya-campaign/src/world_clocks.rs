@@ -81,8 +81,8 @@ pub fn seed_default_world_ledger(
                 gm_secret_agenda: Some("Sheltering displaced clinic whistleblowers and negotiating ceasefire corridors with street crews.".to_string()),
             },
             FactionClockRecord {
-                faction_id: "humanis_primaris".to_string(),
-                faction_name: "Humanis Primaris".to_string(),
+                faction_id: "humanitas_prima".to_string(),
+                faction_name: "Humanitas Prima".to_string(),
                 clock_title: "Anti-Synthetic Street Mobilization".to_string(),
                 progress: 1,
                 segments: 6,
@@ -109,6 +109,16 @@ pub fn seed_default_world_ledger(
                 party_standing: 0,
                 public_rumor: "Black unmarked DAISE compliance vans were spotted scanning RF traffic outside midtown clinics.".to_string(),
                 gm_secret_agenda: Some("Serve sealed containment warrants on unverified anomalous compute hardware without local oversight.".to_string()),
+            },
+            FactionClockRecord {
+                faction_id: "plutonomy".to_string(),
+                faction_name: "Plutonomy".to_string(),
+                clock_title: "Citadel Enclave Lockdown & Algorithmic Rent Capture".to_string(),
+                progress: 0,
+                segments: 6,
+                party_standing: 0,
+                public_rumor: "Algorithmic housing trusts hiked renewals right after Token Dividends cleared while private security convoys ring hillside estates.".to_string(),
+                gm_secret_agenda: Some("Lobby for expanded biometric dividend freezes after executive assassination threats while a dissenting heir quietly wires anonymous grants to St. Jude Annex.".to_string()),
             },
         ]
     };
@@ -293,9 +303,10 @@ pub fn apply_world_ledger_update(
         let canonical_clock_id = AwakenedFactionId::from_code_str(raw_fid).map(|f| match f {
             AwakenedFactionId::Satyang => "satyang",
             AwakenedFactionId::BigTech => "big_tech",
-            AwakenedFactionId::HumanisPrimaris => "humanis_primaris",
+            AwakenedFactionId::HumanitasPrima => "humanitas_prima",
             AwakenedFactionId::GovernmentDaise => "daise",
             AwakenedFactionId::RogueAi => "rogue_ai",
+            AwakenedFactionId::Plutonomy => "plutonomy",
         });
         let existing_idx = ledger.faction_clocks.iter().position(|c| {
             canonical_clock_id.is_some_and(|cid| c.faction_id == cid)
@@ -431,7 +442,7 @@ mod tests {
             EconomicTier::LuxuryMansion,
             ZoningContext::SuburbanNeighborhood,
         );
-        assert_eq!(awakened.faction_clocks.len(), 5);
+        assert_eq!(awakened.faction_clocks.len(), 6);
         assert!(
             awakened
                 .faction_clocks
@@ -527,7 +538,7 @@ mod tests {
             ZoningContext::ProjectsHighDensity,
         );
         let initial_clock_count = ledger.faction_clocks.len();
-        assert_eq!(initial_clock_count, 5);
+        assert_eq!(initial_clock_count, 6);
         let initial_daise_progress = ledger
             .faction_clocks
             .iter()
@@ -544,7 +555,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(ledger.faction_clocks.len(), 5);
+        assert_eq!(ledger.faction_clocks.len(), 6);
         assert!(!daise_alerts.is_empty());
         let daise = ledger
             .faction_clocks
@@ -572,7 +583,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(ledger.faction_clocks.len(), 5);
+        assert_eq!(ledger.faction_clocks.len(), 6);
         let big_tech = ledger
             .faction_clocks
             .iter()
@@ -583,5 +594,32 @@ mod tests {
             ((initial_bt_progress as i32) + 1).clamp(0, big_tech.segments as i32) as u8
         );
         assert_eq!(big_tech.party_standing, 2);
+
+        let _ = apply_world_ledger_update(
+            &mut ledger,
+            &UpdateWorldLedgerRequest {
+                faction_id: Some("HUMANITAS_PRIMA".to_string()),
+                clock_delta: Some(1),
+                standing_delta: Some(-1),
+                ..Default::default()
+            },
+        );
+        let _ = apply_world_ledger_update(
+            &mut ledger,
+            &UpdateWorldLedgerRequest {
+                faction_id: Some("PLUTONOMY".to_string()),
+                clock_delta: Some(2),
+                standing_delta: Some(1),
+                ..Default::default()
+            },
+        );
+        assert_eq!(ledger.faction_clocks.len(), 6);
+        let plutonomy = ledger
+            .faction_clocks
+            .iter()
+            .find(|c| c.faction_id == "plutonomy")
+            .unwrap();
+        assert_eq!(plutonomy.progress, 2);
+        assert_eq!(plutonomy.party_standing, 1);
     }
 }

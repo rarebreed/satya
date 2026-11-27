@@ -262,8 +262,8 @@ Rather than treating every skill rank as a flat 1-for-1 point purchase—which w
 ---
 
 > [!TIP]
-> **Hobbies, Formative Life Events, 5-Faction Templates & Complete Walkthroughs**:
-> Life is more than school and a résumé. For **Personal Hobbies & Subcultures** (`12` archetypes funded by `Experience SP`), the **`2d20` Formative Life Events Table** (injury, family bereavement, romance, AI layoff shock, whistleblower crossroads), **5-Faction Psyche & NPC Templates** (*Satyang, Big Tech, Humanis Primaris, DAISE, Rogue AI*), and the complete worked walkthroughs of **Mateo Vance**, **Dr. Priya Nair**, **Amara Okafor**, and **Linnea Cho**, proceed to [Lifepath Hobbies, Formative Life Events & Factions](lifepath_events_hobbies_and_factions.md).
+> **Hobbies, Formative Life Events, 6-Faction Templates & Complete Walkthroughs**:
+> Life is more than school and a résumé. For **Personal Hobbies & Subcultures** (`12` archetypes funded by `Experience SP`), the **`2d20` Formative Life Events Table** (injury, family bereavement, romance, AI layoff shock, whistleblower crossroads), **6-Faction Psyche & NPC Templates** (*Satyang, Big Tech, Humanitas Prima, DAISE, Rogue AI, Plutonomy*), and the complete worked walkthroughs of **Mateo Vance**, **Dr. Priya Nair**, **Amara Okafor**, and **Linnea Cho**, proceed to [Lifepath Hobbies, Formative Life Events & Factions](lifepath_events_hobbies_and_factions.md).
 
 ---
 

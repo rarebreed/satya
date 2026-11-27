@@ -55,7 +55,7 @@ fn test_compile_party_hooks_generates_character_and_entanglement_hooks() {
     let mut pc2 = CharacterSheetRecord {
         character_id: "pc-reeves".to_string(),
         character_name: "Harlan Reeves".to_string(),
-        callsign_or_role: "Humanis Liaison".to_string(),
+        callsign_or_role: "Humanitas Liaison".to_string(),
         ..CharacterSheetRecord::default()
     };
     pc2.characteristics.opn = 5;
@@ -107,9 +107,9 @@ fn test_compile_party_hooks_generates_character_and_entanglement_hooks() {
 }
 
 #[test]
-fn test_all_5_factions_and_14_archetypes_generate_legal_npcs() {
-    assert_eq!(AwakenedFactionId::ALL.len(), 5);
-    assert_eq!(FactionArchetypeId::ALL.len(), 14);
+fn test_all_6_factions_and_16_archetypes_generate_legal_npcs() {
+    assert_eq!(AwakenedFactionId::ALL.len(), 6);
+    assert_eq!(FactionArchetypeId::ALL.len(), 16);
     for arch in FactionArchetypeId::ALL {
         let res = generate_npc_from_prompt(&NpcGenerationParams {
             prompt: String::new(),

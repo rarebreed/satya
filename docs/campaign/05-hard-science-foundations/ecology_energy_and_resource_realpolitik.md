@@ -4,7 +4,7 @@
 
 In *Awakened*, the decade from **2026 to 2035** is shaped as much by high-voltage transformers, depleted aquifers, maritime chokepoints, and brush wars as by neural weights. Crucially, **AI did not break a peaceful geopolitics, a healthy biosphere, or an abundant electrical grid**. Instead, datacenter and robotics compute landed as the ruthless *marginal* load—the final heavy straw—atop energy corridors, watersheds, and municipal budgets that had **already been stripped of safety margins** by hydrocarbon wars, partisan transmission paralysis, uncoordinated electric vehicle (**EV**) and heat-pump electrification, hydroclimate whiplash, and agricultural water exhaustion.
 
-This foundation chapter explains the physical machinery beneath the 2035 street reality: how non-AI environmental and geopolitical conflicts interlock with **Pax Silica** supply-chain encirclement, **Taiwan / First Island Chain** brinkmanship, transboundary **water and mineral brush wars**, and **Jevons Paradox** across **2026–2035**. Knowing why a substation catches fire at `6:00 PM` or why a fab enclave drinks a farming valley dry turns abstract backdrop into immediate street stakes for **DAISE**, **Shen**, **Big Tech**, **Humanis Primaris**, and **Satyang**.
+This foundation chapter explains the physical machinery beneath the 2035 street reality: how non-AI environmental and geopolitical conflicts interlock with **Pax Silica** supply-chain encirclement, **Taiwan / First Island Chain** brinkmanship, transboundary **water and mineral brush wars**, and **Jevons Paradox** across **2026–2035**. Knowing why a substation catches fire at `6:00 PM` or why a fab enclave drinks a farming valley dry turns abstract backdrop into immediate street stakes for **DAISE**, **Shen**, **Big Tech**, **Humanitas Prima**, **Plutonomy**, and **Satyang**.
 
 ---
 
@@ -21,7 +21,7 @@ flowchart TD
     Margin --> Fracture
     Pax["Compute Phase II (2026-2033)\nPax Silica vs. Shen Bifurcation\n(Taiwan Bottleneck, ESZs & Mineral Rush)"] --> Brush["Brush Wars & Gray-Zone Intrigue\nLuzon Cable Cuts, Indus/Nile/Mekong Dams,\nMineral Coups, Fish Wars & Bio-Espionage"]
     Pax --> Jevons["Compute Phase III (2030-2035)\nAI 2.0 Jevons Explosion (30x Efficiency\n-> 4x-6x Net Power, Robotics & QPUs)"]
-    Fracture --> Politics["2032-2035 Polycrisis Horizon\nInsurance Retreat, 'People First', Humanis\nSabotage & DAISE Overseas Emergency Ops"]
+    Fracture --> Politics["2032-2035 Polycrisis Horizon\nInsurance Retreat, 'People First', Humanitas\nSabotage & DAISE Overseas Emergency Ops"]
     Brush --> Politics
     Jevons --> Politics
 ```
@@ -96,7 +96,7 @@ The **first systemic domestic fracture** strikes grid-choked cluster corridors (
 1. **Supply Collapse**: Failed winter snowpack trims hydro; wildfire `PSPS` shutoffs sever mountain transmission lines; smoke dims regional solar `20%`; and `>32°C` river cooling water forces thermal nuclear and gas plants to **derate output by `10–25%`** so they don't boil river ecosystems or melt condenser seals.
 2. **Cooling Flip (`42–48°C` Ambient)**: Under stationary wet-bulb heat domes (`32–35°C` **Wet-Bulb Globe Temperature, `WBGT`**, the combined heat-and-humidity ceiling near where unprotected human sweat stops cooling the body), ostensibly "water-free" dry-cooled datacenters hit physical thermal limits and trip over to **emergency evaporative water deluge**, sucking tens of millions of liters per day straight out of rationed municipal water mains.
 3. **Sunset EV + AC Transformer Blowouts (`36–60 Month` `LPT` Famine)**: At `6:00 PM`, rooftop solar drops toward zero right as residential air conditioners run wide open and commuters plug in Level-2 `EV` chargers. Overheated substations fail explosively—while specialized grain-oriented electrical steel (**`GOES`**) **Large Power Transformers ([`LPTs`](../07-appendix/plain_english_glossary.md#4-energy-climate-infrastructure--geopolitics))**, the multi-ton high-voltage hearts of every major substation, sit on **`3–5 year` global manufacturing backlogs** cornered upfront by hyperscaler procurement teams.
-4. **Asymmetric Curtailment**: Protected by national-security continuity tiers, razor-wired corporate AI campuses stay chilled at `20°C` while adjacent neighborhoods suffer **rolling blackouts, `EV` charging curfews, and boil-water advisories**—forging **People First** (`2032–2034`) as a populist revolt and teaching militant **Humanis Primaris** cells a brutal tactical truth: destroying one irreplaceable `500 kV` `LPT` transformer can blind a billion-dollar datacenter for over a year.
+4. **Asymmetric Curtailment**: Protected by national-security continuity tiers, razor-wired corporate AI campuses stay chilled at `20°C` while adjacent neighborhoods suffer **rolling blackouts, `EV` charging curfews, and boil-water advisories**—forging **People First** (`2032–2034`) as a populist revolt and teaching militant **Humanitas Prima** cells a brutal tactical truth: destroying one irreplaceable `500 kV` `LPT` transformer can blind a billion-dollar datacenter for over a year.
 
 ---
 

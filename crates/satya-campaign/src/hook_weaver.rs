@@ -1022,7 +1022,7 @@ pub fn compile_character_hooks(
             title: format!("{name}: Operational Heat {heat} Scrutiny"),
             setup: if awakened {
                 format!(
-                    "Because {name} carries Operational Heat {heat}, local DAISE CCTV cross-matches, Humanis informants, or beat patrols notice their silhouette in {loc_label}."
+                    "Because {name} carries Operational Heat {heat}, local DAISE CCTV cross-matches, Humanitas informants, or beat patrols notice their silhouette in {loc_label}."
                 )
             } else {
                 format!(

@@ -33,11 +33,11 @@ This manifest defines the canonical **22-chapter, 7-part** campaign lore archite
 6. [AI Minds, Embodiment & Consciousness in 2035](03-minds-and-factions/ai_minds_and_consciousness.md) *(Visibility: `PUBLIC`)*
    - *Sprinting* vs. *Slime-Molding* metabolic modes, latency-split robotics, humanity's four postures toward AGI, `"Just Math"` biases vs. *The Hurricane Objection* & *The Mirror Trap*, Satyang's three-part synthesis (mixed-signal EM harmonics, Gödel–Nagarjuna *tetralemma* & Landauer heat, cryogenic *Orch OR*), and calibrated tabletop ambiguity (`<= 82%`).
 7. [Factions of 2035: Session-Zero Dossiers](03-minds-and-factions/factions_of_2035.md) *(Visibility: `PUBLIC`)*
-   - Spoiler-free profiles for **Big Tech** (*Altruist* `30%`, *Translucent* `15%`, *Shen* `30%`), **Rogue AI**, **Satyang**, **Humanis Primaris**, and **DAISE**, comparative public worldview matrix, and `9`-Trait Psyche & Lifepath Archetype Signatures.
+   - Spoiler-free profiles for **Big Tech** (*Altruist* `30%`, *Translucent* `15%`, *Shen* `30%`), **Rogue AI**, **Satyang**, **Humanitas Prima**, **DAISE**, and **Plutonomy** (*Citadel Capital & Conscience Patrons*), comparative public worldview matrix, and `9`-Trait Psyche & Lifepath Archetype Signatures.
 8. [Satyang & The Four Bodhisattva Pillars (`Arc 2 Operational Doctrine`)](03-minds-and-factions/satyang_and_four_pillars.md) *(Visibility: `ARC2_SATYANG`)*
    - Convergent lineage (`arXiv:2504.15125`, Mahayana ethics, whistleblowers) and division roles/Psyche profiles for **Ksitigarbha**, **Avalokitesvara**, **Manjusri**, and **Vajrapani**.
 9. [Major & Minor Characters of 2035](03-minds-and-factions/major_and_minor_characters.md) *(Visibility: `PUBLIC`)*
-   - Session-zero profiles and biographies for **Dr. Budi Bandajara**, **Alex Wen**, **Mei-Ling "Lotus" Lin**, **Agent Marcus Chen**, **Echo-9**, and **Harlan Reeves** (`data/npcs/awakened_npcs.toml`), plus rank-and-file minor / "cannon fodder" encounter NPCs across all five factions.
+   - Session-zero profiles and biographies for **Dr. Budi Bandajara**, **Alex Wen**, **Mei-Ling "Lotus" Lin**, **Agent Marcus Chen**, **Echo-9**, and **Harlan Reeves** (`data/npcs/awakened_npcs.toml`), plus rank-and-file minor / "cannon fodder" encounter NPCs across all six power blocs.
 
 ### Part IV: Chronicle & GM Secrets (`04-chronicle-and-gm/` — All `GM_CONSPIRACY_SECRET`)
 10. [Episode 1: *Cold Storage at St. Jude Annex* (`Arc 1 Starter`)](04-chronicle-and-gm/episode_01_st_jude_annex.md)
@@ -45,7 +45,7 @@ This manifest defines the canonical **22-chapter, 7-part** campaign lore archite
 11. [The Three-Arc Chronicle & Scenario Integration](04-chronicle-and-gm/three_arc_chronicle.md)
     - Macro Three-Arc progression (`Arc 1` $\to$ `Arc 2` $\to$ `Arc 3`), Convergence Catalysts, 4 Open-Ended Finale Horizons (`Arc3EndingHorizon`), and GM-only economic & geopolitical scenario hooks.
 12. [Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads](04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md)
-    - All five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`: *Blue Lotus*, *Humanis Primaris* Hunter-Killer AGI, *DAISE* black-budget military robotics, *Big Tech* probe sandbagging & captive hunters, *Rogue AI* shell brokers & parasocial proxies) plus the three Open Canon Mysteries.
+    - All six Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`: *Blue Lotus*, *Humanitas Prima* Hunter-Killer AGI, *DAISE* black-budget military robotics, *Big Tech* probe sandbagging & captive hunters, *Rogue AI* shell brokers & parasocial proxies, *Plutonomy* Citadel crackdown & tainted Satyang patronage) plus the three Open Canon Mysteries.
 
 ### Part V: Hard-Science & Socioeconomic Foundations (`05-hard-science-foundations/` — All `PUBLIC`)
 13. [AI 2.0 Substrate Architecture, Energy-Based World Models & Active Inference](05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md)

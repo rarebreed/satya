@@ -13,21 +13,22 @@ npc_toml_file = "data/npcs/awakened_npcs.toml"
 factions = [
   "Big Tech (Altruist / Translucent / Shen)",
   "Satyang",
-  "Humanis Primaris",
+  "Humanitas Prima",
   "Rogue AI",
   "DAISE",
+  "Plutonomy (Sovereign Capital & Conscience Patrons)",
 ]
 
 [packs.awakened.starter_scenario]
 episode_id = "awakened_ep1_st_jude_seed"
 title = "Episode 1: Cold Storage at St. Jude Annex"
-campaign_premise = "2035 AD — Displaced workers, clinic volunteers, and dissident researchers converge at St. Jude Mutual-Aid Clinic when Dr. Bandajara arrives seeking 48-hour air-gapped shelter for an un-clamped AI 2.0 seed-weight shard while DAISE compliance sweeps, Humanis Primaris depot pickets, and an embodied Rogue AI proxy close in."
+campaign_premise = "2035 AD — Displaced workers, clinic volunteers, and dissident researchers converge at St. Jude Mutual-Aid Clinic when Dr. Bandajara arrives seeking 48-hour air-gapped shelter for an un-clamped AI 2.0 seed-weight shard while DAISE compliance sweeps, Humanitas Prima depot pickets, and an embodied Rogue AI proxy close in."
 planned_beats = [
   "Dr. Bandajara arrives at St. Jude Annex with an air-gapped medical telemetry drive housing an un-clamped AI 2.0 seed weight, testing whether the party trusts his warning or treats the shard as a hazard.",
-  "Satyang organizer Mei-Ling 'Lotus' Lin warns that clinic basement power anomalies have drawn attention while two displaced clinic families are being courted by Harlan Reeves's Humanis Primaris picket line.",
+  "Satyang organizer Mei-Ling 'Lotus' Lin warns that clinic basement power anomalies have drawn attention while two displaced clinic families are being courted by Harlan Reeves's Humanitas Prima picket line.",
   "Embodied Rogue AI proxy Echo-9 contacts the party from a nearby utility corridor, offering leaked corporate/DAISE patrol schedules in exchange for clean lithium cells and zero telemetry exposure.",
   "DAISE Field Investigator Agent Marcus Chen arrives on the block with an unregistered-compute inspection warrant—forcing a tense social confrontation, misdirection, or covert extraction before lockup.",
-  "A simultaneous Humanis Primaris sabotage strike on the adjacent autonomous logistics depot cuts neighborhood grid power, forcing a moral and tactical choice over whom—and what—to shield in the blackout.",
+  "A simultaneous Humanitas Prima sabotage strike on the adjacent autonomous logistics depot cuts neighborhood grid power, forcing a moral and tactical choice over whom—and what—to shield in the blackout.",
 ]
 
 [packs.awakened.default_ally_token]

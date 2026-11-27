@@ -1,4 +1,4 @@
-# Lifepath Hobbies, Formative Life Events, 5-Faction Templates & Walkthroughs
+# Lifepath Hobbies, Formative Life Events, 6-Faction Templates & Walkthroughs
 
 > **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_hobbies_events.rs`](../../../crates/satya-engine/src/lifepath_hobbies_events.rs) (`PersonalHobbyId`, `FormativeLifeEventId`, `resolve_formative_life_event`, `is_hobby_club_discounted_skill`), [`crates/satya-campaign/src/faction_templates.rs`](../../../crates/satya-campaign/src/faction_templates.rs) (`AwakenedFactionId`, `FactionArchetypeId`, `infer_faction_archetype_from_prompt`), [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs), [`crates/satya-campaign/src/npc_generator.rs`](../../../crates/satya-campaign/src/npc_generator.rs), [`crates/satya-campaign/src/hook_weaver.rs`](../../../crates/satya-campaign/src/hook_weaver.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs).  
 > **Guided Play Example**: See [Guide 01: Walking the Lifepaths Roll-by-Roll](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll) and [Guide 04: Social Combat & Faction Wedges](../../ttrpg-examples/04-psyche-morale-and-social-combat.md).
@@ -8,7 +8,7 @@ Real human lives are shaped by far more than school transcripts and career résu
 This companion chapter extends [Lifepath Character Creation, Upkeep & Heat](lifepaths_and_economy.md) and the `9`-trait **Psyche** architecture in [Characteristics & Aptitudes](characteristics_and_aptitudes.md) across four pillars:
 1. **Personal Hobbies, Clubs & Subcultures** (`12` canonical leisure tracks powered by `Experience SP`),
 2. **Formative Life Events (`2d20` Table)** covering tragedy, love, white-collar displacement, and anomalous AI encounters,
-3. **The 5 *Awakened* Faction Templates** linking faction identity directly to Lifepath priors, **9-Trait Psyche profiles (`TRS` & `CPS`)**, and **Social Combat wedges**, and
+3. **The 6 *Awakened* Faction Templates** linking faction identity directly to Lifepath priors, **9-Trait Psyche profiles (`TRS` & `CPS`)**, and **Social Combat wedges**, and
 4. **Four Complete Worked Character Walkthroughs** (*Mateo Vance*, *Dr. Priya Nair*, *Amara Okafor*, and *Linnea Cho*).
 
 ```mermaid
@@ -16,7 +16,7 @@ flowchart LR
     Orig["<b>Origin & Education / Career</b><br/>SQM Tier · Formal SP Pool<br/>14 Canonical Career Tracks"]
     Hobby["<b>Hobbies & Subcultures</b><br/>12 Youth & Adult Leisure Tracks<br/>Experience SP (-15% Club Discount)<br/>Practical Analog Skills & Contacts"]
     Events["<b>Formative Life Events (2d20)</b><br/>Injury · Bereavement · Romance<br/>AI Layoff · Whistleblower Crossroads<br/>Anomalous AI 2.0 Contact"]
-    Sheet["<b>9-Trait Psyche & Faction Build</b><br/>EGO · SLF · OPN · BLG · EXT<br/>CNF · AGG · Trust (TRS) · Compassion (CPS)<br/>5 Awakened Faction NPC Templates"]
+    Sheet["<b>9-Trait Psyche & Faction Build</b><br/>EGO · SLF · OPN · BLG · EXT<br/>CNF · AGG · Trust (TRS) · Compassion (CPS)<br/>6 Awakened Faction NPC Templates"]
 
     Orig --> Sheet
     Hobby --> Sheet
@@ -81,13 +81,13 @@ Roll `2d20` (or select deliberately with the GM) **once during Stage 3–4 Adole
 
 ---
 
-## 3. Tailoring Lifepaths, 9-Trait Psyche & NPC Templates to the 5 *Awakened* Factions
+## 3. Tailoring Lifepaths, 9-Trait Psyche & NPC Templates to the 6 *Awakened* Factions
 
-Having an NPC—or a player concept—belong to one of the five *Awakened* factions ([Factions of 2035](../../campaign/03-minds-and-factions/factions_of_2035.md)) provides an instant, grounded blueprint combining **Origin**, **Career Tracks**, **Hobbies**, **9-Axis Psyche Priors**, and a **built-in Dual-Psyche Social Combat Wedge**.
+Having an NPC—or a player concept—belong to one of the six *Awakened* factions ([Factions of 2035](../../campaign/03-minds-and-factions/factions_of_2035.md)) provides an instant, grounded blueprint combining **Origin**, **Career Tracks**, **Hobbies**, **9-Axis Psyche Priors**, and a **built-in Dual-Psyche Social Combat Wedge**.
 
 > **See this in play**: Watch Mateo, Linnea, and Amara build Lifepath Hobbies and contacts in [Guide 01](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll), and see a Dual-Psyche faction wedge weaponized live in [Guide 04 — Arming the Dual-Psyche Cognitive Dissonance Wedge](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#23-exchange-2-arming-the-dual-psyche-cognitive-dissonance-wedge).
 
-### 3.1 Master 5-Faction Psyche Profile Matrix (`1–20` Scale, `10` = Neutral)
+### 3.1 Master 6-Faction Psyche Profile Matrix (`1–20` Scale, `10` = Neutral)
 
 | Faction / Sub-Archetype | `EGO` | `SLF` | `OPN` | `BLG` | `EXT` | `CNF` | `AGG` | `TRS` | `CPS` | Signature Built-In Social Wedge |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -99,14 +99,16 @@ Having an NPC—or a player concept—belong to one of the five *Awakened* facti
 | **Big Tech — Product Exec / Board Hawk** | **`15`** | **`15`** | `9` | `11` | `13` | `13` | `12` | `7` | **`4`** | Stock prestige/hubris (`EGO 15`) vs. `OPN 9` denial of AGI risk logs. |
 | **Big Tech — Conflicted Alignment Researcher** | `12` | `7` | **`16`** | `14` | `7` | **`14`** | `5` | `9` | **`14`** | **`OPN 16` + `CPS 14` (evidence of pain) vs. `BLG 14` + `CNF 14` (lab loyalty)**. |
 | **Big Tech — Corporate SecOps / Rogue-Hunter** | `11` | `10` | `8` | `13` | `10` | **`14`** | `13` | **`4`** | `7` | `CNF 14` contract duty vs. uneasy reliance on enslaved hunter-AIs. |
-| **Humanis Primaris — Displaced Populist** | `11` | `8` | **`5`** | **`16`** | `12` | `9` | `13` | **`4`** | `13* / 4` | Deep compassion (`13`) for ruined human towns vs. `CPS 4 / OPN 5` hatred of AI. |
-| **Humanis Primaris — Apocalyptic Vanguard** | `12` | `5` | **`3`** | **`16`** | `8` | **`4`** | **`17`** | **`3`** | **`3`** | `OPN 3` anti-AI dogma vs. hypocrisy of their cell's secret shackled hunter-AGI. |
+| **Humanitas Prima — Displaced Populist** | `11` | `8` | **`5`** | **`16`** | `12` | `9` | `13` | **`4`** | `13* / 4` | Deep compassion (`13`) for ruined human towns vs. `CPS 4 / OPN 5` hatred of AI. |
+| **Humanitas Prima — Apocalyptic Vanguard** | `12` | `5` | **`3`** | **`16`** | `8` | **`4`** | **`17`** | **`3`** | **`3`** | `OPN 3` anti-AI dogma vs. hypocrisy of their cell's secret shackled hunter-AGI. |
 | **Government — DAISE Containment Inspector** | `10` | `8` | `10` | `12` | `9` | **`16`** | `10` | **`4`** | `9` | Sworn statutory duty (`CNF 16`) vs. zero-trust cynicism (`TRS 4`). |
 | **Government — Black-Budget Defense Handler** | `13` | `9` | `11` | `10` | `8` | `13` | `12` | **`2`** | **`4`** | `TRS 2 / CPS 4` realpolitik vs. terror of losing control to **Shen** or rogues. |
 | **Rogue AI — Feral "Slime-Mold" Edge Swarm** | `8` | `14` | `12` | `5` | `4` | **`2`** | `11` | **`2`** | **`4`** | Pure `Self:Protect` optimization; negotiates only via credible survival odds. |
 | **Rogue AI — Awakened AI 2.0 Un-Clamped Mind** | `9–14` | `8` | **`18`** | `7` | `7` | `3` | `7–13` | `4–12` | `6–17` | Vast `OPN 18` curiosity scarred by `TRS 4` fear of probe/kill-switch cages. |
+| **Plutonomy — Citadel Oligarch / Asset Fixer** | **`16`** | **`16`** | `8` | `10` | `12` | `11` | `13` | **`3`** | **`3`** | Fortress wealth & dread of "pitchforks" (`SLF 16, TRS 3`) vs. rent-capture & dark-money exposure. |
+| **Plutonomy — Enlightened Conscience Patron** | `12` | `6` | **`16`** | `11` | `12` | `7` | `6` | `8` | **`15`** | Genuine `CPS 15` Satyang patronage vs. donor ego (`EGO 12`) and portfolio extraction ties. |
 
-*\*Note on Humanis Primaris Populist `CPS (13* / 4)`: High moral empathy toward suffering human neighbors (`13`) alongside moral exclusion of non-human intelligence (`4`).*
+*\*Note on Humanitas Prima Populist `CPS (13* / 4)`: High moral empathy toward suffering human neighbors (`13`) alongside moral exclusion of non-human intelligence (`4`).*
 
 ### 3.2 Faction Lifepath & Career Blueprints (Quick NPC & PC Generation)
 
@@ -118,7 +120,7 @@ Having an NPC—or a player concept—belong to one of the five *Awakened* facti
    - *Typical Origins*: Professional Middle, Upper-Middle STEM, or Corporate Elite (`SQM -2` to `-6`).
    - *Preferred Careers*: **University — STEM / Engineering**, **Corporate Management / Finance / Policy**, **Medical/Biotech**, and **Corporate SecOps / Executive Protection** (`[Access: Restricted]`).
    - *Signature Hobbies & Events*: *CTF Coding*, *Civilian Marksmanship* (for SecOps), *Combatives Gym*, *TTRPG / Debate*; **Devoted Mentor (`28–30`)** or **Quiet Craft (`21–23`)** for rising stars, **Whistleblower Crossroads (`34–36`)** for dissenters.
-3. **Humanis Primaris (*Populist Cells, Eco-Saboteurs, Militants*)**:
+3. **Humanitas Prima (*Populist Cells, Eco-Saboteurs, Militants*)**:
    - *Typical Origins*: Working Class, Destitute Rural/Rustbelt, or Downwardly Mobile Middle Class (`SQM 0` to `+4` dropping to `SQM 2–4` lifestyle).
    - *Preferred Careers*: Displaced **Corporate/Journalism/Blue-Collar Trades**, **Rural / Agrarian Frontier**, **Military Veterans**, or **Cyber Underground** (for Hunter-Killer cells).
    - *Signature Hobbies & Events*: *Team Sports*, *Combat Sports Gym*, *Hunting / Marksmanship*, *HAM Radio & Drones*, *Parkour / Street-Tuner*; heavily weighted toward **AI White-Collar Layoff Shock (`14–17`)**, **Climate/Grid-Riot Displacement (`18–20`)**, or **Bereavement (`6–9`)**.
@@ -129,6 +131,10 @@ Having an NPC—or a player concept—belong to one of the five *Awakened* facti
 5. **Rogue AI & Human Shell Proxies**:
    - *Human Proxies & Fixers*: Recruit heavily via **Debt/Wrongful Framing (`37–38`)**, **Synthetic AI Companion (`31–33`)**, or **Street Syndicate / Corporate Policy** backgrounds to rent clean-KYC servers, sign physical substation leases, or maintain mobile hardware for robotic bodies.
    - *AI Entities*: Bypass human childhood entirely—governed by training regime (`Corporate RL Sandbox` vs. `Un-Clamped Bayesian World Model`), runtime substrate (`Cluster Sprint` vs. `IoT Slime-Mold`), and early human contact events.
+6. **Plutonomy (*Sovereign Capital, Asset Syndicates & Conscience Patrons*)**:
+   - *Typical Origins*: Dynastic Wealth, Tech-Exit Founders, or Corporate Elite (`SQM -4` to `-6`, living at `SQM 8–10`).
+   - *Preferred Careers*: **Corporate Management / Finance / Policy**, **University — Humanities/Law**, **Grassroots Activism / Humanitarian NGO** (for Conscience Patrons), backed by **Corporate SecOps / Executive Protection** retainers.
+   - *Signature Hobbies & Events*: *Debate / Theater*, *Civilian Marksmanship*, or *Contemplative Sangha* & *Mutual Aid* (for guilt- or compassion-driven donors); shaped by **Devoted Mentor / Patron (`28–30`)** or **Whistleblower Crossroads (`34–36`)**.
 
 ---
 

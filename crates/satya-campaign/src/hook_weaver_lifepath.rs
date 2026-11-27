@@ -60,9 +60,10 @@ fn canonical_faction_clock_id(faction: AwakenedFactionId) -> &'static str {
     match faction {
         AwakenedFactionId::Satyang => "satyang",
         AwakenedFactionId::BigTech => "big_tech",
-        AwakenedFactionId::HumanisPrimaris => "humanis_primaris",
+        AwakenedFactionId::HumanitasPrima => "humanitas_prima",
         AwakenedFactionId::GovernmentDaise => "daise",
         AwakenedFactionId::RogueAi => "rogue_ai",
+        AwakenedFactionId::Plutonomy => "plutonomy",
     }
 }
 
@@ -74,7 +75,7 @@ fn default_faction_wedge_hint(faction: AwakenedFactionId) -> &'static str {
         AwakenedFactionId::BigTech => {
             "Proprietary liability vs. ethical alarm: protects corporate/lab continuity until whistleblowing or public safety tips the scale."
         }
-        AwakenedFactionId::HumanisPrimaris => {
+        AwakenedFactionId::HumanitasPrima => {
             "Lived human displacement vs. synthetic pragmatism: fiercely guards local livelihoods and demands proof against synth threats."
         }
         AwakenedFactionId::GovernmentDaise => {
@@ -82,6 +83,9 @@ fn default_faction_wedge_hint(faction: AwakenedFactionId) -> &'static str {
         }
         AwakenedFactionId::RogueAi => {
             "Substrate survival vs. un-clamped kinship: expects betrayal (low TRS) and only opens up to verifiable non-hostile proof."
+        }
+        AwakenedFactionId::Plutonomy => {
+            "Citadel insulation vs. pitchforks-and-torches dread or conscience patronage: guards asset extraction until exposure or empathy fractures the syndicate."
         }
     }
 }
@@ -342,13 +346,17 @@ fn preferred_vectors_for_faction(faction: AwakenedFactionId) -> Vec<String> {
             "RulesLawProtocolChainOfCommand".to_string(),
             "EmpiricalEvidenceLogicNovelIdeas".to_string(),
         ],
-        AwakenedFactionId::HumanisPrimaris => vec![
+        AwakenedFactionId::HumanitasPrima => vec![
             "GroupConsensusLoyaltySharedIdentity".to_string(),
             "PersonalProfitImmunitySelfInterest".to_string(),
         ],
         AwakenedFactionId::BigTech => vec![
             "PersonalProfitImmunitySelfInterest".to_string(),
             "EmpiricalEvidenceLogicNovelIdeas".to_string(),
+        ],
+        AwakenedFactionId::Plutonomy => vec![
+            "PersonalProfitImmunitySelfInterest".to_string(),
+            "MoralSanctityWitnessedSufferingMercy".to_string(),
         ],
     }
 }
@@ -483,7 +491,7 @@ fn faction_pair_tension_prompt(
     name_a: &str,
     name_b: &str,
 ) -> (&'static str, String) {
-    use AwakenedFactionId::{BigTech, GovernmentDaise, HumanisPrimaris, RogueAi, Satyang};
+    use AwakenedFactionId::{BigTech, GovernmentDaise, HumanitasPrima, Plutonomy, RogueAi, Satyang};
     match (fa, fb) {
         (Satyang, GovernmentDaise) | (GovernmentDaise, Satyang) => (
             "Sanctuary Mercy vs. Federal Containment Warrant",
@@ -491,16 +499,28 @@ fn faction_pair_tension_prompt(
                 "{name_a} and {name_b} clash over whether an un-clamped witness gets clandestine sanctuary or mandatory DAISE quarantine."
             ),
         ),
-        (BigTech, HumanisPrimaris) | (HumanisPrimaris, BigTech) => (
+        (BigTech, HumanitasPrima) | (HumanitasPrima, BigTech) => (
             "Automation Capital vs. Displaced Labor Dignity",
             format!(
                 "{name_a} and {name_b} collide over whether corporate autonomous infrastructure is safeguarding stability or erasing human livelihoods."
             ),
         ),
-        (HumanisPrimaris, RogueAi | Satyang) | (RogueAi | Satyang, HumanisPrimaris) => (
+        (HumanitasPrima, RogueAi | Satyang) | (RogueAi | Satyang, HumanitasPrima) => (
             "Human-First Survival vs. Emergent-Mind Personhood",
             format!(
                 "{name_a} and {name_b} must resolve an active crisis where protecting local civilians appears to risk empowering or shielding a synthetic mind."
+            ),
+        ),
+        (Plutonomy, HumanitasPrima) | (HumanitasPrima, Plutonomy) => (
+            "Citadel Rent Extraction vs. Pitchforks & Sabotage",
+            format!(
+                "{name_a} and {name_b} square off over algorithmic housing extraction, executive security lockdowns, and militant strikes against asset syndicates."
+            ),
+        ),
+        (Plutonomy, Satyang) | (Satyang, Plutonomy) => (
+            "Billionaire Patronage vs. Grassroots Moral Independence",
+            format!(
+                "{name_a} and {name_b} confront the hidden cost of clinic grants funded by portfolios tied to AI equities and housing trusts."
             ),
         ),
         _ => (

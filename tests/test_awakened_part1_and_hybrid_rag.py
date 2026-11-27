@@ -243,7 +243,7 @@ def test_part1_feature3_4_5_6_7_end_to_end() -> None:
     )
     assert ham_out["hobby_anchor_applied"] is True
     clocks = get_world_clocks_and_heat.invoke({"session_id": sid})
-    assert len(clocks["faction_clocks"]) >= 5
+    assert len(clocks["faction_clocks"]) >= 6
 
     # Feature 7: Dissenter ~30% vs ~15% rates & generate_npc_from_description awakened_social_origin_hook
     satya_py = _ensure_satya_py_loaded()
@@ -343,7 +343,7 @@ def test_part2_hybrid_rag_synonyms_tables_rust_symbols_and_visibility_wall() -> 
     assert "gm_conspiracy_secret" not in joined_player
 
     public_faction_hits = idx.search(
-        "Humanis Primaris DAISE Altruist",
+        "Humanitas Prima DAISE Altruist",
         corpora=["campaign_lore"],
         caller_role="player",
         top_k=6,

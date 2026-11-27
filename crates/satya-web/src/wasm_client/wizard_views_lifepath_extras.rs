@@ -40,7 +40,7 @@ fn parse_life_event_roll_input<F: FnMut(i32) -> i32>(val: &str, rng: &mut F) -> 
     }
 }
 
-/// Applies one of the 14 *Awakened* [`FactionArchetypeId`] templates (or `"NONE"` to clear)
+/// Applies one of the 16 *Awakened* [`FactionArchetypeId`] templates (or `"NONE"` to clear)
 /// onto [`CharacterWizardState`], updating Lifepath, Career Terms, Hobbies, Life Event, and 9 Psyche traits.
 pub fn apply_faction_template_to_wizard(
     wiz: &mut CharacterWizardState,

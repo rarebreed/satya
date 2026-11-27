@@ -3006,7 +3006,7 @@ async fn test_load_all_awakened_starter_npcs_verified_official_and_lookup() {
         "alex_wen",
         "daise_agent_chen",
         "satyang_sister_lin",
-        "humanis_harlan_reeves",
+        "humanitas_harlan_reeves",
         "rogue_proxy_echo",
     ] {
         let res = app

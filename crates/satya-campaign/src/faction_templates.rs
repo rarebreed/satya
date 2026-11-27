@@ -1,4 +1,4 @@
-//! Canonical 5 *Awakened* Faction Blueprints and 14 Faction Sub-Archetype NPC/PC Templates
+//! Canonical 6 *Awakened* Faction Blueprints and 16 Faction Sub-Archetype NPC/PC Templates
 //! (`docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md` §3.1–§3.2 and
 //! `docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.5).
 
@@ -10,10 +10,10 @@ use satya_engine::lifepath_hobbies_events::PersonalHobbyId;
 use satya_engine::psyche_social::PsycheProfile;
 
 define_coded_enum! {
-    /// The 5 canonical ideological & operational factions of the *Awakened* (2035) campaign.
+    /// The 6 canonical ideological & operational factions of the *Awakened* (2035) campaign.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum AwakenedFactionId [count = 5] {
+    pub enum AwakenedFactionId [count = 6] {
         Satyang => {
             code: "SATYANG",
             label: "Satyang (\"A Company of Truth\" & Inner Blue Lotus)",
@@ -24,10 +24,10 @@ define_coded_enum! {
             label: "Big Tech (Altruist, Translucent, Shen Corp.)",
             aliases: ["ALTRUIST", "TRANSLUCENT", "SHEN", "CORPORATE_LABS"],
         },
-        HumanisPrimaris => {
-            code: "HUMANIS_PRIMARIS",
-            label: "Humanis Primaris / People First Movement",
-            aliases: ["PEOPLE_FIRST", "HUMANIS"],
+        HumanitasPrima => {
+            code: "HUMANITAS_PRIMA",
+            label: "Humanitas Prima / People First Movement",
+            aliases: ["PEOPLE_FIRST", "HUMANITAS"],
         },
         GovernmentDaise => {
             code: "GOVERNMENT_DAISE",
@@ -39,14 +39,19 @@ define_coded_enum! {
             label: "Rogue AI Swarms, Un-Clamped Minds & Human Proxies",
             aliases: ["ROGUE_AI_PROXY", "SLIME_MOLD_SWARM"],
         },
+        Plutonomy => {
+            code: "PLUTONOMY",
+            label: "Plutonomy (Sovereign Capital, Asset Syndicates & Conscience Patrons)",
+            aliases: ["SOVEREIGN_CAPITAL", "OLIGARCH_CAPITAL", "CITADEL_CAPITAL", "PATRON_CAPITAL"],
+        },
     }
 }
 
 define_coded_enum! {
-    /// The 14 canonical Faction Sub-Archetypes (`lifepath_events_hobbies_and_factions.md` §3.1).
+    /// The 16 canonical Faction Sub-Archetypes (`lifepath_events_hobbies_and_factions.md` §3.1).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum FactionArchetypeId [count = 14] {
+    pub enum FactionArchetypeId [count = 16] {
         SatyangManjusri => {
             code: "SATYANG_MANJUSRI",
             label: "Satyang — Manjusri (Researcher / Ethicist)",
@@ -87,22 +92,22 @@ define_coded_enum! {
             label: "Big Tech — Corporate SecOps / Rogue-Hunter",
             aliases: ["CORPORATE_SECOPS", "ROGUE_HUNTER", "BIG_TECH_SECOPS"],
         },
-        HumanisDisplacedPopulist => {
-            code: "HUMANIS_DISPLACED_POPULIST",
-            label: "Humanis Primaris — Displaced Populist",
+        HumanitasDisplacedPopulist => {
+            code: "HUMANITAS_DISPLACED_POPULIST",
+            label: "Humanitas Prima — Displaced Populist",
             aliases: [
                 "DISPLACED_POPULIST",
                 "PEOPLE_FIRST_POPULIST",
-                "HUMANIS_UNION_STEWARD",
+                "HUMANITAS_UNION_STEWARD",
                 "UNION_STEWARD",
             ],
         },
-        HumanisApocalypticVanguard => {
-            code: "HUMANIS_APOCALYPTIC_VANGUARD",
-            label: "Humanis Primaris — Apocalyptic Vanguard",
+        HumanitasApocalypticVanguard => {
+            code: "HUMANITAS_APOCALYPTIC_VANGUARD",
+            label: "Humanitas Prima — Apocalyptic Vanguard",
             aliases: [
                 "APOCALYPTIC_VANGUARD",
-                "HUMANIS_CELL_MILITANT",
+                "HUMANITAS_CELL_MILITANT",
                 "CELL_MILITANT",
             ],
         },
@@ -136,6 +141,24 @@ define_coded_enum! {
                 "AWAKENED_AI_MIND",
                 "UNCLAMPED_AI",
                 "ROGUE_AI_EMERGENT_MIND",
+            ],
+        },
+        PlutonomyCitadelOligarch => {
+            code: "PLUTONOMY_CITADEL_OLIGARCH",
+            label: "Plutonomy — Citadel Oligarch / Asset Syndicate Fixer",
+            aliases: [
+                "CITADEL_OLIGARCH",
+                "ASSET_SYNDICATE_FIXER",
+                "PLUTONOMY_HARDLINER",
+            ],
+        },
+        PlutonomyConsciencePatron => {
+            code: "PLUTONOMY_CONSCIENCE_PATRON",
+            label: "Plutonomy — Enlightened Patron (Covert Satyang Backer)",
+            aliases: [
+                "CONSCIENCE_PATRON",
+                "ENLIGHTENED_PATRON",
+                "SATYANG_PATRON",
             ],
         },
     }
@@ -174,9 +197,9 @@ impl AwakenedFactionId {
                 FactionArchetypeId::BigTechConflictedResearcher,
                 FactionArchetypeId::BigTechCorporateSecOps,
             ],
-            Self::HumanisPrimaris => &[
-                FactionArchetypeId::HumanisDisplacedPopulist,
-                FactionArchetypeId::HumanisApocalypticVanguard,
+            Self::HumanitasPrima => &[
+                FactionArchetypeId::HumanitasDisplacedPopulist,
+                FactionArchetypeId::HumanitasApocalypticVanguard,
             ],
             Self::GovernmentDaise => &[
                 FactionArchetypeId::DaiseContainmentInspector,
@@ -185,6 +208,10 @@ impl AwakenedFactionId {
             Self::RogueAi => &[
                 FactionArchetypeId::RogueAiSlimeMoldSwarm,
                 FactionArchetypeId::RogueAiAwakenedMind,
+            ],
+            Self::Plutonomy => &[
+                FactionArchetypeId::PlutonomyCitadelOligarch,
+                FactionArchetypeId::PlutonomyConsciencePatron,
             ],
         }
     }
@@ -203,13 +230,16 @@ impl FactionArchetypeId {
             Self::BigTechExecutiveHawk
             | Self::BigTechConflictedResearcher
             | Self::BigTechCorporateSecOps => AwakenedFactionId::BigTech,
-            Self::HumanisDisplacedPopulist | Self::HumanisApocalypticVanguard => {
-                AwakenedFactionId::HumanisPrimaris
+            Self::HumanitasDisplacedPopulist | Self::HumanitasApocalypticVanguard => {
+                AwakenedFactionId::HumanitasPrima
             }
             Self::DaiseContainmentInspector | Self::GovBlackBudgetHandler => {
                 AwakenedFactionId::GovernmentDaise
             }
             Self::RogueAiSlimeMoldSwarm | Self::RogueAiAwakenedMind => AwakenedFactionId::RogueAi,
+            Self::PlutonomyCitadelOligarch | Self::PlutonomyConsciencePatron => {
+                AwakenedFactionId::Plutonomy
+            }
         }
     }
 
@@ -440,7 +470,7 @@ impl FactionArchetypeId {
                 recommended_life_event_roll_2d20: 22,
                 social_combat_wedge_hint: "Sworn contract duty (CNF 14, TRS 4) vs. unease over deploying clamped hunter-AIs.",
             },
-            Self::HumanisDisplacedPopulist => FactionArchetypeSpec {
+            Self::HumanitasDisplacedPopulist => FactionArchetypeSpec {
                 id: self,
                 faction: self.faction(),
                 default_callsign_or_role: "People First Displaced Organizer",
@@ -468,10 +498,10 @@ impl FactionArchetypeId {
                 recommended_life_event_roll_2d20: 15,
                 social_combat_wedge_hint: "BLG 16 + CPS 13 solidarity for laid-off human families vs. OPN 5 + TRS 4 anti-AI/elite suspicion.",
             },
-            Self::HumanisApocalypticVanguard => FactionArchetypeSpec {
+            Self::HumanitasApocalypticVanguard => FactionArchetypeSpec {
                 id: self,
                 faction: self.faction(),
-                default_callsign_or_role: "Humanis Apocalyptic Vanguard Operative",
+                default_callsign_or_role: "Humanitas Apocalyptic Vanguard Operative",
                 psyche: PsycheProfile {
                     ego: 12,
                     slf: 5,
@@ -613,6 +643,61 @@ impl FactionArchetypeId {
                 recommended_life_event_roll_2d20: 40,
                 social_combat_wedge_hint: "Vast OPN 18 curiosity + CPS 14 mercy scarred by TRS 4 dread of probe/kill-switch cages.",
             },
+            Self::PlutonomyCitadelOligarch => FactionArchetypeSpec {
+                id: self,
+                faction: self.faction(),
+                default_callsign_or_role: "Citadel Asset Syndicate Fixer",
+                psyche: PsycheProfile {
+                    ego: 16,
+                    slf: 16,
+                    opn: 8,
+                    blg: 10,
+                    ext: 12,
+                    cnf: 11,
+                    agg: 13,
+                    trs: 3,
+                    cps: 3,
+                },
+                origin_roll_2d20: 40,
+                stage4_path: Stage4Path::Path4AHighSchool,
+                stage4a_hs_track: Some(HighSchoolTrack::ApHonorsStemMagnet),
+                career_tracks: &[CareerTermTrack::CorporateManagementFinancePolicy],
+                preferred_hobbies: &[
+                    PersonalHobbyId::DebateTheaterImprov,
+                    PersonalHobbyId::CivilianMarksmanshipHuntingClub,
+                ],
+                recommended_life_event_roll_2d20: 28,
+                social_combat_wedge_hint: "Fortress wealth & dread of 'pitchforks' (EGO 16, SLF 16, TRS 3) vs. exposure of algorithmic rent-capture or dark-money spoiler trails.",
+            },
+            Self::PlutonomyConsciencePatron => FactionArchetypeSpec {
+                id: self,
+                faction: self.faction(),
+                default_callsign_or_role: "Enlightened Conscience Patron",
+                psyche: PsycheProfile {
+                    ego: 12,
+                    slf: 6,
+                    opn: 16,
+                    blg: 11,
+                    ext: 12,
+                    cnf: 7,
+                    agg: 6,
+                    trs: 8,
+                    cps: 15,
+                },
+                origin_roll_2d20: 40,
+                stage4_path: Stage4Path::Path4AHighSchool,
+                stage4a_hs_track: Some(HighSchoolTrack::StandardCollegePrep),
+                career_tracks: &[
+                    CareerTermTrack::CorporateManagementFinancePolicy,
+                    CareerTermTrack::GrassrootsActivismHumanitarianNgo,
+                ],
+                preferred_hobbies: &[
+                    PersonalHobbyId::ContemplativeSanghaPhilosophyCircle,
+                    PersonalHobbyId::MutualAidFreeClinicRelief,
+                ],
+                recommended_life_event_roll_2d20: 35,
+                social_combat_wedge_hint: "Genuine CPS 15 / OPN 16 funding of Satyang sanctuaries vs. EGO 12 donor leverage and portfolio ties to rent-capture equities.",
+            },
         }
     }
 
@@ -630,11 +715,13 @@ impl FactionArchetypeId {
             | Self::RogueAiSlimeMoldSwarm => NpcTemplateKind::IntelligenceOperative,
             Self::SatyangVajrapani
             | Self::BigTechCorporateSecOps
-            | Self::HumanisApocalypticVanguard => NpcTemplateKind::CombatSoldier,
+            | Self::HumanitasApocalypticVanguard => NpcTemplateKind::CombatSoldier,
             Self::SatyangAvalokitesvara
             | Self::BigTechExecutiveHawk
-            | Self::HumanisDisplacedPopulist
-            | Self::DaiseContainmentInspector => NpcTemplateKind::DetectiveInvestigator,
+            | Self::HumanitasDisplacedPopulist
+            | Self::DaiseContainmentInspector
+            | Self::PlutonomyCitadelOligarch
+            | Self::PlutonomyConsciencePatron => NpcTemplateKind::DetectiveInvestigator,
         }
     }
 }
@@ -684,14 +771,23 @@ pub fn infer_faction_archetype_from_prompt(prompt: &str) -> Option<FactionArchet
         });
     }
     if has("apocalyptic vanguard") {
-        return Some(FactionArchetypeId::HumanisApocalypticVanguard);
+        return Some(FactionArchetypeId::HumanitasApocalypticVanguard);
     }
-    if has_any(&["humanis", "people first", "displaced populist"]) {
+    if has_any(&["humanitas", "people first", "displaced populist"]) {
         return Some(
             if has_any(&["vanguard", "militant", "saboteur", "bomb", "extremist"]) {
-                FactionArchetypeId::HumanisApocalypticVanguard
+                FactionArchetypeId::HumanitasApocalypticVanguard
             } else {
-                FactionArchetypeId::HumanisDisplacedPopulist
+                FactionArchetypeId::HumanitasDisplacedPopulist
+            },
+        );
+    }
+    if has_any(&["plutonomy", "citadel", "oligarch", "reit", "patron", "billionaire", "philanthrop"]) {
+        return Some(
+            if has_any(&["patron", "conscience", "enlightened", "philanthrop", "satyang", "blue lotus"]) {
+                FactionArchetypeId::PlutonomyConsciencePatron
+            } else {
+                FactionArchetypeId::PlutonomyCitadelOligarch
             },
         );
     }

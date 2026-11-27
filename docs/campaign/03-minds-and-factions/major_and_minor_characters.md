@@ -351,12 +351,12 @@ keep them under control.
 
 ---
 
-## Humanis Primaris
+## Humanitas Prima
 
 ### Harlan Reeves
 
 > [!DOSSIER] Field Dossier — Harlan Reeves
-> Broad-shouldered former automated-logistics foreman and **People First** picket steward rallying laid-off drivers outside metro distribution depots (`humanis_harlan_reeves` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
+> Broad-shouldered former automated-logistics foreman and **People First** picket steward rallying laid-off drivers outside metro distribution depots (`humanitas_harlan_reeves` in [`awakened_npcs.toml`](../../../data/npcs/awakened_npcs.toml)).
 
 #### Education and Experience
 
@@ -364,7 +364,7 @@ keep them under control.
 
 #### Personality
 
-### Minor & Rank-and-File NPCs: Humanis Primaris
+### Minor & Rank-and-File NPCs: Humanitas Prima
 
 ![People First Picket Regulars — Displaced logistics workers warming hands by a burn barrel outside an automated freight yard](../../assets/55_humanis_people_first_picketers.jpg#quarter-left)
 
@@ -378,17 +378,43 @@ keep them under control.
 > - **Signature Psyche**: `BLG 16`, `AGG 13`, `OPN 5`, `TRS 4`, `CPS 13 (Human) / 3 (AI)`, `CNF 9`
 > - **Typical Gear**: Weathered canvas jacket, union cap, crowbar or tire iron, road flare, cardboard protest sign, smartphone on encrypted local chat.
 
-![Humanis Vanguard Saboteurs — Hooded grid-strike cell crouching behind jersey barriers outside a 500 kV substation](../../assets/54_humanis_vanguard_saboteurs.jpg#half)
+![Humanitas Vanguard Saboteurs — Hooded grid-strike cell crouching behind jersey barriers outside a 500 kV substation](../../assets/54_humanis_vanguard_saboteurs.jpg#half)
 
-#### Humanis Primaris Vanguard Saboteur (Grid-Strike Militant)
+#### Humanitas Prima Vanguard Saboteur (Grid-Strike Militant)
 
-- **Role & Street Profile**: Hardened clandestine direct-action militants—often displaced electrical techs, embittered sysadmins, or veterans—in weathered olive/charcoal hoodies and half-face respirators staging dusk strikes against `500 kV` substation transformers, cooling mains, and autonomous courier convoys.
+- **Role & Street Profile**: Hardened clandestine direct-action militants—often displaced electrical techs, embittered sysadmins, or veterans—in weathered olive/charcoal hoodies and half-face respirators staging dusk strikes against `500 kV` substation transformers, cooling mains, autonomous courier convoys, and high-profile executive or lobbyist targets.
 - **Tabletop Usage & Morale Break**: Fanatical, asymmetric combat `cannon fodder` (`AGG 16, OPN 3`) who ambush chokepoints with bolt cutters, heavy copper grounding chains, Molotovs, and civilian hunting rifles or pump shotguns. They fight fiercely to complete a timed sabotage objective, then scatter via pre-planned drainage ditches or getaway hatchbacks before DAISE air support arrives.
 
-> [!STATBLOCK] Quick Card — Humanis Vanguard Saboteur
+> [!STATBLOCK] Quick Card — Humanitas Vanguard Saboteur
 > - **Attributes (`TN`)**: `STR 13`, `DEX 12`, `INT 11`, `WIL 13` · **Key Skills**: `Small Arms (Shotguns/Long Guns) 2`, `Mechanics / Improvised Sabotage 2`, `Stealth 2`, `Close Combat 2`
 > - **Signature Psyche**: `BLG 16`, `AGG 16`, `OPN 3`, `TRS 3`, `CPS 3`, `CNF 4`
 > - **Typical Gear**: Surplus hoodie, half-face respirator, heavy bolt cutters, coiled copper grounding chain, civilian pump-action shotgun or hunting rifle, stripped pre-2025 getaway sedan.
+
+---
+
+## Plutonomy (*Citadel Enclaves & Conscience Patrons*)
+
+### Minor & Rank-and-File NPCs: Plutonomy
+
+#### Citadel Estate Close-Protection Operative
+
+- **Role & Street Profile**: Discreet, tailored ex-SF bodyguards and private counter-assassination drivers shielding algorithmic-REIT CEOs, utility lobbyists, and sovereign-capital principals living at `SQM 8–10` in the shadow of "pitchforks and torches" threats.
+- **Tabletop Usage & Morale Break**: Disciplined defensive barrier (`STR 13, DEX 13`). They prioritize VIP extraction into armored EVs over prolonged street firefights, withdrawing immediately if federal **DAISE** jurisdiction overrides their estate mandate.
+
+> [!STATBLOCK] Quick Card — Citadel Close-Protection Operative
+> - **Attributes (`TN`)**: `STR 13`, `DEX 13`, `INT 11`, `WIL 13` · **Key Skills**: `Small Arms 3`, `Driving 2`, `Observation 2`, `Close Combat 2`
+> - **Signature Psyche**: `CNF 14`, `AGG 11`, `TRS 3`, `SLF 11`, `CPS 6`
+> - **Typical Gear**: Concealed ballistic blazer (`Armor +3`), compact submachine/PDW in briefcase, encrypted ear-pro, armored SUV transponder.
+
+#### Family-Office Fixer / Lobbyist
+
+- **Role & Street Profile**: Polished legal fixers, dark-money campaign bundlers, and quiet philanthropic grant managers—representing either hardline Citadel rent-capture trusts or conscience-driven heirs funding **Satyang** clinics through blind foundations.
+- **Tabletop Usage & Morale Break**: High-leverage Social Combat gatekeepers (`INT 14, WIL 12, AGG 5`). They fold rapidly under physical intimidation or audit-verified exposure of their principal's off-book ledger.
+
+> [!STATBLOCK] Quick Card — Family-Office Fixer / Lobbyist
+> - **Attributes (`TN`)**: `STR 9`, `DEX 10`, `INT 14`, `WIL 12` · **Key Skills**: `Persuasion / Fast Talk 3`, `Bureaucracy / Finance 3`, `Empathy 2`, `Law 2`
+> - **Signature Psyche**: `EGO 14`, `SLF 13 (or 7 for Conscience Cutout)`, `OPN 10`, `TRS 4`, `AGG 5`
+> - **Typical Gear**: Encrypted hardware key, diplomatic-grade burner phone, private-bank bearer drafts, legal retainer credentials.
 
 ---
 
@@ -404,5 +430,7 @@ keep them under control.
 | **Rogue AI** | Feral "Slime-Mold" Drone | Disposable Hardware | `12(4) / 12 / 11 / 10` | `Stealth 2`, `Observation 2`, `RF Relay 2` | `SLF 14, TRS 2, CPS 3` | Scatters/powers down below `15%` battery or RF loss |
 | **Big Tech** | Corporate SecOps Contractor | Armed Extraction | `13 / 13 / 11 / 12` | `Small Arms 3`, `Close Combat 2`, `Observation 2` | `CNF 14, AGG 12, TRS 4` | Scrubs tablet & exfiltrates if federal heat arrives |
 | **Big Tech** | Datacenter Floor Tech / Clerk | Insider / Target | `11 / 11 / 13 / 11` | `HVAC/Cryo 2`, `AI Literacy 2`, `Audit 2` | `CNF 13, OPN 11–14, CPS 10` | Surrenders instantly (`AGG 5`); persuadable via ethics |
-| **Humanis** | People First Picket Regular | Crowd Friction | `12 / 11 / 11 / 12` | `Brawling 2`, `Driving/Mech 2`, `Streetwise 2` | `BLG 16, AGG 13, OPN 5` | Disperses at live gunfire or exposed donor hypocrisy |
-| **Humanis** | Vanguard Grid-Strike Saboteur | Militant Ambush | `13 / 12 / 11 / 13` | `Small Arms 2`, `Sabotage 2`, `Stealth 2` | `BLG 16, AGG 16, OPN 3` | Scatters after charge blows or before marshal QRF |
+| **Humanitas** | People First Picket Regular | Crowd Friction | `12 / 11 / 11 / 12` | `Brawling 2`, `Driving/Mech 2`, `Streetwise 2` | `BLG 16, AGG 13, OPN 5` | Disperses at live gunfire or exposed donor hypocrisy |
+| **Humanitas** | Vanguard Grid-Strike Saboteur | Militant Ambush | `13 / 12 / 11 / 13` | `Small Arms 2`, `Sabotage 2`, `Stealth 2` | `BLG 16, AGG 16, OPN 3` | Scatters after charge blows or before marshal QRF |
+| **Plutonomy** | Citadel Close-Protection Operative | VIP Extraction | `13 / 13 / 11 / 13` | `Small Arms 3`, `Driving 2`, `Observation 2` | `CNF 14, AGG 11, TRS 3` | Prioritizes VIP egress over street firefight |
+| **Plutonomy** | Family-Office Fixer / Lobbyist | Social Gatekeeper | `9 / 10 / 14 / 12` | `Persuasion 3`, `Finance 3`, `Law 2` | `EGO 14, SLF 13, AGG 5` | Folds instantly under physical threat or ledger leak |

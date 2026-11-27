@@ -76,7 +76,7 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "title": "Factions of 2035: Session-Zero Dossiers",
         "relative_path": "03-minds-and-factions/factions_of_2035.md",
         "visibility": "PUBLIC",
-        "description": "Spoiler-free profiles for Big Tech (Altruist, Translucent, Shen), Rogue AI, Satyang, Humanis Primaris, and DAISE with 9-Trait Psyche signatures.",
+        "description": "Spoiler-free profiles for Big Tech (Altruist, Translucent, Shen), Rogue AI, Satyang, Humanitas Prima, DAISE, and Plutonomy with 9-Trait Psyche signatures.",
     },
     {
         "chapter_id": "satyang_and_four_pillars",
@@ -92,7 +92,7 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "title": "Major & Minor Characters of 2035",
         "relative_path": "03-minds-and-factions/major_and_minor_characters.md",
         "visibility": "PUBLIC",
-        "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all five factions.",
+        "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all six power blocs.",
     },
     {
         "chapter_id": "episode_01_st_jude_annex",
@@ -116,7 +116,7 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "title": "Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads",
         "relative_path": "04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md",
         "visibility": "GM_CONSPIRACY_SECRET",
-        "description": "All five Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanis Primaris, DAISE, Big Tech, Rogue AI) plus the three Open Canon Mysteries.",
+        "description": "All six Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanitas Prima, DAISE, Big Tech, Rogue AI, Plutonomy) plus the three Open Canon Mysteries.",
     },
     {
         "chapter_id": "ai_2_0_substrate_and_active_inference",

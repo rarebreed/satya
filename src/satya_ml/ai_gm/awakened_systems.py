@@ -317,10 +317,10 @@ def manage_polycrisis_grid_and_strain(
                 "session_id": sid,
             }
         )
-    if res.get("humanis_sabotage_or_relay_trip"):
+    if res.get("humanitas_sabotage_or_relay_trip"):
         advance_faction_or_heat_clock.invoke(
             {
-                "faction_id": "humanis_primaris",
+                "faction_id": "humanitas_prima",
                 "clock_delta": 1,
                 "reason": "Neighborhood blackout fueled People First agitation and substation tampering",
                 "session_id": sid,

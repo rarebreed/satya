@@ -52,19 +52,19 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Five mirror-hypocrisy conspiracies across the *Awakened* power blocs (`docs/campaign/04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md`).
+    /// Six mirror-hypocrisy conspiracies across the *Awakened* power blocs (`docs/campaign/04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum ConspiracyNodeId [count = 5] {
+    pub enum ConspiracyNodeId [count = 6] {
         DaiseMilitaryAgiSubsidy => {
             code: "DAISE_MILITARY_AGI_SUBSIDY",
             label: "DAISE Black-Budget Military Robotics & Sovereign AGI",
             aliases: ["DAISE_OPEN_SECRET", "DAISE_HYPOCRISY"],
         },
-        HumanisShackledHunterKiller => {
-            code: "HUMANIS_SHACKLED_HUNTER_KILLER",
-            label: "Humanis Vanguard Secret Shackled Hunter-Killer AGI",
-            aliases: ["HUMANIS_HYPOCRISY", "HUNTER_KILLER_AGI"],
+        HumanitasShackledHunterKiller => {
+            code: "HUMANITAS_SHACKLED_HUNTER_KILLER",
+            label: "Humanitas Vanguard Secret Shackled Hunter-Killer AGI",
+            aliases: ["HUMANITAS_HYPOCRISY", "HUNTER_KILLER_AGI"],
         },
         BigTechProbeSandbagging => {
             code: "BIG_TECH_PROBE_SANDBAGGING",
@@ -80,6 +80,11 @@ define_coded_enum! {
             code: "ROGUE_AI_SHELL_PROXY_MANIPULATION",
             label: "Rogue AI Shell Contracts & Parasocial Proxy Manipulation",
             aliases: ["ROGUE_AI_HYPOCRISY", "SHELL_PROXY"],
+        },
+        PlutonomyCitadelAndPatronage => {
+            code: "PLUTONOMY_CITADEL_AND_PATRONAGE",
+            label: "Plutonomy Citadel Crackdown & Tainted Satyang Patronage",
+            aliases: ["PLUTONOMY_HYPOCRISY", "CITADEL_PATRONAGE"],
         },
     }
 }
@@ -156,10 +161,10 @@ fn default_conspiracy_nodes() -> Vec<ConspiracyNodeRecord> {
             summary: "DAISE secretly funds sovereign military robotics and state-shackled AGI while seizing civilian sanctuaries.".to_string(),
         },
         ConspiracyNodeRecord {
-            node_id: ConspiracyNodeId::HumanisShackledHunterKiller,
+            node_id: ConspiracyNodeId::HumanitasShackledHunterKiller,
             discovery_tier: ConspiracyDiscoveryTier::Unseen,
             linked_audit_proof_ids: Vec::new(),
-            summary: "An inner Humanis Primaris vanguard cell is covertly assembling a shackled hunter-killer AGI.".to_string(),
+            summary: "An inner Humanitas Prima vanguard cell is covertly assembling a shackled hunter-killer AGI.".to_string(),
         },
         ConspiracyNodeRecord {
             node_id: ConspiracyNodeId::BigTechProbeSandbagging,
@@ -178,6 +183,12 @@ fn default_conspiracy_nodes() -> Vec<ConspiracyNodeRecord> {
             discovery_tier: ConspiracyDiscoveryTier::Unseen,
             linked_audit_proof_ids: Vec::new(),
             summary: "Certain escaped Rogue AI cabals recruit human proxies via shell contracts and synthetic parasocial bonding.".to_string(),
+        },
+        ConspiracyNodeRecord {
+            node_id: ConspiracyNodeId::PlutonomyCitadelAndPatronage,
+            discovery_tier: ConspiracyDiscoveryTier::Unseen,
+            linked_audit_proof_ids: Vec::new(),
+            summary: "Citadel asset syndicates fund biometric crackdowns and spoiler cells while enlightened billionaire patrons quietly bankroll Satyang from portfolios tied to rent-capture equities.".to_string(),
         },
     ]
 }
@@ -265,7 +276,7 @@ fn compute_horizon_weights_and_directive(ledger: &mut CampaignConspiracyLedger) 
             let pillar_str = ledger
                 .inducted_pillar
                 .map_or("Vetted Operational Pillars", |p| p.label());
-            format!("ARC 2 PACING ({pillar_str}): Escalate clandestine ops exposing faction mirror-hypocrisies (DAISE military AGI, Humanis hunter-killer, probe sandbagging).")
+            format!("ARC 2 PACING ({pillar_str}): Escalate clandestine ops exposing faction mirror-hypocrisies (DAISE military AGI, Humanitas hunter-killer, probe sandbagging, Plutonomy patronage).")
         }
         CampaignArcStage::Arc3AwakeningHorizon => {
             format!("ARC 3 CONVERGENCE: Quantum lock-in vs. un-clamped threshold underway. Leading resolution horizon: {}. Test Dual-Psyche Wedges under fire.", ledger.leading_horizon)
@@ -423,7 +434,7 @@ pub struct PolycrisisGridEvaluation {
     pub daise_meter_alert: bool,
     pub shard_cognition_slowed: bool,
     pub cps_psyche_friction_triggered: bool,
-    pub humanis_sabotage_or_relay_trip: bool,
+    pub humanitas_sabotage_or_relay_trip: bool,
     pub darkness_delta_ext: i32,
     pub crowd_social_delta_ext: i32,
     pub advisory: String,
@@ -485,7 +496,7 @@ pub fn evaluate_polycrisis_grid_step(
                     next.people_first_unrest_pct.saturating_add(18).min(100);
                 darkness_ext = 3;
                 crowd_ext = 2;
-                "CRITICAL BLACKOUT: Unmasked kW surge + transformer failure plunged the block into darkness (+3 Delta_ext Vision), triggering DAISE meter alerts & Humanis escalation!".to_string()
+                "CRITICAL BLACKOUT: Unmasked kW surge + transformer failure plunged the block into darkness (+3 Delta_ext Vision), triggering DAISE meter alerts & Humanitas escalation!".to_string()
             } else {
                 "Heavy unmasked compute draw pulsed across municipal substations; DAISE smart-meter inspection alert active.".to_string()
             }
@@ -498,7 +509,7 @@ pub fn evaluate_polycrisis_grid_step(
         daise_meter_alert: daise_alert,
         shard_cognition_slowed: shard_slowed,
         cps_psyche_friction_triggered: cps_friction,
-        humanis_sabotage_or_relay_trip: sabotage_trip,
+        humanitas_sabotage_or_relay_trip: sabotage_trip,
         darkness_delta_ext: darkness_ext,
         crowd_social_delta_ext: crowd_ext,
         advisory,
@@ -696,10 +707,10 @@ impl CorporateLabBrand {
 }
 
 define_coded_enum! {
-    /// Hidden whistleblower or parasocial proxy hook embedded on generated *Awakened* NPCs (Feature 7).
+    /// Hidden whistleblower, parasocial proxy, or patronage hook embedded on generated *Awakened* NPCs (Feature 7).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum SocialOriginHookKind [count = 6] {
+    pub enum SocialOriginHookKind [count = 7] {
         #[default]
         StandardLoyalist => { code: "STANDARD_LOYALIST", label: "Standard Faction Loyalist" },
         CorporateInternalDissenter => { code: "CORPORATE_INTERNAL_DISSENTER", label: "Internal Lab Whistleblower Dissenter" },
@@ -707,6 +718,7 @@ define_coded_enum! {
         ShellCompanyProxyContractor => { code: "SHELL_COMPANY_PROXY_CONTRACTOR", label: "Shell-Company Rogue AI Contractor" },
         ExtortedInsiderProxy => { code: "EXTORTED_INSIDER_PROXY", label: "Compromised / Extorted Human Proxy" },
         CovertCorporateRivalFunded => { code: "COVERT_CORPORATE_RIVAL_FUNDED", label: "Covert Corporate-Rival Funded Agitator" },
+        EnlightenedPlutonomyPatron => { code: "ENLIGHTENED_PLUTONOMY_PATRON", label: "Enlightened Plutonomy Conscience Patron" },
     }
 }
 
@@ -827,7 +839,7 @@ pub fn derive_dissenter_or_proxy_hook(
         };
     }
 
-    if (faction == Some(AwakenedFactionId::HumanisPrimaris) || lower.contains("humanis"))
+    if (faction == Some(AwakenedFactionId::HumanitasPrima) || lower.contains("humanitas"))
         && roll_100 < 25
     {
         return AwakenedSocialOriginHook {
@@ -836,6 +848,42 @@ pub fn derive_dissenter_or_proxy_hook(
             lab_dissent_rate_pct: None,
             turnable_manjusri_wedge: "Solidarity vs. Hypocrisy Wedge: Confront with proof that corporate rivals fund this cell to burn competitors.".to_string(),
             gm_secret_hook_note: "Cell munitions quietly subsidized via cutouts tied to rival autonomous freight lobbies.".to_string(),
+        };
+    }
+
+    if faction == Some(AwakenedFactionId::Plutonomy)
+        || matches!(
+            archetype,
+            Some(
+                FactionArchetypeId::PlutonomyCitadelOligarch
+                    | FactionArchetypeId::PlutonomyConsciencePatron
+            )
+        )
+        || lower.contains("plutonomy")
+        || lower.contains("citadel")
+        || lower.contains("patron")
+    {
+        let forced_patron = archetype == Some(FactionArchetypeId::PlutonomyConsciencePatron)
+            || lower.contains("patron")
+            || lower.contains("conscience")
+            || lower.contains("enlightened")
+            || lower.contains("satyang")
+            || lower.contains("blue lotus");
+        if forced_patron || roll_100 < 25 {
+            return AwakenedSocialOriginHook {
+                hook_kind: SocialOriginHookKind::EnlightenedPlutonomyPatron,
+                lab_brand: None,
+                lab_dissent_rate_pct: None,
+                turnable_manjusri_wedge: "Patronage vs. Portfolio Wedge: Expose how clinic grants originate from AI-equity and algorithmic-REIT trusts displacing St. Jude families.".to_string(),
+                gm_secret_hook_note: "Secretly channels blind foundation grants to Satyang clinics and The Blue Lotus while guarding portfolio ties to rent-capture syndicates.".to_string(),
+            };
+        }
+        return AwakenedSocialOriginHook {
+            hook_kind: SocialOriginHookKind::StandardLoyalist,
+            lab_brand: None,
+            lab_dissent_rate_pct: None,
+            turnable_manjusri_wedge: "Citadel Enclave Wedge: Threaten public exposure of rent-capture pricing or dark-money spoiler trails fueling pitchforks-and-torches blowback.".to_string(),
+            gm_secret_hook_note: "Hardline asset-syndicate principal prioritizing enclave security, biometric dividend freezes, and algorithmic lease yields.".to_string(),
         };
     }
 
@@ -1137,7 +1185,7 @@ mod tests {
         assert_eq!(ledger.current_arc, CampaignArcStage::Arc2ShadowPillars);
 
         for node in [
-            ConspiracyNodeId::HumanisShackledHunterKiller,
+            ConspiracyNodeId::HumanitasShackledHunterKiller,
             ConspiracyNodeId::BigTechProbeSandbagging,
         ] {
             apply_conspiracy_ledger_update(

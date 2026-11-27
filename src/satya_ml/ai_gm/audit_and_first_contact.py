@@ -72,8 +72,10 @@ def _subject_tokens(npc: dict[str, Any]) -> set[str]:
             expanded.update({"dr_bandajara", "bandajara", "altruist", "translucent", "shen", "big_tech"})
         if "echo" in item or "rogue" in item:
             expanded.update({"rogue_ai", "rogue_proxy_echo", "echo-9", "echo_9"})
-        if "humanis" in item or "reeves" in item:
-            expanded.add("humanis_primaris")
+        if "humanitas" in item or "reeves" in item:
+            expanded.add("humanitas_prima")
+        if any(tok in item for tok in ("plutonomy", "citadel", "patron", "oligarch")):
+            expanded.add("plutonomy")
     return {t for t in expanded if t}
 
 

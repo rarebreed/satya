@@ -75,7 +75,7 @@ _CONCEPT_GROUPS: tuple[tuple[str, ...], ...] = (
     ("blue_lotus", "bandajara", "arc_1", "arc_2", "arc_3", "horizon", "sanctuary", "conspiracy"),
     ("big_tech", "altruist", "translucent", "shen", "dissenter", "whistleblower", "nda", "researcher"),
     ("rogue_ai", "parasocial", "companion", "devotee", "shell_company", "extort", "proxy", "blackmail"),
-    ("daise", "humanis", "humanis_primaris", "avalokitesvara", "vajrapani", "satyang", "factions"),
+    ("daise", "humanitas", "humanitas_prima", "plutonomy", "citadel", "patron", "avalokitesvara", "vajrapani", "satyang", "factions"),
     ("tradecraft", "ham_radio", "shortwave", "steganography", "steganographic", "dead_drop", "courier", "sigint", "wiretap"),
     ("deepfake", "liars_dividend", "osint", "forensic", "telemetry", "jitter", "43_ms", "subpoena"),
     ("lifepath", "career", "hobby", "event", "economic_tier", "upkeep", "operational_heat", "sqm", "club_discount"),

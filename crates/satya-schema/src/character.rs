@@ -272,7 +272,7 @@ pub struct CharacterSheetRecord {
     pub server_signature_hex: Option<String>,
     #[serde(default)]
     pub updated_at_us: i64,
-    /// Optional canonical faction identifier (e.g., `"SATYANG"`, `"BIG_TECH"`, `"HUMANIS_PRIMARIS"`, `"GOVERNMENT_DAISE"`, `"ROGUE_AI"`).
+    /// Optional canonical faction identifier (e.g., `"SATYANG"`, `"BIG_TECH"`, `"HUMANITAS_PRIMA"`, `"GOVERNMENT_DAISE"`, `"ROGUE_AI"`, `"PLUTONOMY"`).
     #[serde(default)]
     pub faction_id: Option<String>,
     /// Optional canonical faction sub-archetype code (e.g., `"SATYANG_MANJUSRI"`, `"BIG_TECH_EXECUTIVE_HAWK"`).

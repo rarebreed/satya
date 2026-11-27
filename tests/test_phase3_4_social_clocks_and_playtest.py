@@ -97,7 +97,7 @@ def test_phase3_social_combat_empathy_read_and_conviction_surge() -> None:
     # Ego Wound provocation on high-EGO/AGG Harlan Reeves with failed DIS check triggers lashed_out_from_ego_wound
     ex_ego = deliver_social_argument.invoke(
         {
-            "target_npc_id_or_name": "humanis_harlan_reeves",
+            "target_npc_id_or_name": "humanitas_harlan_reeves",
             "argument_vectors": ["humiliate_fault"],
             "net_successes": 2,
             "ego_wound_dis_check_passed": False,
@@ -105,7 +105,7 @@ def test_phase3_social_combat_empathy_read_and_conviction_surge() -> None:
         }
     )
     assert ex_ego["updated_state"]["lashed_out_from_ego_wound"] is True
-    assert get_session_npcs(sid)["humanis_harlan_reeves"]["disposition"] == "hostile"
+    assert get_session_npcs(sid)["humanitas_harlan_reeves"]["disposition"] == "hostile"
 
     # 3. Dissonance resolution, Conviction Surge (Delta_int +4 -> -2), and Psyche Drift Mark
     diss = resolve_psyche_dissonance_or_surge.invoke(
@@ -584,6 +584,8 @@ def test_post_merge_9axis_vectors_faction_aliases_and_clock_id_mapping() -> None
             ("DAISE_FIELD_AGENT", "DAISE_CONTAINMENT_INSPECTOR", "GOVERNMENT_DAISE"),
             ("ROGUE_AI_AWAKENED_MIND", "ROGUE_AI_AWAKENED_MIND", "ROGUE_AI"),
             ("ROGUE_AI_EMERGENT_MIND", "ROGUE_AI_AWAKENED_MIND", "ROGUE_AI"),
+            ("HUMANITAS_DISPLACED_POPULIST", "HUMANITAS_DISPLACED_POPULIST", "HUMANITAS_PRIMA"),
+            ("PLUTONOMY_CONSCIENCE_PATRON", "PLUTONOMY_CONSCIENCE_PATRON", "PLUTONOMY"),
         ):
             npc_res = generate_npc_from_description.invoke(
                 {
@@ -615,7 +617,7 @@ def test_post_merge_9axis_vectors_faction_aliases_and_clock_id_mapping() -> None
 
         harlan_ok = deliver_social_argument.invoke(
             {
-                "target_npc_id_or_name": "humanis_harlan_reeves",
+                "target_npc_id_or_name": "humanitas_harlan_reeves",
                 "argument_vectors": [
                     "TransparencyVulnerabilityGoodFaith (with verifiable audit proof)",
                     "MoralSanctityWitnessedSufferingMercy",
@@ -648,7 +650,7 @@ def test_post_merge_9axis_vectors_faction_aliases_and_clock_id_mapping() -> None
             }
         )
         clocks = updated["ledger"]["faction_clocks"]
-        assert len(clocks) == 5
+        assert len(clocks) == 6
         daise_clock = next(c for c in clocks if c["faction_id"] == "daise")
         assert daise_clock["progress"] == 2
 
