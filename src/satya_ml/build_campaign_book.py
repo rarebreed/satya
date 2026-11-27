@@ -87,12 +87,12 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "description": "Convergent lineage (arXiv:2504.15125, Mahayana ethics, whistleblowers) and division roles for Ksitigarbha, Avalokitesvara, Manjusri, and Vajrapani.",
     },
     {
-        "chapter_id": "major_characters",
+        "chapter_id": "major_and_minor_characters",
         "part": "Part III: Minds, Consciousness & Factions",
-        "title": "Major Characters of 2035",
-        "relative_path": "03-minds-and-factions/major_characters.md",
+        "title": "Major & Minor Characters of 2035",
+        "relative_path": "03-minds-and-factions/major_and_minor_characters.md",
         "visibility": "PUBLIC",
-        "description": "Session-zero profiles and biographies for Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, and Harlan Reeves.",
+        "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all five factions.",
     },
     {
         "chapter_id": "episode_01_st_jude_annex",

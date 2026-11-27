@@ -9,6 +9,8 @@ In the *Awakened* 2035 setting, autonomous drones, tracked breaching crawlers, A
 
 ## 1. Modular Drones & Autonomous Ground Vehicles (UGVs)
 
+![Morphology Systems QPed-590 — Segmented-spine quadruped flexing mid-climb with clawed traction paws, bi-camera stereo optics, and modular harness](../../assets/65_qped590_segmented_quadruped_action.jpg#half)
+
 ### 1.1 Drone & UGV Chassis Catalog (`DroneChassisClass`)
 
 Pick an airframe or ground crawler chassis from the 6-entry catalog, then bolt on up to its **`Max Payload (kg)`** budget in mission modules and optional chassis armor plating (`+0..+4 PR`, where each `+1 PR` adds `max(0.15 kg, 12% base chassis mass)` and `$1,200`):
@@ -23,6 +25,8 @@ Pick an airframe or ground crawler chassis from the 6-entry catalog, then bolt o
 | **`HeavyCargoOrWeaponVtol`** | `18.0 kg` | `12.0 kg` | `850 Wh` | `950 W` | `24.0 m/s` | `2 / 5` | `-6` *(Loud)* | `$55,000` | Class III |
 
 ### 1.2 Modular Payloads (`DroneModuleId`) & Real Battery Endurance
+
+![QPed-590 Modular Harness Configurations — Recon/comms/radar/cargo rig beside a tactical weapon-mount configuration](../../assets/66_qped590_harness_loadouts_style_b.jpg#half)
 
 | Module (`DroneModuleId`) | Mass | Power Draw | Battery Bonus | Special Effect | Cost | `[Access]` |
 | :--- | :---: | :---: | :---: | :--- | :---: | :---: |
@@ -43,6 +47,8 @@ $$T_{\text{endurance}} = \frac{E_{\text{bat,Wh}}}{P_{\text{base}} + P_{\text{aut
 ---
 
 ## 2. Autonomous Chassis Trauma, Thermal Runaway & EMP
+
+![Heavy Ground & Aerial Platforms — Tracked breaching crawler UGV with 6-DoF manipulator arm beneath a heavy-lift cargo/weapon VTOL](../../assets/67_tracked_breacher_and_heavy_vtol_drones.jpg#half)
 
 Called shots (`+2` to `+4` $\Delta_{\text{ext}}$ depending on chassis size) or random hits resolve against the drone's `PR` (`Effective Pen = Base Pen + floor(Net Successes / 2)`):
 
@@ -121,6 +127,8 @@ In keeping with Satya's hard medical realism, **cybernetics do not use an abstra
 ---
 
 ## 5. Worked Example: Shrouded Recon FPV, Co-Design Debt & Clinical Suite
+
+![Stealth Recon Quadrotors — Palm-sized micro-scout paired with a toroidal-shrouded tactical FPV recon drone](../../assets/68_micro_scout_and_shrouded_fpv_drones.jpg#half)
 
 > [!EXAMPLE]
 > **1. Shrouded Tactical Recon Quadrotor**:

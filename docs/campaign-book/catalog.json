@@ -128,30 +128,36 @@
       "html_file": "satyang_and_four_pillars.html"
     },
     {
-      "chapter_id": "major_characters",
+      "chapter_id": "major_and_minor_characters",
       "part": "Part III: Minds, Consciousness & Factions",
-      "title": "Major Characters of 2035",
-      "relative_path": "03-minds-and-factions/major_characters.md",
+      "title": "Major & Minor Characters of 2035",
+      "relative_path": "03-minds-and-factions/major_and_minor_characters.md",
       "visibility": "PUBLIC",
-      "description": "Session-zero profiles and biographies for Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, and Harlan Reeves.",
+      "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all five factions.",
       "headings": [
         "Satyang & Independent Contacts",
         "Dr. Budi Bandajara",
         "Alex Wen",
         "Mei-Ling \"Lotus\" Lin",
+        "Minor & Rank-and-File NPCs: Satyang",
         "DAISE",
         "Agent Marcus Chen",
         "Dev Blake",
+        "Minor & Rank-and-File NPCs: DAISE",
         "Rogue AI",
         "Echo-9",
         "Kate Springer",
+        "Minor & Rank-and-File NPCs: Rogue AI",
         "Big Tech (*Altruist*, *Translucent*, *Shen*)",
         "Cliff Reed",
         "Jose Dominguez",
+        "Minor & Rank-and-File NPCs: Big Tech",
         "Humanis Primaris",
-        "Harlan Reeves"
+        "Harlan Reeves",
+        "Minor & Rank-and-File NPCs: Humanis Primaris",
+        "Quick-Reference Encounter & \"Cannon Fodder\" Matrix"
       ],
-      "html_file": "major_characters.html"
+      "html_file": "major_and_minor_characters.html"
     },
     {
       "chapter_id": "episode_01_st_jude_annex",
@@ -196,6 +202,7 @@
       "description": "All five Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanis Primaris, DAISE, Big Tech, Rogue AI) plus the three Open Canon Mysteries.",
       "headings": [
         "1. The Five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)",
+        "How Each Hypocrisy Unfolds in Play",
         "2. Open Canon Decisions for Upcoming Drafts & Campaigns"
       ],
       "html_file": "faction_conspiracies_and_canon_threads.html"
@@ -424,7 +431,9 @@
       "headings": [
         "1. Machine Learning & AI Architectures",
         "2. Mathematics & Information Theory",
-        "3. Economics, Finance & Political Economy"
+        "3. Economics, Finance & Political Economy",
+        "4. Energy, Climate, Infrastructure & Geopolitics",
+        "5. Satya Tabletop Rules & Engine Terms"
       ],
       "html_file": "plain_english_glossary.html"
     }

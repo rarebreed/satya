@@ -1,4 +1,4 @@
-"""Regression tests for Solo Co-GM mode, loadable campaign NPCs, major_characters RAG visibility,
+"""Regression tests for Solo Co-GM mode, loadable campaign NPCs, major_and_minor_characters RAG visibility,
 and non-default GM memory deletion guards."""
 
 from __future__ import annotations
@@ -51,19 +51,22 @@ class _StaticPromptCaptureModel:
         return AIMessage(content=self.reply_text)
 
 
-def test_major_characters_rag_chunks_are_public_and_complete() -> None:
+def test_major_and_minor_characters_rag_chunks_are_public_and_complete() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     chunks = build_campaign_lore_chunks(repo_root)
     mc_chunks = [
         chunk
         for chunk in chunks
-        if chunk.get("source_path") == "docs/campaign/03-minds-and-factions/major_characters.md"
+        if chunk.get("source_path") == "docs/campaign/03-minds-and-factions/major_and_minor_characters.md"
     ]
     assert len(mc_chunks) >= 4
     assert all(chunk.get("visibility") == "PUBLIC" for chunk in mc_chunks)
     combined = "\n".join(str(chunk.get("content") or "") for chunk in mc_chunks)
     assert "Dr. Budi Bandajara" in combined
     assert "Alex Wen" in combined
+    assert "DAISE Containment Marshal" in combined
+    assert "Corporate SecOps" in combined
+    assert "Vanguard Saboteur" in combined
 
 
 def test_awakened_starter_npcs_include_enriched_bandajara_and_alex_wen() -> None:

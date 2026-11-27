@@ -731,7 +731,7 @@ mod tests {
 
         let default_lore = GmLookupHit {
             source_kind: GmLookupSourceKind::CampaignLore,
-            item_id: "docs/campaign/03-minds-and-factions/major_characters.md#2".to_string(),
+            item_id: "docs/campaign/03-minds-and-factions/major_and_minor_characters.md#2".to_string(),
             title: "Dr. Budi Bandajara".to_string(),
             subtitle: "Campaign Lore (awakened)".to_string(),
             snippet: "Malaysian mathematician.".to_string(),

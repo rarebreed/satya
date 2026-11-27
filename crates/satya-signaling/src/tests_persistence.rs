@@ -2993,9 +2993,9 @@ async fn test_load_all_awakened_starter_npcs_verified_official_and_lookup() {
         .iter()
         .find(|h| {
             h.source_kind == satya_schema::GmLookupSourceKind::CampaignLore
-                && h.item_id.contains("major_characters.md")
+                && h.item_id.contains("major_and_minor_characters.md")
         })
-        .expect("Expected CampaignLore hit from major_characters.md");
+        .expect("Expected CampaignLore hit from major_and_minor_characters.md");
     assert!(lore_hit.is_campaign_default);
     assert!(!lore_hit.can_delete);
     assert!(lore_hit.section_anchor.is_some());
@@ -3172,7 +3172,7 @@ async fn test_campaign_lore_catalog_visibility_and_traversal_guard() {
         .await
         .unwrap();
 
-    // Player catalog exposes major_characters.md but excludes GM_CONSPIRACY_SECRET chapters
+    // Player catalog exposes major_and_minor_characters.md but excludes GM_CONSPIRACY_SECRET chapters
     let player_cat: satya_schema::CampaignLoreCatalogResponse = serde_json::from_slice(
         &to_bytes(
             app.clone()
@@ -3197,7 +3197,8 @@ async fn test_campaign_lore_catalog_visibility_and_traversal_guard() {
         player_cat
             .chapters
             .iter()
-            .any(|c| c.relative_path.ends_with("major_characters.md") && c.visibility == "PUBLIC")
+            .any(|c| c.relative_path.ends_with("major_and_minor_characters.md")
+                && c.visibility == "PUBLIC")
     );
     assert!(
         !player_cat
@@ -3211,7 +3212,7 @@ async fn test_campaign_lore_catalog_visibility_and_traversal_guard() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/sessions/lore-vis-test/lore/chapter?path=docs/campaign/03-minds-and-factions/major_characters.md")
+                .uri("/api/sessions/lore-vis-test/lore/chapter?path=docs/campaign/03-minds-and-factions/major_and_minor_characters.md")
                 .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
                 .body(Body::empty())
                 .unwrap(),

@@ -199,7 +199,7 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
         ]);
     let lore_hit = satya_schema::GmLookupHit {
         source_kind: satya_schema::GmLookupSourceKind::CampaignLore,
-        item_id: "docs/campaign/03-minds-and-factions/major_characters.md#1".to_string(),
+        item_id: "docs/campaign/03-minds-and-factions/major_and_minor_characters.md#1".to_string(),
         title: "Dr. Budi Bandajara".to_string(),
         subtitle: "Campaign Lore (awakened)".to_string(),
         snippet: "Malaysian mathematician.".to_string(),

@@ -682,7 +682,7 @@ pub fn satya_select_reader_source(source: String) {
         } else {
             refresh_campaign_lore_catalog();
             load_campaign_lore_chapter_and_scroll(
-                "docs/campaign/03-minds-and-factions/major_characters.md".to_string(),
+                "docs/campaign/03-minds-and-factions/major_and_minor_characters.md".to_string(),
                 String::new(),
             );
         }
