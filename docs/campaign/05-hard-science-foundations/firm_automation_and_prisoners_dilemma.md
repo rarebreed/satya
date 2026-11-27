@@ -1,6 +1,6 @@
 # Firm Automation, Demand Collapse & The Prisoner's Dilemma
 
-> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · **Part V:** *Firm Automation & Prisoner's Dilemma* · [Political Economy, Token Tax & Unrest](political_economy_token_tax_and_unrest.md) · [AI 2.0 Substrate & Active Inference](ai_2_0_substrate_and_active_inference.md) · [Ecology & Resource Realpolitik](ecology_energy_and_resource_realpolitik.md) · [Polycrisis Economy & Society](../02-world-of-2035/polycrisis_economy_and_society.md) · [Lifepaths & Economy](../../ttrpg/03-character/lifepaths_and_economy.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · **Part V:** *Firm Automation & Prisoner's Dilemma* · [Political Economy, Token Tax & Unrest](political_economy_token_tax_and_unrest.md) · [AI 2.0 Substrate & Active Inference](ai_2_0_substrate_and_active_inference.md) · [Ecology & Resource Realpolitik](ecology_energy_and_resource_realpolitik.md) · [Polycrisis Economy & Society](../02-world-of-2035/polycrisis_economy_and_society.md) · [Lifepaths & Economy](../../ttrpg/03-character/lifepaths_and_economy.md) · **Appendix:** [Plain-English Glossary](../07-appendix/plain_english_glossary.md)
 
 Between **2026 and 2035**, public anxiety in *Awakened* split along two converging fault lines: existential dread that superintelligence might destroy humanity, and a kitchen-table certainty that autonomous software and robotics were hollowing out the economy. Even as breakthroughs in medicine, mathematics, and lean manufacturing accelerated, corporate boards, labor unions, and sovereign governments remained locked inside an unyielding competitive machine built on three structural realities:
 
@@ -97,7 +97,9 @@ Even in sectors or regional crises where **Track A** panics forced CEOs back to 
 
 ## 3. The Multi-Player Prisoner's Dilemma: Micro-Rationality vs. Macro-Catastrophe
 
-What looked like reckless management shortsightedness was actually **strictly rational game theory at the level of each individual firm and nation-state**.
+In plain terms, the **Prisoner's Dilemma** is a classic game-theory trap where individual common sense produces collective ruin. Imagine two partners in crime arrested and questioned in separate rooms: if both stay silent, both walk away with light sentences; if one informs while the other stays quiet, the informer goes free and the silent partner takes heavy prison time. Because *each* suspect looks at the wall and realizes "no matter what my partner does, I get a better personal deal by ratting," both rationally betray each other—and both end up far worse off than if they had held the line together. Game theorists call that mutually destructive lock-in a **Dominant Nash Equilibrium** (see the [Plain-English Glossary](../07-appendix/plain_english_glossary.md#3-economics-finance--political-economy)).
+
+What looked like reckless management shortsightedness between `2026` and `2035` was actually **that exact trap scaled up to every boardroom and sovereign capital**.
 
 ### 3.1 The Corporate & Geopolitical Payoff Matrix
 

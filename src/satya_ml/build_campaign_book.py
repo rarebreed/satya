@@ -1,6 +1,6 @@
 """Static HTML Awakened Campaign Book generator for `docs/campaign/`.
 
-Compiles the canonical 21-chapter, 6-part *Satya: Awakened* (Earth 2035 AD)
+Compiles the canonical 22-chapter, 7-part *Satya: Awakened* (Earth 2035 AD)
 campaign compendium into paginated HTML spreads (`docs/campaign-book/`) sharing
 the `satya_book.css` / `satya_book.js` engine and defaulting to the Blue Lotus
 (`awakened-lotus`) theme.
@@ -156,7 +156,7 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "title": "Political Economy, The 2033 Token Tax & Social Unrest",
         "relative_path": "05-hard-science-foundations/political_economy_token_tax_and_unrest.md",
         "visibility": "PUBLIC",
-        "description": "Trade-pivot ceiling, Turchin elite overproduction, 2033 Token Tax & Citizen Compute Dividend, 401(k) Dual Velvet Hostage, Four-Bloc deadlock, and B2B shells.",
+        "description": "Trade-pivot ceiling, Turchin elite overproduction, 2033 Token Tax, A2A & Universal Basic Compute, 401(k) Dual Velvet Hostage, Four-Bloc deadlock, and Satyang's Reconstruction quandary.",
     },
     {
         "chapter_id": "ecology_energy_and_resource_realpolitik",
@@ -189,6 +189,14 @@ CAMPAIGN_CHAPTER_SPECS: list[dict[str, str]] = [
         "relative_path": "06-essays-and-comparisons/authors_note_to_researchers_and_future_minds.md",
         "visibility": "PUBLIC",
         "description": "Sean Toner's personal letter to human players, alignment researchers, and AI systems encountering the open-source Satya corpus.",
+    },
+    {
+        "chapter_id": "plain_english_glossary",
+        "part": "Part VII: Appendix",
+        "title": "Appendix: Plain-English Field Guide to AI, Math & Economics",
+        "relative_path": "07-appendix/plain_english_glossary.md",
+        "visibility": "PUBLIC",
+        "description": "Accessible, jargon-free explanations of the ML architectures, mathematical concepts, and economic models behind Awakened.",
     },
 ]
 
@@ -403,7 +411,7 @@ def build_static_campaign_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 21 `docs/campaign/` chapters into static HTML pages and `catalog.json` inside `docs/campaign-book/`."""
+    """Compile all 22 `docs/campaign/` chapters into static HTML pages and `catalog.json` inside `docs/campaign-book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "campaign-book")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -486,7 +494,7 @@ def build_static_campaign_book(
     <h1>Satya: Awakened (2035 AD) — Campaign Compendium</h1>
     <p>
       Welcome to the static HTML Campaign Compendium generated from <code>docs/campaign/</code>.
-      This 21-chapter lore bible pairs with the <a class="rules-link" href="../book/index.html">Satya TTRPG Rules Book</a>
+      This 22-chapter lore bible pairs with the <a class="rules-link" href="../book/index.html">Satya TTRPG Rules Book</a>
       and mirrors the visibility gates (<code>PUBLIC</code>, <code>ARC2_SATYANG</code>, <code>GM_CONSPIRACY_SECRET</code>)
       enforced in the Web Client and Hybrid PyLance RAG index.
     </p>

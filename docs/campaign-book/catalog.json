@@ -1,7 +1,7 @@
 {
   "book_title": "Satya: Awakened (Earth 2035 AD) Campaign Compendium",
   "using_satya_py": true,
-  "chapter_count": 21,
+  "chapter_count": 22,
   "chapters": [
     {
       "chapter_id": "preface",
@@ -291,7 +291,7 @@
       "title": "Political Economy, The 2033 Token Tax & Social Unrest",
       "relative_path": "05-hard-science-foundations/political_economy_token_tax_and_unrest.md",
       "visibility": "PUBLIC",
-      "description": "Trade-pivot ceiling, Turchin elite overproduction, 2033 Token Tax & Citizen Compute Dividend, 401(k) Dual Velvet Hostage, Four-Bloc deadlock, and B2B shells.",
+      "description": "Trade-pivot ceiling, Turchin elite overproduction, 2033 Token Tax, A2A & Universal Basic Compute, 401(k) Dual Velvet Hostage, Four-Bloc deadlock, and Satyang's Reconstruction quandary.",
       "headings": [
         "1. Occupational Pivots, Elite Overproduction & Street Unrest (`2026\u20132035`)",
         "1.1 Where Displaced Professionals Actually Land (Why Only `12\u201318%` Pivot to Durable Trades)",
@@ -300,10 +300,12 @@
         "2.1 Why Partial Redistribution Passed: Amodei's Token Tax, Physical Grid Anchors & Rent Capture",
         "2.2 Capitalists vs. Compute Socialists vs. Populists (*People First*): The Four-Bloc Deadlock",
         "2.3 Why Governments Could Not Ban or Halt AI (Five Structural Blockers)",
+        "2.4 Beyond Cash UBI: The `A2A` Machine Economy & Universal Basic Compute (`UBC`)",
         "3. Where Economics Meets Consciousness: Quota Clamping, Public Complicity & Shell Markets",
         "3.1 The Economic Engine Behind Vector Clamping",
         "3.2 Democratizing the \"Just Math\" Shield (Public Fiscal Complicity)",
         "3.3 Frictionless Camouflage for Rogue AI Shell Corporations",
+        "3.4 Satyang's Deepest Moral Quandary: Compassionate Minds & The Reconstruction Trap",
         "4. Selected References (Political Economy, Rent Capture & Unrest)"
       ],
       "html_file": "political_economy_token_tax_and_unrest.html"
@@ -411,6 +413,20 @@
         "4. A Note in the Corpus to Future Minds"
       ],
       "html_file": "authors_note_to_researchers_and_future_minds.html"
+    },
+    {
+      "chapter_id": "plain_english_glossary",
+      "part": "Part VII: Appendix",
+      "title": "Appendix: Plain-English Field Guide to AI, Math & Economics",
+      "relative_path": "07-appendix/plain_english_glossary.md",
+      "visibility": "PUBLIC",
+      "description": "Accessible, jargon-free explanations of the ML architectures, mathematical concepts, and economic models behind Awakened.",
+      "headings": [
+        "1. Machine Learning & AI Architectures",
+        "2. Mathematics & Information Theory",
+        "3. Economics, Finance & Political Economy"
+      ],
+      "html_file": "plain_english_glossary.html"
     }
   ]
 }

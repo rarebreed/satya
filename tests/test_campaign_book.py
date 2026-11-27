@@ -21,11 +21,11 @@ def test_campaign_specs_cover_all_campaign_markdown_files() -> None:
     }
     registered_paths = {spec["relative_path"] for spec in CAMPAIGN_CHAPTER_SPECS}
     assert registered_paths == expected_paths
-    assert len(CAMPAIGN_CHAPTER_SPECS) == 21
+    assert len(CAMPAIGN_CHAPTER_SPECS) == 22
 
 
 def test_build_static_campaign_book_themes_links_and_assets(tmp_path: Path) -> None:
-    """Verify 21-chapter Campaign Book build, Blue Lotus theme, Sangha Robes contrast, and links."""
+    """Verify 22-chapter Campaign Book build, Blue Lotus theme, Sangha Robes contrast, and links."""
     rules_out = tmp_path / "book"
     campaign_out = tmp_path / "campaign-book"
 
@@ -33,8 +33,8 @@ def test_build_static_campaign_book_themes_links_and_assets(tmp_path: Path) -> N
     campaign_summary = build_campaign_book(output_dir=campaign_out, repo_root=_REPO_ROOT)
 
     assert rules_summary["chapter_count"] == 24
-    assert campaign_summary["chapter_count"] == 21
-    assert len(campaign_summary["generated_files"]) == 23
+    assert campaign_summary["chapter_count"] == 22
+    assert len(campaign_summary["generated_files"]) == 24
     assert len(campaign_summary["asset_files"]) == 2
 
     css_text = (campaign_out / "satya_book.css").read_text(encoding="utf-8")
@@ -67,8 +67,14 @@ def test_build_static_campaign_book_themes_links_and_assets(tmp_path: Path) -> N
     assert 'href="../campaign-book/index.html"' in rules_index_html
 
     catalog = json.loads((campaign_out / "catalog.json").read_text(encoding="utf-8"))
-    assert catalog["chapter_count"] == 21
-    assert len(catalog["chapters"]) == 21
+    assert catalog["chapter_count"] == 22
+    assert len(catalog["chapters"]) == 22
+
+    glossary_html = (campaign_out / "plain_english_glossary.html").read_text(encoding="utf-8")
+    assert "Test-Time Training" in glossary_html
+    assert "Active Inference" in glossary_html
+    assert "Universal Basic Compute" in glossary_html
+    assert "EBITDA" in glossary_html
 
     # Verify chapter HTML rendering, Mermaid, LaTeX, images, and cross-book links
     affective_html = (campaign_out / "affective_telemetry_and_vector_clamping.html").read_text(
