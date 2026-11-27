@@ -109,6 +109,13 @@ def test_build_static_campaign_book_themes_links_and_assets(tmp_path: Path) -> N
     assert "rules-figure--half-top" in (
         campaign_out / "polycrisis_economy_and_society.html"
     ).read_text(encoding="utf-8")
+    polycrisis_html = (campaign_out / "polycrisis_economy_and_society.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Social Media Tribal Bubbles<br/>&amp; Synth-Media Deepfakes" in polycrisis_html
+    assert r"\n" not in polycrisis_html
+    assert "mermaid-flow-dag" in polycrisis_html
+    assert "flex: 0 0 auto;" in css_text
 
     history_html = (campaign_out / "history_and_ai_revolution.html").read_text(encoding="utf-8")
     assert "rules-figure--quarter" in history_html

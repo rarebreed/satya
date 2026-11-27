@@ -492,7 +492,8 @@ fn format_mermaid_label(raw: &str) -> String {
         .replace("</em>", "\x01I_CLOSE\x02")
         .replace("<br/>", "\x01BR\x02")
         .replace("<br />", "\x01BR\x02")
-        .replace("<br>", "\x01BR\x02");
+        .replace("<br>", "\x01BR\x02")
+        .replace("\\n", "\x01BR\x02");
 
     escape_html_text(&tokenized)
         .replace("\x01B_OPEN\x02", "<strong>")
@@ -867,7 +868,14 @@ pub fn render_mermaid_to_html(diagram_src: &str) -> String {
                 .enumerate()
                 .all(|(idx, e)| e.from == nodes[idx].id && e.to == nodes[idx + 1].id);
 
-        html.push_str("<div class=\"mermaid-flow-track\">");
+        let flow_cls = if is_simple_chain {
+            "mermaid-flow-track mermaid-flow-chain"
+        } else {
+            "mermaid-flow-track mermaid-flow-dag"
+        };
+        html.push_str("<div class=\"");
+        html.push_str(flow_cls);
+        html.push_str("\">");
         for (idx, n) in nodes.iter().enumerate() {
             render_mermaid_node_html(&mut html, n, &edges, !is_simple_chain, &lookup_title);
             if is_simple_chain && idx + 1 < nodes.len() {

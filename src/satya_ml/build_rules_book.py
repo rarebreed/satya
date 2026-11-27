@@ -756,7 +756,13 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
                 nodes_html: list[str] = []
                 for m_line in buf:
                     for m_match in re.finditer(r'([A-Za-z0-9_]+)\["([^"]+)"\]', m_line):
-                        lbl = m_match.group(2).replace("<br/>", "<br>")
+                        lbl = (
+                            html.escape(m_match.group(2))
+                            .replace("\\n", "<br/>")
+                            .replace("&lt;br/&gt;", "<br/>")
+                            .replace("&lt;br /&gt;", "<br/>")
+                            .replace("&lt;br&gt;", "<br/>")
+                        )
                         nodes_html.append(
                             f'<div class="mermaid-node"><div class="mermaid-node-body">{lbl}</div></div>'
                         )

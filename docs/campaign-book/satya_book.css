@@ -1433,6 +1433,18 @@ body[data-book-theme="awakened-lotus"] .rules-table-wrap {
   flex-direction: column;
 }
 
+.mermaid-dir-td > .mermaid-flow-track.mermaid-flow-dag {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  align-items: start;
+  gap: 6px;
+}
+
+.mermaid-dir-td > .mermaid-flow-track > .mermaid-node,
+.mermaid-subgraph-nodes > .mermaid-node {
+  flex: 0 0 auto;
+}
+
 .mermaid-subgraphs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
@@ -1481,7 +1493,7 @@ body[data-book-theme="awakened-lotus"] .rules-table-wrap {
   color: var(--ink);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 4px;
 }
 

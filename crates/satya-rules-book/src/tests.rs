@@ -380,3 +380,33 @@ fn test_markdown_url_sanitization_blocks_javascript_and_data_uris() {
         "relative anchor link should be preserved: {html}"
     );
 }
+
+#[test]
+fn mermaid_backslash_n_renders_br_and_short_link_pills() {
+    let src = concat!(
+        "flowchart TD\n",
+        "    A[\"First Line\\n(Second Line)\"] --> B[\"Target Title\\n(Extra Detail)\"]\n",
+        "    A --> C[\"Third Node\\n(More Detail)\"]\n",
+    );
+    let html = render_mermaid_to_html(src);
+    assert!(
+        html.contains("First Line<br/>(Second Line)"),
+        "expected \\n in node body to convert to <br/>: {html}"
+    );
+    assert!(
+        html.contains("mermaid-flow-dag"),
+        "expected branching flowchart TD to tag mermaid-flow-dag: {html}"
+    );
+    assert!(
+        !html.contains(r"\n"),
+        "literal \\n must not leak into rendered Mermaid HTML: {html}"
+    );
+    assert!(
+        html.contains(r#"<span class="mermaid-link-pill">→ Target Title</span>"#),
+        "expected edge pill to show only first line before <br/>: {html}"
+    );
+    assert!(
+        !html.contains("→ Target Title\\n(Extra Detail)"),
+        "edge pill must not include trailing lines: {html}"
+    );
+}
