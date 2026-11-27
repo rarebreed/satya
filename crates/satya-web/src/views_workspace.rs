@@ -299,6 +299,24 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                     </div>
                 </div>
 
+                <div
+                    id="center-row-splitter"
+                    class="center-row-splitter"
+                    role="separator"
+                    tabindex="0"
+                    aria-orientation="horizontal"
+                    aria-valuemin="20"
+                    aria-valuemax="82"
+                    aria-valuenow="62"
+                    aria-label="Resize Session Chat and Task Resolution panes (double-click to reset)"
+                    title="Drag to resize Session Chat & Task Resolution panes (double-click to reset)"
+                    onmousedown="window.satyaStartCenterRowResize(event)"
+                    ondblclick="window.satyaResetCenterRowResize()"
+                    onkeydown="window.satyaCenterRowSplitterKeydown(event)"
+                >
+                    <span class="row-splitter-grip" aria-hidden="true"></span>
+                </div>
+
                 <div id="ttrpg-drawer" class="card ttrpg-card">
                     <div
                         id="ttrpg-drag-header"

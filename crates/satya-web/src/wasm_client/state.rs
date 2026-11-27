@@ -211,6 +211,10 @@ pub struct SatyaWasmState {
     pub floating_z_order: [FloatingPaneKind; 3],
     /// Whether the user is currently dragging `#workspace-col-splitter` to resize `#notebook-column` vs `#center-column`.
     pub column_resizing: bool,
+    /// Whether the user is currently dragging `#center-row-splitter` to resize `#chat-card` vs `#ttrpg-drawer`.
+    pub center_row_resizing: bool,
+    /// Active custom Session Chat height percentage (`20.0..=82.0`) when set via `#center-row-splitter`.
+    pub center_chat_height_pct: Option<f64>,
     /// Current Satya combat round counter in the Combat Tracker tab.
     pub combat_round: u32,
     /// Current Satya Action-Count (Tick) clock in the Combat Tracker tab.
@@ -343,6 +347,8 @@ impl Default for SatyaWasmState {
                 FloatingPaneKind::Webcam,
             ],
             column_resizing: false,
+            center_row_resizing: false,
+            center_chat_height_pct: None,
             combat_round: 1,
             combat_tick: 0,
             combat_combatants: Vec::new(),

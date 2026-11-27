@@ -1,10 +1,11 @@
-//! Collapsible Workspace Drawers, Floating Overlay Panes, Column Splitter Resize,
+//! Collapsible Workspace Drawers, Floating Overlay Panes, Column & Center Row Splitter Resize,
 //! and Notebook WebGPU Viewport Refresh (`#workspace-panel`).
 //!
 //! Synchronizes all combinations of `(Docked, Floating, Collapsed)` across Session Chat
 //! (`#chat-card`), Task Resolution (`#ttrpg-drawer`), and Web Cams (`#webrtc-card`),
 //! ensuring `#notebook-column` expands to fill all freed horizontal space when panes
-//! collapse or float even after a custom `#workspace-col-splitter` percentage has been persisted.
+//! collapse or float even after a custom `#workspace-col-splitter` percentage has been persisted,
+//! and persisting custom `#center-row-splitter` heights between Session Chat and Task Resolution.
 
 use crate::wasm_client::dom::{
     document, get_element, local_storage_get, local_storage_set, set_class, set_text, window,
@@ -14,10 +15,17 @@ use js_sys::Reflect;
 use satya_schema::SessionMode;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, HtmlElement, MouseEvent};
+use web_sys::{Element, HtmlElement, KeyboardEvent, MouseEvent};
 
 /// Storage key persisting the user's custom `#notebook-column` width percentage (`22.0..=72.0`).
 const STORAGE_KEY_NOTEBOOK_WIDTH_PCT: &str = "satya.workspace.notebook_width_pct";
+/// Storage key persisting the user's custom `#chat-card` height percentage (`20.0..=82.0`) inside `#center-column`.
+const STORAGE_KEY_CENTER_CHAT_HEIGHT_PCT: &str = "satya.workspace.center_chat_height_pct";
+const CENTER_CHAT_DEFAULT_PCT: f64 = 62.0;
+const CENTER_CHAT_MIN_PCT: f64 = 20.0;
+const CENTER_CHAT_MAX_PCT: f64 = 82.0;
+const CENTER_CHAT_MIN_PX: f64 = 220.0;
+const CENTER_TTRPG_MIN_PX: f64 = 140.0;
 
 /// Workspace panes that support collapsing to `#right-drawer-rails` or floating over the workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -820,6 +828,157 @@ pub(crate) fn handle_column_resize_move(ev: &web_sys::Event) {
     refresh_active_notebook_stage_on_layout_change();
 }
 
+/// Computes Session Chat's clamped height percentage (`20.0..=82.0`) from a pointer Y position in `#center-column`.
+#[must_use]
+pub fn compute_center_row_split_pct(
+    client_y_px: f64,
+    col_top_px: f64,
+    col_height_px: f64,
+    splitter_height_px: f64,
+) -> Option<f64> {
+    if !client_y_px.is_finite()
+        || !col_top_px.is_finite()
+        || !col_height_px.is_finite()
+        || !splitter_height_px.is_finite()
+    {
+        return None;
+    }
+    let splitter_h = splitter_height_px.max(0.0);
+    if col_height_px < CENTER_CHAT_MIN_PX + CENTER_TTRPG_MIN_PX + splitter_h {
+        return None;
+    }
+    let max_chat_px = col_height_px - splitter_h - CENTER_TTRPG_MIN_PX;
+    let desired_chat_px = client_y_px - col_top_px - (splitter_h * 0.5);
+    let clamped_chat_px = desired_chat_px.clamp(CENTER_CHAT_MIN_PX, max_chat_px);
+    Some(((clamped_chat_px / col_height_px) * 100.0).clamp(CENTER_CHAT_MIN_PCT, CENTER_CHAT_MAX_PCT))
+}
+
+/// Steps the Session Chat height percentage by `delta_pct` within `20.0..=82.0`.
+#[must_use]
+pub fn step_center_row_split_pct(current_pct: f64, delta_pct: f64) -> f64 {
+    let base = if current_pct.is_finite() {
+        current_pct
+    } else {
+        CENTER_CHAT_DEFAULT_PCT
+    };
+    let delta = if delta_pct.is_finite() { delta_pct } else { 0.0 };
+    (base + delta).clamp(CENTER_CHAT_MIN_PCT, CENTER_CHAT_MAX_PCT)
+}
+
+/// Restores a previously saved `#chat-card` height percentage (`20.0..=82.0`) from `localStorage`.
+pub fn restore_saved_center_row_split() {
+    if let Some(raw) = local_storage_get(STORAGE_KEY_CENTER_CHAT_HEIGHT_PCT)
+        && let Ok(pct) = raw.trim().parse::<f64>()
+        && pct.is_finite()
+    {
+        apply_center_row_split_pct(pct.clamp(CENTER_CHAT_MIN_PCT, CENTER_CHAT_MAX_PCT));
+    }
+}
+
+fn apply_center_row_split_pct(pct: f64) {
+    let clamped = pct.clamp(CENTER_CHAT_MIN_PCT, CENTER_CHAT_MAX_PCT);
+    if let Some(center_col) =
+        get_element("center-column").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = center_col
+            .style()
+            .set_property("--center-chat-pct", &format!("{clamped:.1}%"));
+    }
+    if let Some(splitter) = get_element("center-row-splitter") {
+        let _ = splitter.set_attribute("aria-valuenow", &format!("{clamped:.0}"));
+    }
+    with_state_mut(|st| {
+        st.center_chat_height_pct = Some(clamped);
+    });
+}
+
+/// Begins resizing the division between `#chat-card` and `#ttrpg-drawer` via `#center-row-splitter`.
+#[wasm_bindgen]
+pub fn satya_start_center_row_resize(ev: web_sys::Event) {
+    if let Some(me) = ev.dyn_ref::<MouseEvent>()
+        && me.button() != 0
+    {
+        return;
+    }
+    ev.prevent_default();
+    with_state_mut(|st| {
+        st.center_row_resizing = true;
+    });
+    if let Some(splitter) = get_element("center-row-splitter") {
+        splitter.set_class_name("center-row-splitter is-dragging");
+    }
+}
+
+/// Resets `#chat-card` vs `#ttrpg-drawer` vertical split back to the responsive CSS default (`62%`).
+#[wasm_bindgen]
+pub fn satya_reset_center_row_resize() {
+    with_state_mut(|st| {
+        st.center_row_resizing = false;
+        st.center_chat_height_pct = None;
+    });
+    local_storage_set(STORAGE_KEY_CENTER_CHAT_HEIGHT_PCT, "");
+    if let Some(center_col) =
+        get_element("center-column").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = center_col.style().remove_property("--center-chat-pct");
+    }
+    if let Some(splitter) = get_element("center-row-splitter") {
+        splitter.set_class_name("center-row-splitter");
+        let _ = splitter.set_attribute("aria-valuenow", &format!("{CENTER_CHAT_DEFAULT_PCT:.0}"));
+    }
+}
+
+/// Resizes `#chat-card` vs `#ttrpg-drawer` via keyboard on `#center-row-splitter`.
+#[wasm_bindgen]
+pub fn satya_center_row_splitter_keydown(ev: KeyboardEvent) {
+    let step = if ev.shift_key() { 8.0 } else { 3.0 };
+    let next_pct = match ev.key().as_str() {
+        "ArrowUp" => {
+            let cur = with_state(|st| st.center_chat_height_pct.unwrap_or(CENTER_CHAT_DEFAULT_PCT));
+            step_center_row_split_pct(cur, -step)
+        }
+        "ArrowDown" => {
+            let cur = with_state(|st| st.center_chat_height_pct.unwrap_or(CENTER_CHAT_DEFAULT_PCT));
+            step_center_row_split_pct(cur, step)
+        }
+        "Home" => CENTER_CHAT_MIN_PCT,
+        "End" => CENTER_CHAT_MAX_PCT,
+        "Enter" | "0" => {
+            ev.prevent_default();
+            satya_reset_center_row_resize();
+            return;
+        }
+        _ => return,
+    };
+    ev.prevent_default();
+    apply_center_row_split_pct(next_pct);
+    local_storage_set(STORAGE_KEY_CENTER_CHAT_HEIGHT_PCT, &format!("{next_pct:.1}"));
+}
+
+pub(crate) fn handle_center_row_resize_move(ev: &web_sys::Event) {
+    if !with_state(|st| st.center_row_resizing) {
+        return;
+    }
+    let Some((_, client_y)) = extract_pointer_xy(ev) else {
+        return;
+    };
+    let Some(center_col) = get_element("center-column") else {
+        return;
+    };
+    let col_rect = center_col.get_bounding_client_rect();
+    let splitter_h = get_element("center-row-splitter")
+        .map(|el| el.get_bounding_client_rect().height())
+        .filter(|&h| h > 0.0)
+        .unwrap_or(10.0);
+    let Some(pct) =
+        compute_center_row_split_pct(client_y, col_rect.top(), col_rect.height(), splitter_h)
+    else {
+        return;
+    };
+    apply_center_row_split_pct(pct);
+    local_storage_set(STORAGE_KEY_CENTER_CHAT_HEIGHT_PCT, &format!("{pct:.1}"));
+}
+
 pub(crate) fn handle_floating_pane_drag_move(ev: &web_sys::Event) {
     let Some((kind, off_x, off_y)) = with_state(|st| st.active_pane_drag) else {
         return;
@@ -838,11 +997,13 @@ pub(crate) fn handle_floating_pane_drag_move(ev: &web_sys::Event) {
 }
 
 pub(crate) fn end_workspace_pointer_interactions() {
-    let (drag_kind, was_resizing) = with_state_mut(|st| {
+    let (drag_kind, was_col_resizing, was_row_resizing) = with_state_mut(|st| {
         let dragged = st.active_pane_drag.take().map(|(k, _, _)| k);
-        let resizing = st.column_resizing;
+        let col_resizing = st.column_resizing;
+        let row_resizing = st.center_row_resizing;
         st.column_resizing = false;
-        (dragged, resizing)
+        st.center_row_resizing = false;
+        (dragged, col_resizing, row_resizing)
     });
     if let Some(kind) = drag_kind {
         let spec = spec_for_pane(kind);
@@ -850,8 +1011,11 @@ pub(crate) fn end_workspace_pointer_interactions() {
             header.set_class_name(spec.drag_header_base_class);
         }
     }
-    if was_resizing && let Some(splitter) = get_element("workspace-col-splitter") {
+    if was_col_resizing && let Some(splitter) = get_element("workspace-col-splitter") {
         splitter.set_class_name("workspace-col-splitter");
+    }
+    if was_row_resizing && let Some(splitter) = get_element("center-row-splitter") {
+        splitter.set_class_name("center-row-splitter");
     }
 }
 
@@ -996,5 +1160,33 @@ mod tests {
         );
         assert_eq!(z_index_for_pane(&order, FloatingPaneKind::Chat), 97);
         assert_eq!(z_index_for_pane(&order, FloatingPaneKind::Ttrpg), 95);
+    }
+
+    #[test]
+    fn test_center_row_split_clamping_and_stepping() {
+        // Midpoint of a 900px center column with 10px splitter at top=0 -> (450 - 5) / 900 = 49.444...%
+        let mid = compute_center_row_split_pct(450.0, 0.0, 900.0, 10.0).unwrap();
+        assert!((mid - 49.444).abs() < 0.05, "got {mid}");
+
+        // Dragging above top clamps to CENTER_CHAT_MIN_PX (220px) / 900 = 24.444...%
+        let top_clamped = compute_center_row_split_pct(-20.0, 100.0, 900.0, 10.0).unwrap();
+        assert!((top_clamped - (220.0 / 900.0 * 100.0)).abs() < 0.05, "got {top_clamped}");
+
+        // Dragging below bottom clamps to (900 - 10 - 140) = 750px -> 83.33% -> clamped to 82.0%
+        let bot_clamped = compute_center_row_split_pct(1500.0, 100.0, 900.0, 10.0).unwrap();
+        assert_eq!(bot_clamped, CENTER_CHAT_MAX_PCT);
+
+        // Tall column (1400px): 220px / 1400 = 15.7% -> clamped to CENTER_CHAT_MIN_PCT (20.0%)
+        let min_pct = compute_center_row_split_pct(0.0, 0.0, 1400.0, 10.0).unwrap();
+        assert_eq!(min_pct, CENTER_CHAT_MIN_PCT);
+
+        // Short column guard (< 220 + 140 + 10 = 370px) returns None
+        assert!(compute_center_row_split_pct(150.0, 0.0, 350.0, 10.0).is_none());
+        assert!(compute_center_row_split_pct(f64::NAN, 0.0, 900.0, 10.0).is_none());
+
+        // Keyboard stepping clamps within [20.0, 82.0]
+        assert_eq!(step_center_row_split_pct(62.0, -3.0), 59.0);
+        assert_eq!(step_center_row_split_pct(21.0, -8.0), CENTER_CHAT_MIN_PCT);
+        assert_eq!(step_center_row_split_pct(78.0, 8.0), CENTER_CHAT_MAX_PCT);
     }
 }

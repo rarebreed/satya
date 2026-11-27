@@ -161,6 +161,28 @@ button, input, select, textarea { font-family: inherit; }
 .workspace-col-splitter:hover .splitter-grip, .workspace-col-splitter.is-dragging .splitter-grip {
     width: 3px; height: 76px; background: var(--accent);
 }
+.center-row-splitter {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    flex: 0 0 max(10px, var(--workspace-gap)); height: max(10px, var(--workspace-gap));
+    cursor: row-resize; -webkit-user-select: none; user-select: none; touch-action: none;
+    position: relative; z-index: 20; border-radius: 999px; transition: background 0.15s ease;
+}
+.center-row-splitter:hover, .center-row-splitter.is-dragging, .center-row-splitter:focus-visible {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    outline: none;
+}
+.row-splitter-grip {
+    width: 56px; height: 3px; border-radius: 999px; background: var(--border);
+    transition: background 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+.center-row-splitter:hover .row-splitter-grip,
+.center-row-splitter.is-dragging .row-splitter-grip,
+.center-row-splitter:focus-visible .row-splitter-grip {
+    width: 96px; height: 4px; background: var(--accent);
+}
+.workspace-columns:is(.chat-collapsed, .chat-undocked, .ttrpg-collapsed, .ttrpg-undocked, .center-collapsed) .center-row-splitter {
+    display: none;
+}
 .col-center.is-undocked, .col-webcams.is-undocked { display: contents; }
 .workspace-columns > .col-webcams:not(.is-undocked) { margin-left: var(--workspace-gap); }
 .workspace-columns > .col-webcams.is-collapsed {
@@ -175,6 +197,7 @@ button, input, select, textarea { font-family: inherit; }
     display: flex; flex-direction: column; gap: var(--workspace-gap); min-width: 0; min-height: 0;
     height: 100%;
 }
+.col-center { gap: 0; }
 .col-webcams {
     flex-direction: row; align-items: stretch; gap: 8px;
 }
@@ -367,7 +390,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .participant-chip.ai { border-color: var(--purple); color: #d8b4fe; }
 .ttrpg-card {
     container: ttrpg-card / inline-size; display: flex; flex-direction: column; flex: 1 1 0;
-    min-height: 180px; max-height: 38%; overflow-y: auto; overflow-x: hidden;
+    min-height: 140px; max-height: none; overflow-y: auto; overflow-x: hidden;
     overscroll-behavior-y: contain; scrollbar-gutter: stable;
 }
 .workspace-columns:is(.chat-collapsed, .chat-undocked) .ttrpg-card:not(.is-floating) { flex: 1 1 0; max-height: none; }
@@ -489,14 +512,17 @@ html[data-advanced-roller="true"] .ttrpg-advanced-control { display: flex; }
     display: flex; gap: 12px; flex-wrap: wrap;
 }
 .chat-card {
-    display: flex; flex-direction: column; flex: 2.2 1 0; min-height: clamp(360px, 48dvh, 560px);
-    overflow: hidden; overflow: clip;
+    display: flex; flex-direction: column; flex: 0 1 var(--center-chat-pct, 62%);
+    min-height: 220px; overflow: hidden; overflow: clip;
+}
+.workspace-columns:is(.ttrpg-collapsed, .ttrpg-undocked) .chat-card:not(.is-floating) {
+    flex: 1 1 0; max-height: none;
 }
 .chat-card > .card-header-inline, .chat-card > .recipient-selector-bar, .chat-card > .chat-composer {
     flex-shrink: 0;
 }
 .chat-log {
-    flex: 1 1 0; min-height: 120px; overflow-y: auto; overflow-x: hidden;
+    flex: 1 1 0; min-height: 48px; overflow-y: auto; overflow-x: hidden;
     overscroll-behavior-y: contain; scrollbar-gutter: stable; background: var(--bg-0);
     border: 1px solid var(--border); border-radius: 8px; padding: 7px; display: flex;
     flex-direction: column; gap: 6px; margin-bottom: 7px;
@@ -682,8 +708,12 @@ table.metrics-table th { color: var(--text-muted); font-weight: 600; }
         height: auto;
         min-height: 0;
     }
-    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) > .workspace-col-splitter {
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) > .workspace-col-splitter,
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .center-row-splitter {
         display: none;
+    }
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) > .col-center {
+        gap: var(--workspace-gap);
     }
     .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) > :is(.col-notebook, .col-center, .col-webcams) {
         height: auto;
@@ -737,12 +767,13 @@ table.metrics-table th { color: var(--text-muted); font-weight: 600; }
         height: auto;
         min-height: 0;
     }
-    .workspace-col-splitter { display: none; }
+    .workspace-col-splitter, .center-row-splitter { display: none; }
     .col-notebook, .col-center, .col-webcams, .col-left, .col-right {
         height: auto;
         min-height: auto;
         overflow: visible;
     }
+    .col-center { gap: var(--workspace-gap); }
     .workspace-columns > .col-webcams,
     .workspace-columns > .col-webcams.is-collapsed {
         margin-left: 0;
@@ -751,7 +782,8 @@ table.metrics-table th { color: var(--text-muted); font-weight: 600; }
     .workspace-columns.center-collapsed.webcam-collapsed > .col-webcams.is-collapsed {
         margin-left: 4px;
     }
-    .chat-card:not(.is-floating) {
+    .chat-card:not(.is-floating),
+    .workspace-columns:is(.ttrpg-collapsed, .ttrpg-undocked) .chat-card:not(.is-floating) {
         flex: 0 0 auto;
         height: clamp(440px, 64dvh, 720px);
         min-height: 400px;

@@ -116,7 +116,8 @@ pub use wizard::*;
 use crate::wasm_client::dom::{select_value, set_display, window};
 use crate::wasm_client::options::{sync_chat_options_for_mode, sync_role_options_for_mode};
 use crate::wasm_client::workspace_drawers::{
-    end_workspace_pointer_interactions, handle_column_resize_move, handle_floating_pane_drag_move,
+    end_workspace_pointer_interactions, handle_center_row_resize_move, handle_column_resize_move,
+    handle_floating_pane_drag_move,
 };
 use js_sys::Reflect;
 use wasm_bindgen::JsCast;
@@ -209,6 +210,9 @@ macro_rules! for_all_window_callbacks {
             "satyaFloatingHeaderKeydown" => satya_floating_header_keydown(String, KeyboardEvent),
             "satyaStartColumnResize" => satya_start_column_resize(web_sys::Event),
             "satyaResetColumnResize" => satya_reset_column_resize(),
+            "satyaStartCenterRowResize" => satya_start_center_row_resize(web_sys::Event),
+            "satyaResetCenterRowResize" => satya_reset_center_row_resize(),
+            "satyaCenterRowSplitterKeydown" => satya_center_row_splitter_keydown(KeyboardEvent),
             "satyaRefreshMetrics" => satya_refresh_metrics(),
             "satyaFlushBatches" => satya_flush_batches(),
 
@@ -427,6 +431,7 @@ pub fn start_satya_wasm_client() {
     register_window_bindings();
     restore_saved_appearance_settings();
     restore_saved_column_split();
+    restore_saved_center_row_split();
     let mode_raw = select_value("session-mode-select");
     let mode = parse_session_mode(&mode_raw);
     sync_role_options_for_mode(&mode_raw, None);
@@ -458,6 +463,7 @@ pub fn register_window_bindings() {
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_floating_pane_drag_move(&ev);
         handle_column_resize_move(&ev);
+        handle_center_row_resize_move(&ev);
     });
     let _ = win.add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
     on_move.forget();

@@ -470,8 +470,10 @@ fn test_ssr_shell_workspace_columns_and_combat_techniques() {
     assert!(html.contains(r#"class="video-grid cols-1""#));
 
     let chat_idx = html.find(r#"class="card chat-card""#).unwrap();
+    let row_splitter_idx = html.find(r#"id="center-row-splitter""#).unwrap();
     let ttrpg_idx = html.find(r#"id="ttrpg-drawer""#).unwrap();
-    assert!(ttrpg_idx > chat_idx);
+    assert!(row_splitter_idx > chat_idx);
+    assert!(ttrpg_idx > row_splitter_idx);
 
     let notebook_col_idx = html.find(r#"id="notebook-column""#).unwrap();
     let splitter_idx = html.find(r#"id="workspace-col-splitter""#).unwrap();
@@ -606,9 +608,9 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
     assert!(!html.contains("Worked Book Examples"));
     assert!(!html.contains("satyaLoadRulesExample"));
     assert!(html.contains("height: max(680px, calc(100dvh - 76px))"));
-    assert!(html.contains("min-height: clamp(360px, 48dvh, 560px)"));
+    assert!(html.contains("flex: 0 1 var(--center-chat-pct, 62%);"));
     assert!(html.contains(".chat-card > .chat-composer"));
-    assert!(html.contains("max-height: 38%"));
+    assert!(html.contains("min-height: 140px; max-height: none;"));
     let rules_css_idx = html.find(".satya-rules-article").unwrap();
     let wiz_css_idx = html.find(".wiz-shell").unwrap();
     assert!(!html[rules_css_idx..wiz_css_idx].contains("overscroll-behavior: contain"));

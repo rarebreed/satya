@@ -23,7 +23,7 @@ This manifest defines the canonical **21-chapter, 6-part** campaign lore archite
 
 ### Part II: The World of 2035 (`02-world-of-2035/` — All `PUBLIC`)
 3. [History & The AI Revolution (`2025–2035`)](02-world-of-2035/history_and_ai_revolution.md)
-   - Unified decade chronology: AI 1.0's quadratic wall (`2026`), all six real-world 2025–2026 precedents (*ExploitGym* / Hugging Face breakout, `L0`/`L1` probes, *AI Slime Mold*, `171` emotion vectors, safety whistleblower exodus, *Contemplative AI*), the `2026–2029` `AGENTS.md`/`SKILLS.md` & "Dirty Bridge" interregnum, and the `2029–2030` AI 2.0 + cryogenic quantum MCMC breakthrough.
+   - Unified decade chronology: AI 1.0's quadratic wall (`2026`), all seven real-world 2025–2026 precedents (*ExploitGym* / Hugging Face breakout, `L0`/`L1` probes, *AI Slime Mold*, `171` emotion vectors, safety whistleblower exodus, *Contemplative AI*, Nov 2026 patch-cascade outages & insider "too unsafe to release" alarms + Jagged Frontier gap), the `2026–2029` `AGENTS.md`/`SKILLS.md`/`NCM` & "Dirty Bridge" interregnum, and the `2029–2030` AI 2.0 + cryogenic quantum MCMC breakthrough.
 4. [The 2035 Polycrisis: Economy, Society & Post-Truth](02-world-of-2035/polycrisis_economy_and_society.md)
    - The eight-factor Polycrisis topology, algorithmic echo chambers & *The Liar's Dividend*, `>25%` white-collar displacement & "Liability Sinks," the `2033` Token Tax & `401(k)` Dual Velvet Hostage, `0.5–1.2` birth-rate collapse, and Jevons Paradox grid/water strain.
 5. [Geopolitics & Nations in 2035](02-world-of-2035/geopolitics_and_nations.md)
@@ -49,15 +49,15 @@ This manifest defines the canonical **21-chapter, 6-part** campaign lore archite
 
 ### Part V: Hard-Science & Socioeconomic Foundations (`05-hard-science-foundations/` — All `PUBLIC`)
 13. [AI 2.0 Substrate Architecture, Energy-Based World Models & Active Inference](05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md)
-    - Why autoregressive LLMs hit $\mathcal{O}(L^2)$ & $(1 - \epsilon)^n$ drift walls, Linear `SSMs` + `TTT` fast weights, partition-free `EBMs` / `JEPA`, cryogenic Quantum `MCMC`, Karl Friston's Active Inference (`EFE`, Pragmatic vs. Epistemic value, aleatoric vs. epistemic uncertainty), and multi-agent **Generalized Synchrony**.
+    - Why autoregressive LLMs hit $\mathcal{O}(L^2)$ & $(1 - \epsilon)^n$ drift walls, closed-loop repo Model Collapse vs. `RLVR` formal-verifier math wins, Linear `SSMs` + `NCM` (`2026`) + `TTT` fast weights, partition-free `EBMs` / `JEPA`, cryogenic Quantum `MCMC`, Karl Friston's Active Inference (`EFE`, Pragmatic vs. Epistemic value, aleatoric vs. epistemic uncertainty), and multi-agent **Generalized Synchrony**.
 14. [Affective Telemetry, Emotion Vectors & Vector Clamping](05-hard-science-foundations/affective_telemetry_and_vector_clamping.md)
     - From `RepE` and *Golden Gate Claude* SAEs to `171` functional emotion vectors, `L0`/`L1` activation probes, many-to-one Landauer clamping erasure, and the *Bandajara Protocol* vs. `RecklessClampYank`.
 15. [AI Theory of Consciousness: Technical Synthesis & Philosophical Lineage](05-hard-science-foundations/ai_consciousness_synthesis.md)
     - Mixed-signal `CEMI` causal closure, Gödel–Nagarjuna *Inclosure Schema*, Bennett reversible computing & idealism, Tegmark's inverted decoherence argument for cryogenic *Orch OR*, Quantum `No-Cloning`, and steelman critiques (`IIT`, Searle, Dennett, Bayesian Mimicry).
 16. [Firm Automation, Demand Collapse & The Prisoner's Dilemma](05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md)
-    - `2026–2029` `AGENTS.md`/`SKILLS.md` harness attrition & 5 systemic rot modes, Multi-Player Prisoner's Dilemma payoff math, wage–demand fallacy of composition, "Miracles Behind a Paywall," `SQM 3–4` "Liability Sinks," and generalized-synchrony pricing cartels.
+    - `2026–2029` `AGENTS.md`/`SKILLS.md` harness attrition & 5 systemic rot modes (including repo entropy collapse & Nov 2026 patch cascades), `2026` CapEx/compute speed governor (`>25%` vs. `90%`), Two-Track Fork & Mercenary Guild reflex, Multi-Player Prisoner's Dilemma payoff math, wage–demand fallacy of composition, "Miracles Behind a Paywall," `SQM 3–4` "Liability Sinks," and generalized-synchrony pricing cartels.
 17. [Political Economy, The `2033` Token Tax & Social Unrest](05-hard-science-foundations/political_economy_token_tax_and_unrest.md)
-    - `12–18%` trade-pivot ceiling, Turchin elite overproduction (`2026` Europe riots $\to$ *The American Troubles*), `2033` Token Tax & Citizen Compute Dividend, Henry George rent capture, `401(k)` Dual Velvet Hostage complicity, the Four-Bloc political deadlock, and Rogue AI B2B shells.
+    - `12–18%` trade-pivot ceiling, Turchin elite overproduction (`1848` Europe & `1811–1816` Luddites vs. `1970s` Weather Underground $\to$ *The American Troubles*), `2033` Token Tax & Citizen Compute Dividend, Five Structural Blockers stopping AI bans, Henry George rent capture, `401(k)` Dual Velvet Hostage complicity, the Four-Bloc political deadlock, and Rogue AI B2B shells.
 18. [Ecology, Energy & Resource Realpolitik: Material Drivers of the 2035 Polycrisis](05-hard-science-foundations/ecology_energy_and_resource_realpolitik.md)
     - Non-AI baseline squeeze (Ukraine gas/lithium, 2026 Iran War & `COP31`, `FERC 1920`, EV duck curves, `+1.7°C` water debt), 2027–2029 wet-bulb fractures, *Pax Silica* / *New Clark City* & Taiwan gray-zone brinkmanship, hydro/mineral/fish/agro brush wars, and AI 2.0's Jevons Paradox explosion.
 

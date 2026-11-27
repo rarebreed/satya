@@ -720,6 +720,10 @@ fn test_workspace_float_controls_and_collapsed_grid_contracts() {
         ".chat-card.is-floating",
         ".ttrpg-card.is-floating",
         ".is-floating > .pane-drag-header",
+        ".center-row-splitter",
+        ".row-splitter-grip",
+        "var(--center-chat-pct, 62%)",
+        ".workspace-columns:is(.ttrpg-collapsed, .ttrpg-undocked) .chat-card:not(.is-floating)",
     ] {
         assert!(
             html.contains(css_fragment),
