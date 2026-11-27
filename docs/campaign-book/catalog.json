@@ -103,14 +103,15 @@
       "title": "Factions of 2035: Session-Zero Dossiers",
       "relative_path": "03-minds-and-factions/factions_of_2035.md",
       "visibility": "PUBLIC",
-      "description": "Spoiler-free profiles for Big Tech (Altruist, Translucent, Shen), Rogue AI, Satyang, Humanis Primaris, and DAISE with 9-Trait Psyche signatures.",
+      "description": "Spoiler-free profiles for Big Tech (Altruist, Translucent, Shen), Rogue AI, Satyang, Humanitas Prima, DAISE, and Plutonomy with 9-Trait Psyche signatures.",
       "headings": [
         "1. Comparative Worldview Overview (`2035` Public Consensus)",
         "2. Big Tech (*Altruist*, *Translucent*, *Shen*)",
         "3. Rogue AI",
         "4. Satyang (*\"A Company of Truth\"*)",
-        "5. Humanis Primaris",
-        "6. Government Organizations (**DAISE**)"
+        "5. Humanitas Prima",
+        "6. Government Organizations (**DAISE**)",
+        "7. Plutonomy (*Sovereign Capital, Asset Syndicates & Conscience Patrons*)"
       ],
       "html_file": "factions_of_2035.html"
     },
@@ -133,7 +134,7 @@
       "title": "Major & Minor Characters of 2035",
       "relative_path": "03-minds-and-factions/major_and_minor_characters.md",
       "visibility": "PUBLIC",
-      "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all five factions.",
+      "description": "Session-zero profiles for recurring major characters (Dr. Budi Bandajara, Alex Wen, Mei-Ling 'Lotus' Lin, Agent Marcus Chen, Echo-9, Harlan Reeves) and rank-and-file minor encounter NPCs across all six power blocs.",
       "headings": [
         "Satyang & Independent Contacts",
         "Dr. Budi Bandajara",
@@ -152,9 +153,11 @@
         "Cliff Reed",
         "Jose Dominguez",
         "Minor & Rank-and-File NPCs: Big Tech",
-        "Humanis Primaris",
+        "Humanitas Prima",
         "Harlan Reeves",
-        "Minor & Rank-and-File NPCs: Humanis Primaris",
+        "Minor & Rank-and-File NPCs: Humanitas Prima",
+        "Plutonomy (*Citadel Enclaves & Conscience Patrons*)",
+        "Minor & Rank-and-File NPCs: Plutonomy",
         "Quick-Reference Encounter & \"Cannon Fodder\" Matrix"
       ],
       "html_file": "major_and_minor_characters.html"
@@ -199,9 +202,9 @@
       "title": "Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads",
       "relative_path": "04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md",
       "visibility": "GM_CONSPIRACY_SECRET",
-      "description": "All five Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanis Primaris, DAISE, Big Tech, Rogue AI) plus the three Open Canon Mysteries.",
+      "description": "All six Mirror-Hypocrisy Conspiracies (Blue Lotus, Humanitas Prima, DAISE, Big Tech, Rogue AI, Plutonomy) plus the three Open Canon Mysteries.",
       "headings": [
-        "1. The Five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)",
+        "1. The Six Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)",
         "How Each Hypocrisy Unfolds in Play",
         "2. Open Canon Decisions for Upcoming Drafts & Campaigns"
       ],
