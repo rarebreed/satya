@@ -13,6 +13,9 @@ from typing import Any
 
 from satya_py.enums import MessageVisibility
 
+MAX_PROSE_CHUNK_CHARS = 1600
+MAX_DIGEST_CHARS = 340
+
 CANONICAL_TTRPG_FILES: tuple[tuple[str, str], ...] = (
     ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: 2d20xN Cascade Engine & Task Resolution"),
     ("02-core-mechanics/task_requirements_catalog.md", "Ch. 5: Master Task Requirements Catalog"),
@@ -124,8 +127,219 @@ def _identifier_search_expansion(text: str) -> str:
     return f"{text}\n{expanded}".strip()
 
 
-def _split_large_table_body(body: str, breadcrumb: str, max_data_rows: int = 12) -> list[str]:
-    """Slice Markdown tables exceeding `max_data_rows` while keeping header & separator rows."""
+def _split_atomic_prose_units(text: str) -> list[str]:
+    """Split prose on blank lines while keeping fenced code blocks intact."""
+    lines = text.splitlines()
+    units: list[str] = []
+    buf: list[str] = []
+    in_fence = False
+
+    def flush() -> None:
+        blk = "\n".join(buf).strip()
+        if blk:
+            units.append(blk)
+        buf.clear()
+
+    for line in lines:
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            buf.append(line)
+            continue
+        if not in_fence and not line.strip():
+            flush()
+            continue
+        buf.append(line)
+    flush()
+    return units
+
+
+def _split_oversized_unit(unit: str, max_chars: int) -> list[str]:
+    """Subdivide a single oversized non-fence paragraph along lines, sentences, or words."""
+    if len(unit) <= max_chars or unit.lstrip().startswith("```"):
+        return [unit]
+
+    parts: list[str] = []
+    cur = ""
+    for line in unit.splitlines():
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+        if len(line_clean) > max_chars:
+            if cur:
+                parts.append(cur)
+                cur = ""
+            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", line_clean) if s.strip()]
+            sent_buf = ""
+            for sent in sentences:
+                if len(sent) > max_chars:
+                    if sent_buf:
+                        parts.append(sent_buf)
+                        sent_buf = ""
+                    word_buf = ""
+                    for word in sent.split():
+                        candidate = f"{word_buf} {word}".strip() if word_buf else word
+                        if len(candidate) <= max_chars:
+                            word_buf = candidate
+                        else:
+                            if word_buf:
+                                parts.append(word_buf)
+                            word_buf = word
+                    if word_buf:
+                        parts.append(word_buf)
+                else:
+                    candidate = f"{sent_buf} {sent}".strip() if sent_buf else sent
+                    if len(candidate) <= max_chars:
+                        sent_buf = candidate
+                    else:
+                        if sent_buf:
+                            parts.append(sent_buf)
+                        sent_buf = sent
+            if sent_buf:
+                parts.append(sent_buf)
+            continue
+
+        candidate = f"{cur}\n{line_clean}".strip() if cur else line_clean
+        if len(candidate) <= max_chars:
+            cur = candidate
+        else:
+            if cur:
+                parts.append(cur)
+            cur = line_clean
+    if cur:
+        parts.append(cur)
+    return parts or [unit]
+
+
+def _split_long_prose_block(
+    text: str,
+    breadcrumb: str,
+    *,
+    max_chars: int = MAX_PROSE_CHUNK_CHARS,
+) -> list[str]:
+    """Split prose exceeding `max_chars` along paragraph/sentence boundaries."""
+    stripped = text.strip()
+    if not stripped or len(stripped) <= max_chars:
+        return [stripped] if stripped else []
+
+    atomic: list[str] = []
+    for unit in _split_atomic_prose_units(stripped):
+        atomic.extend(_split_oversized_unit(unit, max_chars))
+
+    chunks: list[str] = []
+    cur = ""
+    for unit in atomic:
+        if not cur:
+            cur = unit
+        elif len(cur) + len(unit) + 2 <= max_chars:
+            cur = f"{cur}\n\n{unit}"
+        else:
+            chunks.append(cur)
+            cur = unit
+    if cur:
+        chunks.append(cur)
+
+    out: list[str] = []
+    for idx, ch in enumerate(chunks):
+        if idx == 0:
+            out.append(ch)
+        else:
+            out.append(f"*[Continued · {breadcrumb}]*\n{ch}")
+    return out
+
+
+def _truncate_digest(text: str, max_chars: int) -> str:
+    collapsed = re.sub(r"\s+", " ", text).strip()
+    if len(collapsed) <= max_chars:
+        return collapsed
+    cut = collapsed[: max_chars - 1]
+    last_space = cut.rfind(" ")
+    if last_space >= max_chars // 2:
+        cut = cut[:last_space]
+    return cut.rstrip(" ,;:-") + "…"
+
+
+def build_chunk_digest(
+    content: str,
+    breadcrumb: str,
+    corpus: str,
+    *,
+    max_chars: int = MAX_DIGEST_CHARS,
+) -> str:
+    """Build a deterministic compact fact card (`<= max_chars`) for a knowledge chunk."""
+    lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    if not lines:
+        return _truncate_digest(breadcrumb, max_chars)
+
+    if corpus == "rust_engine":
+        header = lines[0]
+        body_lines: list[str] = []
+        in_fence = False
+        for ln in lines[1:]:
+            if ln.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if ln.startswith(("Origin:", "#[")):
+                continue
+            body_lines.append(ln)
+            if len(body_lines) >= 2 and not in_fence:
+                break
+        summary = " | ".join([header, *body_lines]) if body_lines else header
+        return _truncate_digest(summary, max_chars)
+
+    clean_lines: list[str] = []
+    for ln in lines:
+        if ln.startswith(("*[Table slice", "*[Continued")):
+            continue
+        if ln.startswith("#"):
+            heading_txt = ln.lstrip("#").strip()
+            if heading_txt and heading_txt.lower() in breadcrumb.lower():
+                continue
+            clean_lines.append(heading_txt)
+            continue
+        clean_lines.append(ln)
+
+    if not clean_lines:
+        return _truncate_digest(breadcrumb, max_chars)
+
+    table_rows = [ln for ln in clean_lines if ln.startswith("|") and not _TABLE_SEP_RE.match(ln)]
+    bullets = [ln for ln in clean_lines if ln.startswith(("- ", "* "))]
+    prose_lines = [
+        ln
+        for ln in clean_lines
+        if not ln.startswith(("|", "- ", "* ", "```"))
+    ]
+
+    parts: list[str] = []
+    if prose_lines:
+        lead = " ".join(prose_lines[:2])
+        parts.append(lead)
+    if bullets:
+        prioritized = sorted(
+            bullets,
+            key=lambda b: (("**" in b or "`" in b or ":" in b), len(b) > 20),
+            reverse=True,
+        )
+        parts.extend(prioritized[:3])
+    if table_rows and (not prose_lines or len(" ".join(parts)) < max_chars // 2):
+        # Include table header + first 2 data rows compactly
+        compact_rows = [
+            " / ".join(cell.strip() for cell in row.strip("|").split("|") if cell.strip())
+            for row in table_rows[:3]
+        ]
+        parts.append(" | ".join(r for r in compact_rows if r))
+
+    combined = " • ".join(p for p in parts if p) or " ".join(clean_lines[:3])
+    return _truncate_digest(combined, max_chars)
+
+
+def _split_large_table_body(
+    body: str,
+    breadcrumb: str,
+    max_data_rows: int = 12,
+    *,
+    max_prose_chars: int = MAX_PROSE_CHUNK_CHARS,
+) -> list[str]:
+    """Slice Markdown tables exceeding `max_data_rows` and long prose blocks cleanly."""
     lines = body.splitlines()
     blocks: list[list[str]] = []
     prose_buf: list[str] = []
@@ -140,7 +354,8 @@ def _split_large_table_body(body: str, breadcrumb: str, max_data_rows: int = 12)
             if prose_buf:
                 text = "\n".join(prose_buf).strip()
                 if text:
-                    blocks.append([text])
+                    for prose_part in _split_long_prose_block(text, breadcrumb, max_chars=max_prose_chars):
+                        blocks.append([prose_part])
                 prose_buf = []
             header = line.rstrip()
             sep = lines[i + 1].rstrip()
@@ -161,7 +376,8 @@ def _split_large_table_body(body: str, breadcrumb: str, max_data_rows: int = 12)
     if prose_buf:
         text = "\n".join(prose_buf).strip()
         if text:
-            blocks.append([text])
+            for prose_part in _split_long_prose_block(text, breadcrumb, max_chars=max_prose_chars):
+                blocks.append([prose_part])
 
     # Coalesce consecutive short prose + table blocks up to ~1600 chars so slices stay rich.
     merged: list[str] = []
@@ -170,8 +386,8 @@ def _split_large_table_body(body: str, breadcrumb: str, max_data_rows: int = 12)
         rendered = "\n".join(blk).strip()
         if not rendered:
             continue
-        is_sliced_table = rendered.startswith("*[Table slice")
-        if is_sliced_table:
+        is_standalone_slice = rendered.startswith(("*[Table slice", "*[Continued"))
+        if is_standalone_slice:
             if cur:
                 merged.append(cur)
                 cur = ""
@@ -194,8 +410,9 @@ def split_markdown_with_breadcrumbs(
     doc_label: str,
     *,
     max_table_rows: int = 12,
+    max_prose_chars: int = MAX_PROSE_CHUNK_CHARS,
 ) -> list[dict[str, str]]:
-    """Split Markdown on `#`, `##`, `###` headings while slicing long tables with headers intact."""
+    """Split Markdown on `#`, `##`, `###` headings while slicing long tables and prose cleanly."""
     lines = text.splitlines()
     h1 = doc_label
     h2 = ""
@@ -247,7 +464,12 @@ def split_markdown_with_breadcrumbs(
 
     out: list[dict[str, str]] = []
     for breadcrumb, sec_title, body in raw_sections:
-        for part in _split_large_table_body(body, breadcrumb, max_data_rows=max_table_rows):
+        for part in _split_large_table_body(
+            body,
+            breadcrumb,
+            max_data_rows=max_table_rows,
+            max_prose_chars=max_prose_chars,
+        ):
             if not part.strip():
                 continue
             out.append(
@@ -311,6 +533,7 @@ def build_ttrpg_rules_chunks(repo_root: Path) -> list[dict[str, Any]]:
                     "symbol_or_section": symbol,
                     "breadcrumb": breadcrumb,
                     "linked_doc_path": rel_posix,
+                    "digest": build_chunk_digest(content, breadcrumb, "ttrpg_rules"),
                     "content": content,
                     "search_text": _identifier_search_expansion(f"{breadcrumb}\n{rel_posix}\n{content}"),
                 }
@@ -419,6 +642,7 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
                         "symbol_or_section": rs_path.stem,
                         "breadcrumb": mod_crumb,
                         "linked_doc_path": module_linked_doc,
+                        "digest": build_chunk_digest(card, mod_crumb, "rust_engine"),
                         "content": card,
                         "search_text": _identifier_search_expansion(f"{rs_path.stem} {module_linked_doc}\n{card}"),
                     }
@@ -448,6 +672,7 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
                             "symbol_or_section": enum_name,
                             "breadcrumb": enum_crumb,
                             "linked_doc_path": module_linked_doc,
+                            "digest": build_chunk_digest(card, enum_crumb, "rust_engine"),
                             "content": card,
                             "search_text": _identifier_search_expansion(f"{enum_name} {module_linked_doc}\n{card}"),
                         }
@@ -511,6 +736,7 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
                                     "symbol_or_section": sym_name,
                                     "breadcrumb": sym_crumb,
                                     "linked_doc_path": linked,
+                                    "digest": build_chunk_digest(card, sym_crumb, "rust_engine"),
                                     "content": card,
                                     "search_text": _identifier_search_expansion(
                                         f"{sym_name} {linked} {' '.join(attrs)}\n{header}\n{sig_block}"
@@ -574,6 +800,7 @@ def build_campaign_lore_chunks(repo_root: Path) -> list[dict[str, Any]]:
                         "symbol_or_section": symbol,
                         "breadcrumb": breadcrumb,
                         "linked_doc_path": rel_posix,
+                        "digest": build_chunk_digest(content, breadcrumb, "campaign_lore"),
                         "content": content,
                         "search_text": _identifier_search_expansion(f"{breadcrumb}\n{rel_posix}\n{content}"),
                     }

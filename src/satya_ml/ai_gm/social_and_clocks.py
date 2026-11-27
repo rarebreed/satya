@@ -292,7 +292,7 @@ def format_world_ledger_for_prompt(ledger: dict[str, Any] | None) -> str:
     econ = str(ledger.get("active_economic_tier") or "MiddleClass")
     zoning = str(ledger.get("active_zoning") or "UrbanResidential")
     bm_mod = int(ledger.get("black_market_delta_ext_mod", 0) or 0)
-    response_prof = str(ledger.get("jurisdiction_response_profile") or "")
+    response_prof = str(ledger.get("jurisdiction_response_profile") or "")[:140]
 
     lines = [
         "### Active World Clocks & Jurisdiction Heat:",
@@ -302,19 +302,31 @@ def format_world_ledger_for_prompt(ledger: dict[str, Any] | None) -> str:
         ),
         f"- Jurisdiction ({econ} x {zoning}): {response_prof}",
     ]
+    dormant: list[str] = []
     for clk in ledger.get("faction_clocks") or []:
         if not isinstance(clk, dict):
             continue
-        agenda = str(clk.get("gm_secret_agenda") or "").strip()
+        progress = int(clk.get("progress", 0) or 0)
+        segments = int(clk.get("segments", 6) or 6)
+        standing = int(clk.get("party_standing", 0) or 0)
+        if progress == 0 and standing == 0:
+            dormant.append(f"{clk.get('faction_id')}({progress}/{segments})")
+            continue
+        agenda = str(clk.get("gm_secret_agenda") or "").strip()[:110]
+        rumor = str(clk.get("public_rumor") or "").strip()[:110]
         agenda_txt = f" | [GM Secret Agenda: {agenda}]" if agenda else ""
         lines.append(
             f"- Clock `{clk.get('faction_id')}` ({clk.get('faction_name')} — {clk.get('clock_title')}): "
-            f"`{clk.get('progress', 0)}/{clk.get('segments', 6)}` | Standing `{int(clk.get('party_standing', 0)):+d}` | "
-            f"Rumor: {clk.get('public_rumor', '')}{agenda_txt}"
+            f"`{progress}/{segments}` | Standing `{standing:+d}` | "
+            f"Rumor: {rumor}{agenda_txt}"
+        )
+    if dormant:
+        lines.append(
+            f"- Dormant Clocks (0 progress): {', '.join(dormant)} (call `get_world_clocks_and_heat` for full faction dossiers)"
         )
     recent = ledger.get("recent_ledger_events") or []
     if recent:
-        lines.append(f"- Recent World Alerts: {'; '.join(str(x) for x in recent[-3:])}")
+        lines.append(f"- Recent World Alerts: {'; '.join(str(x)[:120] for x in recent[-3:])}")
     return "\n".join(lines)
 
 

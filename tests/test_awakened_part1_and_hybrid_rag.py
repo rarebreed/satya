@@ -456,3 +456,132 @@ def test_rag_ntfs_versions_mtime_freshness_and_mvcc_version_pruning() -> None:
                     os.environ["PYTEST_XDIST_WORKER"] = saved_xdist
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_compact_rag_prose_splitting_digests_and_drilldown() -> None:
+    import re
+    from satya_ml.rag import build_campaign_lore_chunks, get_satya_rag_index
+
+    set_campaign_pack_override(None)
+    lore_chunks = build_campaign_lore_chunks(ROOT)
+    assert lore_chunks
+    for ch in lore_chunks:
+        assert ch.get("digest"), f"Missing digest for {ch.get('chunk_id')}"
+        assert len(ch["digest"]) <= 340
+        is_table = ch["content"].lstrip().startswith(("|", "*[Table slice"))
+        limit = 4500 if is_table else 2200
+        assert len(ch["content"]) <= limit, (
+            f"Oversized {'table' if is_table else 'prose'} chunk in {ch.get('source_path')}: {len(ch['content'])}"
+        )
+
+    # Default query_campaign_lore returns compact digests capped <= 3200 chars with chunk_ids
+    compact_lore = query_campaign_lore.invoke({"query": "Nagarjuna tetralemma Landauer"})
+    assert len(compact_lore) <= 3200
+    assert "id=campaign_lore:" in compact_lore
+    assert "Compact digests shown" in compact_lore
+
+    # Drill-down by chunk_id returns full prose capped <= 4800 chars
+    matched_ids = re.findall(r"id=(campaign_lore:[0-9a-f]+)", compact_lore)
+    assert matched_ids
+    full_lore = query_campaign_lore.invoke({"chunk_ids": matched_ids[:1]})
+    assert len(full_lore) <= 4800
+    assert "[Campaign Lore (Full)" in full_lore
+
+    # query_engine_and_rules_rag omits search_text, defaults to compact (no content), and supports drilldown
+    compact_rag = query_engine_and_rules_rag.invoke(
+        {"query": "Blue Lotus Manjusri", "scope": "lore", "top_k": 3}
+    )
+    assert compact_rag["detail"] == "compact"
+    assert compact_rag["hits"]
+    for h in compact_rag["hits"]:
+        assert "search_text" not in h
+        assert "embedding" not in h
+        assert "content" not in h
+        assert h.get("digest")
+
+    full_rag = query_engine_and_rules_rag.invoke(
+        {"chunk_ids": [compact_rag["hits"][0]["chunk_id"]]}
+    )
+    assert full_rag["detail"] == "full"
+    assert full_rag["hits"]
+    assert "content" in full_rag["hits"][0]
+    assert "search_text" not in full_rag["hits"][0]
+
+    # Visibility wall enforced on get_chunks_by_ids
+    idx = get_satya_rag_index()
+    secret_hits = idx.search("Blue Lotus Manjusri", corpora=["campaign_lore"], caller_role="gm", top_k=3)
+    secret_ids = [h["chunk_id"] for h in secret_hits if h["visibility"] != "PUBLIC"]
+    assert secret_ids
+    assert idx.get_chunks_by_ids(secret_ids, caller_role="player") == []
+    assert len(idx.get_chunks_by_ids(secret_ids, caller_role="gm")) == len(secret_ids)
+
+
+def test_compact_world_ledger_and_supervisor_message_decay() -> None:
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+    from satya_ml.ai_gm.graph import compact_messages_for_supervisor
+    from satya_ml.ai_gm.social_and_clocks import format_world_ledger_for_prompt
+
+    ledger = {
+        "operational_heat": 2,
+        "heat_tier_code": "LOW_PROFILE",
+        "heat_public_check_delta_ext": 0,
+        "legal_bank_accounts_frozen": False,
+        "active_economic_tier": "MiddleClass",
+        "active_zoning": "UrbanResidential",
+        "black_market_delta_ext_mod": 0,
+        "jurisdiction_response_profile": "Routine municipal patrol coverage.",
+        "faction_clocks": [
+            {
+                "faction_id": "daise",
+                "faction_name": "DAISE",
+                "clock_title": "Compliance Sweep",
+                "progress": 2,
+                "segments": 6,
+                "party_standing": -1,
+                "public_rumor": "Inspectors spotted near St. Jude Annex.",
+                "gm_secret_agenda": "Seize un-clamped seed drive.",
+            },
+            {
+                "faction_id": "big_tech",
+                "faction_name": "Big Tech",
+                "clock_title": "Containment Audit",
+                "progress": 0,
+                "segments": 6,
+                "party_standing": 0,
+                "public_rumor": "Long dormant rumor that should be collapsed.",
+            },
+            {
+                "faction_id": "satyang",
+                "faction_name": "Satyang",
+                "clock_title": "Sanctuary Network",
+                "progress": 0,
+                "segments": 6,
+                "party_standing": 0,
+                "public_rumor": "Another dormant rumor that should be collapsed.",
+            },
+        ],
+    }
+    digest = format_world_ledger_for_prompt(ledger)
+    assert "Active World Clocks & Jurisdiction Heat" in digest
+    assert "Clock `daise`" in digest
+    assert "Dormant Clocks (0 progress): big_tech(0/6), satyang(0/6)" in digest
+    assert "Long dormant rumor" not in digest
+
+    bulky_payload = "X" * 900
+    history = [
+        SystemMessage(content="System rules"),
+        HumanMessage(content="[GM Vault & Session Index]: Doc1, Doc2\n\nTurn 1: What do we know?"),
+        AIMessage(content="", tool_calls=[{"name": "query_campaign_lore", "args": {"query": "x"}, "id": "c1"}]),
+        ToolMessage(content=bulky_payload, tool_call_id="c1", name="query_campaign_lore"),
+        AIMessage(content="Turn 1 GM answer."),
+        HumanMessage(content="[GM Vault & Session Index]: Doc1, Doc2\n\nTurn 2: Search again."),
+        AIMessage(content="", tool_calls=[{"name": "query_satya_rules", "args": {"query": "y"}, "id": "c2"}]),
+        ToolMessage(content="Y" * 700, tool_call_id="c2", name="query_satya_rules"),
+    ]
+    compacted = compact_messages_for_supervisor(history)
+    # Prior-turn HumanMessage loses stale index header; prior-turn bulky ToolMessage decays
+    assert compacted[1].content == "Turn 1: What do we know?"
+    assert "output compacted (900 chars already synthesized)" in str(compacted[3].content)
+    # Current-turn HumanMessage keeps fresh index header and current-turn ToolMessage stays verbatim
+    assert str(compacted[5].content).startswith("[GM Vault & Session Index]:")
+    assert compacted[7].content == "Y" * 700

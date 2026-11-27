@@ -82,7 +82,7 @@ def query_satya_rules_public(query: str, top_k: int = 4) -> str:
             lines = []
             for h in hits:
                 title = str(h.get("breadcrumb") or h.get("symbol_or_section") or "Rules")
-                body = str(h.get("content") or "").strip()[:500]
+                body = str(h.get("digest") or h.get("content") or "").strip()[:500]
                 lines.append(f"[{title}]: {body}")
             return "\n\n".join(lines)
     except Exception:

@@ -391,29 +391,55 @@ def transmit_via_tradecraft_channel(
     ooc_readonly=True,
 )
 def query_engine_and_rules_rag(
-    query: str,
+    query: str = "",
     scope: str = "all",
     top_k: int = 5,
+    detail: Literal["compact", "full"] = "compact",
+    chunk_ids: list[str] | None = None,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Hybrid PyLance BM25/FTS + 384-d vector RAG across TTRPG rules (`ttrpg_rules`), Rust `satya-engine` symbols (`rust_engine`), and GM lore (`campaign_lore`)."""
+    """Hybrid PyLance BM25/FTS + 384-d vector RAG across TTRPG rules (`ttrpg_rules`), Rust `satya-engine` symbols (`rust_engine`), and GM lore (`campaign_lore`). Returns compact `digest` cards by default; pass `chunk_ids=[...]` or `detail='full'` for full prose."""
     from satya_ml.rag.hybrid_index import get_satya_rag_index
 
     norm_scope = (scope or "all").strip().lower()
+    norm_detail: Literal["compact", "full"] = "full" if str(detail).strip().lower() == "full" else "compact"
     corpora = list(_RAG_SCOPE_CORPORA.get(norm_scope, _RAG_SCOPE_CORPORA["all"]))
     arc_stage = str(get_session_conspiracy_ledger(session_id or "default").get("current_arc") or "ARC_3")
     idx = get_satya_rag_index()
-    hits = idx.search(
-        query,
-        corpora=corpora,
-        caller_role="gm",
-        arc_stage=arc_stage,
-        top_k=max(1, min(12, int(top_k))),
-        include_linked_rust=(norm_scope in {"all", "rules", "ttrpg_rules"}),
-    )
+
+    requested_ids = [str(cid).strip() for cid in (chunk_ids or []) if str(cid).strip()]
+    if requested_ids:
+        raw_hits = idx.get_chunks_by_ids(requested_ids, caller_role="gm")
+        eff_detail: Literal["compact", "full"] = "full"
+    else:
+        raw_hits = idx.search(
+            query,
+            corpora=corpora,
+            caller_role="gm",
+            arc_stage=arc_stage,
+            top_k=max(1, min(12, int(top_k))),
+            include_linked_rust=(norm_scope in {"all", "rules", "ttrpg_rules"}),
+            detail=norm_detail,
+        )
+        eff_detail = norm_detail
+
+    hits: list[dict[str, Any]] = []
+    remaining_budget = 4800
+    for hit in raw_hits:
+        item = {k: v for k, v in hit.items() if k != "search_text"}
+        if eff_detail == "full" and "content" in item:
+            body = str(item.get("content") or "")
+            max_piece = min(1400, max(200, remaining_budget))
+            if len(body) > max_piece:
+                body = body[:max_piece] + "\n...[truncated]..."
+            item["content"] = body
+            remaining_budget = max(0, remaining_budget - len(body))
+        hits.append(item)
+
     return {
         "query": query,
         "scope": norm_scope,
+        "detail": eff_detail,
         "arc_stage": arc_stage,
         "backend": idx.stats().get("backend"),
         "hits": hits,

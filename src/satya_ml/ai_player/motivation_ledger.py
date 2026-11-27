@@ -687,12 +687,13 @@ def lookup_public_lore_and_npcs(
             for rh in rag_rules:
                 if rh.get("visibility") != "PUBLIC":
                     continue
+                snippet_txt = str(rh.get("digest") or rh.get("content") or "").strip()[:360]
                 hits.append(
                     {
                         "source_kind": "RULES_BOOK",
                         "item_id": str(rh.get("chunk_id") or ""),
                         "title": str(rh.get("breadcrumb") or rh.get("symbol_or_section") or "Rules"),
-                        "snippet": str(rh.get("content") or "")[:360],
+                        "snippet": snippet_txt,
                     }
                 )
                 added_rag_rules = True
@@ -784,7 +785,7 @@ def lookup_public_lore_and_npcs(
                             "item_id": str(rag_hit.get("chunk_id") or ""),
                             "title": str(rag_hit.get("breadcrumb") or rag_hit.get("symbol_or_section") or "Lore"),
                             "subtitle": f"{rag_hit.get('source_path')} (PUBLIC)",
-                            "snippet": str(rag_hit.get("content") or "")[:450],
+                            "snippet": str(rag_hit.get("digest") or rag_hit.get("content") or "").strip()[:450],
                         }
                     )
         except Exception:

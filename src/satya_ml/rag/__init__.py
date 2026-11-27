@@ -3,6 +3,7 @@
 from satya_ml.rag.corpus_builder import (
     build_all_knowledge_chunks,
     build_campaign_lore_chunks,
+    build_chunk_digest,
     build_rust_engine_symbol_chunks,
     build_ttrpg_rules_chunks,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "SatyaHybridRagIndex",
     "build_all_knowledge_chunks",
     "build_campaign_lore_chunks",
+    "build_chunk_digest",
     "build_rust_engine_symbol_chunks",
     "build_ttrpg_rules_chunks",
     "embed_rag_text",

@@ -17,7 +17,11 @@ import urllib.parse
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
+
+MAX_CAMPAIGN_LORE_COMPACT_CHARS: Final[int] = 3200
+MAX_CAMPAIGN_LORE_FULL_CHARS: Final[int] = 4800
+MAX_RULES_HIT_CHARS: Final[int] = 1300
 
 logger = logging.getLogger("satya_ml.ai_gm.tools")
 
@@ -915,16 +919,19 @@ def query_satya_rules(query: str) -> str:
         if rag_hits:
             formatted_hits: list[str] = []
             for hit in rag_hits:
+                body = str(hit.get("content") or "")
+                if len(body) > MAX_RULES_HIT_CHARS:
+                    body = body[:MAX_RULES_HIT_CHARS] + "\n...[truncated]..."
                 if hit.get("corpus") == "rust_engine":
                     formatted_hits.append(
                         f"[Rust Implementation — `{hit['source_path']}` · {hit['symbol_or_section']}]\n"
-                        f"{hit['content']}"
+                        f"{body}"
                     )
                 else:
                     formatted_hits.append(
-                        f"[{hit['breadcrumb']} — `{hit['source_path']}`]\n{hit['content']}"
+                        f"[{hit['breadcrumb']} — `{hit['source_path']}`]\n{body}"
                     )
-            return "\n\n---\n\n".join(formatted_hits)[:4800]
+            return "\n\n---\n\n".join(formatted_hits)[:MAX_CAMPAIGN_LORE_FULL_CHARS]
     except Exception:
         pass
 
@@ -968,8 +975,39 @@ def query_satya_rules(query: str) -> str:
 
 
 @satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER", ooc_readonly=True)
-def query_campaign_lore(query: str, session_id: str | None = None) -> str:
-    """Search campaign Markdown lore (`lore_dirs`), active-pack & DB NPC dossiers, Signaling Omnisearch (`scope=LORE`), and archived PyLance chat history."""
+def query_campaign_lore(
+    query: str = "",
+    session_id: str | None = None,
+    detail: Literal["compact", "full"] = "compact",
+    chunk_ids: list[str] | None = None,
+) -> str:
+    """Search campaign Markdown lore (`lore_dirs`), active-pack & DB NPC dossiers, Signaling Omnisearch (`scope=LORE`), and archived PyLance chat history. Returns compact digests by default; pass `chunk_ids=[...]` or `detail='full'` for full prose."""
+    trunc_suffix = "\n...[truncated]..."
+    compact_hint = "\n(Compact digests shown — call query_campaign_lore with chunk_ids=[...] or detail='full' for full prose.)"
+    requested_ids = [str(cid).strip() for cid in (chunk_ids or []) if str(cid).strip()]
+    if requested_ids:
+        try:
+            from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+            fetched = get_satya_rag_index().get_chunks_by_ids(requested_ids, caller_role="gm")
+        except Exception:
+            fetched = []
+        if not fetched:
+            return f"No campaign lore chunks matched chunk_ids={requested_ids}."
+        blocks = [
+            (
+                f"[Campaign Lore (Full) — `{hit['source_path']}` · {hit['breadcrumb']} "
+                f"({hit['visibility']}) | id={hit['chunk_id']}]:\n"
+                f"{str(hit.get('content') or '')[:1600]}"
+            )
+            for hit in fetched
+        ]
+        joined = "\n\n---\n\n".join(blocks)
+        if len(joined) > MAX_CAMPAIGN_LORE_FULL_CHARS:
+            return joined[: MAX_CAMPAIGN_LORE_FULL_CHARS - len(trunc_suffix)].rstrip() + trunc_suffix
+        return joined
+
+    norm_detail: Literal["compact", "full"] = "full" if str(detail).strip().lower() == "full" else "compact"
     q_clean = query.strip()
     q_low = q_clean.lower()
     keywords = [w.lower() for w in re.split(r"[^a-zA-Z0-9_-]+", q_clean) if len(w) >= 3]
@@ -987,13 +1025,14 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
                     continue
                 title = str(hit.get("title") or "Entry")
                 subtitle = str(hit.get("subtitle") or hit.get("source_kind") or "Lore")
-                snippet = str(hit.get("snippet") or "").strip()
+                snippet = str(hit.get("snippet") or "").strip()[:250]
                 if snippet:
                     matches.append(f"[Omnisearch · {subtitle} — {title}]: {snippet}")
 
     merged_npcs = dict(load_all_npc_profiles(_repo_root()))
     if session_id:
         merged_npcs.update(get_session_npcs(session_id))
+    npc_matches: list[str] = []
     for npc_id, profile in merged_npcs.items():
         agenda = str(profile.get("immediate_agenda") or "").strip()
         drive = str(profile.get("core_drive") or "").strip()
@@ -1015,20 +1054,26 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
         if not keywords or (q_low and q_low in blob.lower()) or any(kw in blob.lower() for kw in keywords):
             extra_parts: list[str] = []
             if agenda:
-                extra_parts.append(f"Agenda: {agenda}")
+                extra_parts.append(f"Agenda: {agenda[:160]}")
             if drive:
-                extra_parts.append(f"Core Drive: {drive}")
+                extra_parts.append(f"Core Drive: {drive[:140]}")
             if wedge:
-                extra_parts.append(f"Wedge: {wedge}")
+                extra_parts.append(f"Wedge: {wedge[:120]}")
             extra_suffix = f" ({'; '.join(extra_parts)})" if extra_parts else ""
-            matches.append(
+            notes_txt = str(profile.get("notes") or "")[:220]
+            secrets_txt = "; ".join(str(s) for s in (profile.get("secrets") or []))[:220]
+            npc_matches.append(
                 f"[NPC {profile.get('name', npc_id)} ({profile.get('faction', 'Unknown')})]: "
-                f"{profile.get('archetype', '')}. Notes: {profile.get('notes', '')} "
-                f"Secrets: {'; '.join(profile.get('secrets', []))}{extra_suffix}"
+                f"{profile.get('archetype', '')}. Notes: {notes_txt} "
+                f"Secrets: {secrets_txt}{extra_suffix}"
             )
+            if len(npc_matches) >= 3:
+                break
+    matches.extend(npc_matches)
 
     root = _repo_root()
     rag_handled = False
+    rag_hits_added = False
     if get_active_campaign_pack_name() == "awakened" and q_clean:
         try:
             from satya_ml.ai_gm.awakened_systems import get_session_conspiracy_ledger
@@ -1043,14 +1088,37 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
                 caller_role="gm",
                 arc_stage=arc_stage,
                 top_k=5,
+                detail="full",
             )
             if rag_hits:
                 rag_handled = True
+                rag_hits_added = True
                 for hit in rag_hits:
-                    matches.append(
-                        f"[Campaign Lore — `{hit['source_path']}` · {hit['breadcrumb']} ({hit['visibility']})]: "
-                        f"{hit['content']}"
-                    )
+                    cid = str(hit.get("chunk_id") or "")
+                    if norm_detail == "compact":
+                        body = str(hit.get("digest") or "").strip()
+                        raw_content = str(hit.get("content") or "")
+                        if keywords and body and not any(kw in body.lower() for kw in keywords):
+                            matched_line = next(
+                                (
+                                    re.sub(r"\s+", " ", ln.strip())[:160]
+                                    for ln in raw_content.splitlines()
+                                    if ln.strip() and any(kw in ln.lower() for kw in keywords)
+                                ),
+                                "",
+                            )
+                            if matched_line:
+                                body = f"{body} | Match: {matched_line}"
+                        matches.append(
+                            f"[Campaign Lore — `{hit['source_path']}` · {hit['breadcrumb']} ({hit['visibility']}) | id={cid}]: "
+                            f"{body}"
+                        )
+                    else:
+                        full_body = str(hit.get("content") or "")[:1400]
+                        matches.append(
+                            f"[Campaign Lore — `{hit['source_path']}` · {hit['breadcrumb']} ({hit['visibility']}) | id={cid}]: "
+                            f"{full_body}"
+                        )
         except Exception:
             rag_handled = False
 
@@ -1084,7 +1152,7 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
                             elif kw in body_low:
                                 score += 4
                     if score > 0:
-                        snippet = body[:420].replace("\n", " ").strip()
+                        snippet = body[:340].replace("\n", " ").strip()
                         scored_md.append(
                             (score, rel_posix, f"[Campaign Lore — `{rel_posix}` · {heading}]: {snippet}")
                         )
@@ -1107,13 +1175,19 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
                 content = str(row.get("body") or row.get("content") or "")
                 if not keywords or any(kw in content.lower() for kw in keywords):
                     sender = (row.get("sender") or {}).get("display_name", "Unknown")
-                    matches.append(f"[Chat History - {sender}]: {content}")
+                    matches.append(f"[Chat History - {sender}]: {content[:240]}")
         except Exception:
             pass
 
     if not matches:
         return f"No specific lore entries matched '{query}'."
-    return "\n".join(matches[:8])
+    body_out = "\n".join(matches[:8])
+    hint = compact_hint if (norm_detail == "compact" and rag_hits_added) else ""
+    cap = MAX_CAMPAIGN_LORE_FULL_CHARS if norm_detail == "full" else MAX_CAMPAIGN_LORE_COMPACT_CHARS
+    if len(body_out) + len(hint) > cap:
+        body_budget = max(0, cap - len(hint) - len(trunc_suffix))
+        return body_out[:body_budget].rstrip() + trunc_suffix + hint
+    return body_out + hint
 
 
 def format_gm_document_block(d: dict[str, Any]) -> str:

@@ -8,7 +8,7 @@ import os
 import re
 import threading
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -138,6 +138,28 @@ def _tokenize_with_subtokens(text: str) -> list[str]:
     return tokens
 
 
+def _matching_concept_groups(tokens: Sequence[str]) -> list[tuple[int, float]]:
+    """Return `(concept_index, anchor_hit_score)` pairs for `tokens` across `_CONCEPT_GROUPS`."""
+    if not tokens:
+        return []
+    joined_low = " ".join(tokens)
+    tok_set = set(tokens)
+    matched: list[tuple[int, float]] = []
+    for c_idx, anchors in enumerate(_CONCEPT_GROUPS):
+        if c_idx >= _CONCEPT_DIM:
+            break
+        hits = 0.0
+        for anchor in anchors:
+            anchor_clean = anchor.replace("_", " ")
+            if anchor in tok_set or (len(anchor_clean) > 4 and anchor_clean in joined_low):
+                hits += 1.0
+            elif any(tok.startswith(anchor[:5]) for tok in tokens if len(anchor) >= 6 and len(tok) >= 5):
+                hits += 0.5
+        if hits > 0.0:
+            matched.append((c_idx, hits))
+    return matched
+
+
 def embed_rag_text(text: str) -> list[float]:
     """Build a deterministic 384-d L2-normalized hybrid lexical + Satya concept vector."""
     vec = np.zeros(EMBEDDING_DIM, dtype=np.float32)
@@ -161,20 +183,8 @@ def embed_rag_text(text: str) -> list[float]:
             for k in range(0, min(len(tok) - 3, 6)):
                 add_feature(f"c4:{tok[k:k+4]}", 0.25)
 
-    joined_low = " ".join(tokens)
-    tok_set = set(tokens)
-    for c_idx, anchors in enumerate(_CONCEPT_GROUPS):
-        if c_idx >= _CONCEPT_DIM:
-            break
-        hits = 0.0
-        for anchor in anchors:
-            anchor_clean = anchor.replace("_", " ")
-            if anchor in tok_set or (len(anchor_clean) > 4 and anchor_clean in joined_low):
-                hits += 1.0
-            elif any(tok.startswith(anchor[:5]) for tok in tokens if len(anchor) >= 6 and len(tok) >= 5):
-                hits += 0.5
-        if hits > 0.0:
-            vec[_LEXICAL_DIM + c_idx] += np.float32(min(4.0, hits * 1.45))
+    for c_idx, hits in _matching_concept_groups(tokens):
+        vec[_LEXICAL_DIM + c_idx] += np.float32(min(7.5, hits * 2.4))
 
     norm = float(np.linalg.norm(vec))
     if norm > 1e-8:
@@ -198,11 +208,39 @@ def _knowledge_schema() -> pa.Schema:
             pa.field("symbol_or_section", pa.string()),
             pa.field("breadcrumb", pa.string()),
             pa.field("linked_doc_path", pa.string()),
+            pa.field("digest", pa.string()),
             pa.field("content", pa.string()),
             pa.field("search_text", pa.string()),
             pa.field("embedding", pa.list_(pa.float32(), EMBEDDING_DIM)),
         ]
     )
+
+
+def _project_hit(
+    row: dict[str, Any],
+    *,
+    detail: Literal["full", "compact"],
+    score: float | None = None,
+) -> dict[str, Any]:
+    """Project an internal index row into a caller-safe hit without `embedding` or `search_text`."""
+    content_str = str(row.get("content") or "")
+    digest_str = str(row.get("digest") or "").strip() or content_str[:340].strip()
+    out: dict[str, Any] = {
+        "chunk_id": str(row.get("chunk_id") or ""),
+        "corpus": str(row.get("corpus") or ""),
+        "visibility": str(row.get("visibility") or "PUBLIC"),
+        "source_path": str(row.get("source_path") or ""),
+        "symbol_or_section": str(row.get("symbol_or_section") or ""),
+        "breadcrumb": str(row.get("breadcrumb") or ""),
+        "linked_doc_path": str(row.get("linked_doc_path") or ""),
+        "digest": digest_str,
+        "content_chars": len(content_str),
+    }
+    if detail == "full":
+        out["content"] = content_str
+    if score is not None:
+        out["score"] = round(float(score), 5)
+    return out
 
 
 def _sql_escape(value: str) -> str:
@@ -289,7 +327,7 @@ class SatyaHybridRagIndex:
         if not force_rebuild and self.lance_path.exists():
             try:
                 ds = lance.dataset(str(self.lance_path))
-                if ds.count_rows() > 0:
+                if ds.count_rows() > 0 and "digest" in ds.schema.names:
                     _, latest_mtime = self._source_signature()
                     lance_mtime = _dataset_mtime(self.lance_path)
                     if lance_mtime >= latest_mtime - 2.0 or os.environ.get("PYTEST_XDIST_WORKER"):
@@ -305,6 +343,7 @@ class SatyaHybridRagIndex:
                                 "symbol_or_section",
                                 "breadcrumb",
                                 "linked_doc_path",
+                                "digest",
                                 "content",
                                 "search_text",
                             ]
@@ -404,6 +443,7 @@ class SatyaHybridRagIndex:
         arc_stage: str = "ARC_3",
         top_k: int = 5,
         include_linked_rust: bool = False,
+        detail: Literal["full", "compact"] = "full",
     ) -> list[dict[str, Any]]:
         """Hybrid PyLance SQL-prefiltered Vector kNN + INVERTED FTS/BM25 + RRF search."""
         q_clean = query.strip()
@@ -456,6 +496,11 @@ class SatyaHybridRagIndex:
         # Deterministic in-process BM25/exact-identifier pass enforces strict visibility & zero-miss symbol lookup.
         corpus_set = set(corpora) if corpora else None
         is_gm = caller_role.strip().lower() == "gm"
+        q_concept_anchors = tuple(
+            anchor.replace("_", " ")
+            for c_idx, _ in _matching_concept_groups(q_tokens)
+            for anchor in _CONCEPT_GROUPS[c_idx]
+        )
         lex_scored: list[tuple[float, dict[str, Any]]] = []
         for row in self._rows:
             if corpus_set is not None and row["corpus"] not in corpus_set:
@@ -483,6 +528,14 @@ class SatyaHybridRagIndex:
                     distinct_hits += 1
             if distinct_hits >= 2:
                 score += distinct_hits * 2.0
+            if q_concept_anchors:
+                concept_hits = sum(
+                    1
+                    for anc in q_concept_anchors
+                    if anc in sym_low or anc in crumb_low or anc in search_low
+                )
+                if concept_hits > 0:
+                    score += min(18.0, concept_hits * 3.5)
             if score > 0.0:
                 lex_scored.append((score, row))
 
@@ -514,9 +567,7 @@ class SatyaHybridRagIndex:
         results: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         for rrf_score, row in fused[:top_k]:
-            item = dict(row)
-            item["score"] = round(float(rrf_score), 5)
-            results.append(item)
+            results.append(_project_hit(row, detail=detail, score=rrf_score))
             seen_ids.add(str(row["chunk_id"]))
 
         if include_linked_rust and is_gm and len(results) > 0:
@@ -533,6 +584,7 @@ class SatyaHybridRagIndex:
                     arc_stage=arc_stage,
                     top_k=3,
                     include_linked_rust=False,
+                    detail=detail,
                 )
                 picked = None
                 for rc in rust_candidates:
@@ -545,6 +597,32 @@ class SatyaHybridRagIndex:
                     results.append(picked)
 
         return results
+
+    def get_chunks_by_ids(
+        self,
+        chunk_ids: Sequence[str],
+        *,
+        caller_role: str = "gm",
+    ) -> list[dict[str, Any]]:
+        """Fetch full-prose chunk records by `chunk_id` while enforcing caller visibility."""
+        wanted = [str(cid).strip() for cid in chunk_ids if str(cid).strip()]
+        if not wanted:
+            return []
+        is_gm = caller_role.strip().lower() == "gm"
+        by_id = {str(row.get("chunk_id") or ""): row for row in self._rows}
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for cid in wanted:
+            if cid in seen:
+                continue
+            seen.add(cid)
+            row = by_id.get(cid)
+            if row is None:
+                continue
+            if not is_gm and str(row.get("visibility") or "") != "PUBLIC":
+                continue
+            out.append(_project_hit(row, detail="full"))
+        return out
 
 
 _RAG_INDEX_LOCK = threading.Lock()
