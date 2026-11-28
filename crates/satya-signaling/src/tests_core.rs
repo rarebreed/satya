@@ -230,12 +230,12 @@ async fn test_axum_http_endpoints_and_leptos_render() {
     assert_eq!(res_tasks_ch.status(), StatusCode::OK);
 
     let metrics = state.storage.metrics_snapshot().await;
-    assert_eq!(metrics.len(), 13);
+    assert_eq!(metrics.len(), 14);
     let schema_reg_topic = metrics
         .iter()
         .find(|m| m.topic == "schema-registry")
         .unwrap();
-    assert_eq!(schema_reg_topic.total_messages_ingested, 16);
+    assert_eq!(schema_reg_topic.total_messages_ingested, 17);
     assert_eq!(schema_reg_topic.flushed_batches_count, 1);
 
     let _ = std::fs::remove_dir_all(&temp_dir);

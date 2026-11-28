@@ -8,8 +8,8 @@ use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, PutPayload};
 use satya_schema::{
-    AiGmTrajectoryEvent, CampaignDirectoryEvent, CharacterSheetEvent, ChatMessageEvent,
-    InteractionDynamicsEvent, SavedMapEvent, SchemaRegistry, SchemaRegistryEvent,
+    AccountSecurityEvent, AiGmTrajectoryEvent, CampaignDirectoryEvent, CharacterSheetEvent,
+    ChatMessageEvent, InteractionDynamicsEvent, SavedMapEvent, SchemaRegistry, SchemaRegistryEvent,
     SessionAccessEvent, SessionLifecycleEvent, SessionLogEvent, TabletopCanvasEvent,
     TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent, WireFrameHeader, subjects, topics,
 };
@@ -191,6 +191,18 @@ pub struct QuotaConfig {
     pub join_request_ttl_hours: u64,
     /// Time-to-live (hours) before an unused `APPROVED` join grant expires.
     pub approval_grant_ttl_hours: u64,
+    /// Sliding-window account recovery request limit per client IP per hour.
+    pub max_recovery_requests_per_ip_per_hour: usize,
+    /// Sliding-window account recovery request limit per normalized identifier per window.
+    pub max_recovery_requests_per_identifier_per_hour: usize,
+    /// Persistent SQLite sliding-window recovery email limit per resolved account email address.
+    pub max_recovery_requests_per_email_per_window: usize,
+    /// Sliding-window duration (minutes) for per-email recovery throttling.
+    pub recovery_email_window_mins: u64,
+    /// Sliding-window password reset confirmation limit per client IP per minute.
+    pub max_recovery_confirms_per_ip_per_min: usize,
+    /// Time-to-live (minutes) before an unused password reset token expires.
+    pub password_reset_token_ttl_mins: u64,
 }
 
 impl Default for QuotaConfig {
@@ -212,6 +224,12 @@ impl Default for QuotaConfig {
             join_token_ttl_secs: 900,
             join_request_ttl_hours: 72,
             approval_grant_ttl_hours: 24,
+            max_recovery_requests_per_ip_per_hour: 10,
+            max_recovery_requests_per_identifier_per_hour: 3,
+            max_recovery_requests_per_email_per_window: 3,
+            recovery_email_window_mins: 60,
+            max_recovery_confirms_per_ip_per_min: 15,
+            password_reset_token_ttl_mins: 30,
         }
     }
 }
@@ -420,6 +438,7 @@ impl Default for StorageConfig {
             (topics::SAVED_MAPS, 11, 2),
             (topics::CAMPAIGN_DIRECTORY, 12, 2),
             (topics::SESSION_ACCESS, 13, 2),
+            (topics::ACCOUNT_SECURITY, 14, 2),
         ];
         for (name, id, parts) in defaults {
             topic_map.insert(
@@ -1011,6 +1030,20 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Publishes an [`AccountSecurityEvent`] to the `account-security` topic (`v1`) and immediately flushes it.
+    pub async fn log_account_security(&self, event: &AccountSecurityEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(
+                topics::ACCOUNT_SECURITY,
+                subjects::ACCOUNT_SECURITY,
+                1,
+                event,
+            )
+            .await?;
+        self.flush_topic(topics::ACCOUNT_SECURITY).await?;
+        Ok(offset)
+    }
+
     /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
@@ -1034,6 +1067,7 @@ impl EventLogRouter {
                 topics::SAVED_MAPS => subjects::SAVED_MAP,
                 topics::CAMPAIGN_DIRECTORY => subjects::CAMPAIGN_DIRECTORY,
                 topics::SESSION_ACCESS => subjects::SESSION_ACCESS,
+                topics::ACCOUNT_SECURITY => subjects::ACCOUNT_SECURITY,
                 _ => subjects::CHAT_MESSAGE,
             };
             let target_version = if subject == subjects::CHARACTER_SHEET {
@@ -1215,11 +1249,14 @@ mod tests {
         assert!(ai_cfg.fail_fast_when_offline);
 
         let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
-        assert_eq!(storage_cfg.topics.len(), 13);
+        assert_eq!(storage_cfg.topics.len(), 14);
         assert!(storage_cfg.topics.contains_key(topics::SAVED_MAPS));
         assert!(storage_cfg.topics.contains_key(topics::CAMPAIGN_DIRECTORY));
         assert!(storage_cfg.topics.contains_key(topics::SESSION_ACCESS));
+        assert!(storage_cfg.topics.contains_key(topics::ACCOUNT_SECURITY));
         assert_eq!(storage_cfg.quotas.max_campaigns_per_gm, 10);
+        assert_eq!(storage_cfg.quotas.max_recovery_requests_per_email_per_window, 3);
+        assert_eq!(storage_cfg.quotas.recovery_email_window_mins, 60);
         assert!(!storage_cfg.email.enabled);
         assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
         assert_eq!(storage_cfg.ai_gm.request_timeout_secs, 180);
@@ -1270,7 +1307,7 @@ mod tests {
         let acc_ev = satya_schema::SessionAccessEvent {
             metadata: acc_meta,
             event_type: satya_schema::SessionAccessEventType::JoinRequestCreated,
-            actor: gm,
+            actor: gm.clone(),
             target_participant: None,
             request_id: Some("jreq_1".to_string()),
             campaign_id: Some("camp_1".to_string()),
@@ -1280,8 +1317,32 @@ mod tests {
         };
         router.log_session_access(&acc_ev).await.unwrap();
 
+        let sec_meta = router
+            .registry()
+            .build_metadata(
+                102,
+                subjects::ACCOUNT_SECURITY,
+                1,
+                "account-security",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let sec_ev = satya_schema::AccountSecurityEvent {
+            metadata: sec_meta,
+            event_type: satya_schema::AccountSecurityEventType::RecoveryRequested,
+            actor: gm,
+            identifier_sha256: Some("hash_id".to_string()),
+            email_sha256: Some("hash_em".to_string()),
+            client_ip_sha256: Some("hash_ip".to_string()),
+            request_id: Some("rec_1".to_string()),
+            delivery_channel: Some("LOCAL_OUTBOX".to_string()),
+            revoked_session_count: 0,
+            reason: None,
+        };
+        router.log_account_security(&sec_ev).await.unwrap();
+
         let metrics = router.metrics_snapshot().await;
-        assert_eq!(metrics.len(), 13);
+        assert_eq!(metrics.len(), 14);
         let dir_m = metrics
             .iter()
             .find(|m| m.topic == topics::CAMPAIGN_DIRECTORY)
@@ -1294,6 +1355,12 @@ mod tests {
             .unwrap();
         assert_eq!(acc_m.total_messages_ingested, 1);
         assert_eq!(acc_m.flushed_batches_count, 1);
+        let sec_m = metrics
+            .iter()
+            .find(|m| m.topic == topics::ACCOUNT_SECURITY)
+            .unwrap();
+        assert_eq!(sec_m.total_messages_ingested, 1);
+        assert_eq!(sec_m.flushed_batches_count, 1);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

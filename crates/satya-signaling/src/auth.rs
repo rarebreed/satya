@@ -8,7 +8,10 @@
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+    password_hash::{
+        PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+        rand_core::{OsRng, RngCore},
+    },
 };
 use chrono::Utc;
 pub use satya_schema::{AccountRole, AuthSuccessResponse};
@@ -81,6 +84,41 @@ pub struct UserAccount {
     pub account_role: AccountRole,
     /// Account creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
+}
+
+/// Single-use password reset token material issued by [`AuthAndSessionManager::request_password_reset`]
+/// for outbound email delivery (the plaintext `raw_token` is never persisted in SQLite).
+#[derive(Debug, Clone)]
+pub struct IssuedPasswordReset {
+    /// Target user account matching the recovery request.
+    pub account: UserAccount,
+    /// Verified destination email address on file.
+    pub to_email: String,
+    /// Lowercase SHA-256 hex digest of `to_email`.
+    pub email_sha256: String,
+    /// CSPRNG single-use reset token (`satya_rst_<hex>`).
+    pub raw_token: String,
+    /// Lifetime of the token in minutes.
+    pub ttl_mins: u64,
+}
+
+/// Outcome of [`AuthAndSessionManager::request_password_reset`] including persistent
+/// per-email sliding-window throttling.
+#[derive(Debug, Clone)]
+pub enum PasswordResetRequestOutcome {
+    /// A new single-use reset token was issued and should be emailed to `to_email`.
+    Issued(IssuedPasswordReset),
+    /// The resolved account's email exceeded `max_recovery_requests_per_email_per_window`.
+    EmailRateLimited {
+        /// Matched account whose email was throttled.
+        account: UserAccount,
+        /// Lowercase SHA-256 hex digest of the resolved email address.
+        email_sha256: String,
+        /// Remaining seconds before the oldest attempt falls outside the window.
+        retry_after_secs: u64,
+    },
+    /// No account with an email on file matched the identifier.
+    NoMatch,
 }
 
 /// Ephemeral in-memory AI GM model and BYOK credential vault for an active session.
@@ -416,6 +454,23 @@ impl AuthAndSessionManager {
                 status        TEXT NOT NULL,
                 created_at_us INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_hash    TEXT PRIMARY KEY NOT NULL,
+                user_id       TEXT NOT NULL,
+                created_at_us INTEGER NOT NULL,
+                expires_at_us INTEGER NOT NULL,
+                used_at_us    INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
+                ON password_reset_tokens(user_id, created_at_us DESC);
+            CREATE TABLE IF NOT EXISTS recovery_email_attempts (
+                attempt_id    TEXT PRIMARY KEY NOT NULL,
+                email_sha256  TEXT NOT NULL,
+                user_id       TEXT NOT NULL,
+                created_at_us INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_recovery_email_attempts_lookup
+                ON recovery_email_attempts(email_sha256, created_at_us DESC);
             CREATE TABLE IF NOT EXISTS session_participants (
                 session_id    TEXT NOT NULL,
                 user_id       TEXT NOT NULL,
@@ -1013,6 +1068,198 @@ impl AuthAndSessionManager {
         }
 
         self.issue_auth_token(account).await
+    }
+
+    /// Generates and persists a SHA-256-hashed single-use password reset token for `identifier`
+    /// (email address or username with optional leading `@`), enforcing a persistent per-email
+    /// sliding-window cap (`max_recovery_requests_per_email_per_window` over `recovery_email_window_mins`).
+    pub async fn request_password_reset(
+        &self,
+        identifier: &str,
+    ) -> anyhow::Result<PasswordResetRequestOutcome> {
+        let trimmed = identifier.trim();
+        if trimmed.is_empty() || trimmed.len() > 254 || trimmed.chars().any(char::is_control) {
+            anyhow::bail!("Please enter your email address or username");
+        }
+
+        let candidate = trimmed.strip_prefix('@').unwrap_or(trimmed);
+        let account_opt = if candidate.contains('@') {
+            let Ok(Some(norm_email)) = Self::normalize_and_validate_email(Some(candidate)) else {
+                return Ok(PasswordResetRequestOutcome::NoMatch);
+            };
+            let guard = self.users_by_username.read().await;
+            guard
+                .values()
+                .find(|u| u.email.as_deref() == Some(norm_email.as_str()))
+                .cloned()
+        } else {
+            let uname = candidate.to_lowercase();
+            let guard = self.users_by_username.read().await;
+            guard.get(&uname).cloned()
+        };
+
+        let Some(account) = account_opt else {
+            return Ok(PasswordResetRequestOutcome::NoMatch);
+        };
+        let Some(to_email) = account
+            .email
+            .as_ref()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+        else {
+            return Ok(PasswordResetRequestOutcome::NoMatch);
+        };
+
+        let email_sha256 = hex::encode(crate::characters::sha256_digest(to_email.as_bytes()));
+        let now_us = Utc::now().timestamp_micros();
+        let window_mins = self.quotas.recovery_email_window_mins.max(1);
+        let window_us = (window_mins as i64).saturating_mul(60_000_000);
+        let cutoff_us = now_us.saturating_sub(window_us);
+
+        let email_limit = self.quotas.max_recovery_requests_per_email_per_window;
+        if email_limit == 0 {
+            return Ok(PasswordResetRequestOutcome::EmailRateLimited {
+                account,
+                email_sha256,
+                retry_after_secs: window_mins.saturating_mul(60).max(1),
+            });
+        }
+
+        let recent_attempts: Vec<i64> = sqlx::query_scalar(
+            "SELECT created_at_us FROM recovery_email_attempts WHERE email_sha256 = ?1 AND created_at_us > ?2 ORDER BY created_at_us ASC",
+        )
+        .bind(&email_sha256)
+        .bind(cutoff_us)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        if recent_attempts.len() >= email_limit {
+            let oldest_us = recent_attempts[0];
+            let expires_window_us = oldest_us.saturating_add(window_us);
+            let retry_after_secs = ((expires_window_us.saturating_sub(now_us) + 999_999) / 1_000_000)
+                .max(1) as u64;
+            return Ok(PasswordResetRequestOutcome::EmailRateLimited {
+                account,
+                email_sha256,
+                retry_after_secs,
+            });
+        }
+
+        let mut raw_bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut raw_bytes);
+        let raw_token = format!("satya_rst_{}", hex::encode(raw_bytes));
+        let token_hash = hex::encode(crate::characters::sha256_digest(raw_token.as_bytes()));
+
+        let ttl_mins = self.quotas.password_reset_token_ttl_mins.max(1);
+        let expires_at_us = now_us.saturating_add((ttl_mins as i64).saturating_mul(60_000_000));
+
+        sqlx::query(
+            "INSERT INTO recovery_email_attempts (attempt_id, email_sha256, user_id, created_at_us) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(format!("ratt_{}", Uuid::now_v7()))
+        .bind(&email_sha256)
+        .bind(&account.user_id)
+        .bind(now_us)
+        .execute(&self.db_pool)
+        .await?;
+
+        sqlx::query("DELETE FROM password_reset_tokens WHERE user_id = ?1 AND used_at_us IS NULL")
+            .bind(&account.user_id)
+            .execute(&self.db_pool)
+            .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO password_reset_tokens (token_hash, user_id, created_at_us, expires_at_us, used_at_us)
+            VALUES (?1, ?2, ?3, ?4, NULL)
+            "#,
+        )
+        .bind(&token_hash)
+        .bind(&account.user_id)
+        .bind(now_us)
+        .bind(expires_at_us)
+        .execute(&self.db_pool)
+        .await?;
+
+        Ok(PasswordResetRequestOutcome::Issued(IssuedPasswordReset {
+            account,
+            to_email,
+            email_sha256,
+            raw_token,
+            ttl_mins,
+        }))
+    }
+
+    /// Consumes a single-use password reset token, updates the user's Argon2id password hash,
+    /// and revokes all active bearer/join tokens and live session memberships.
+    pub async fn confirm_password_reset(
+        &self,
+        raw_token: &str,
+        new_password: &str,
+    ) -> anyhow::Result<(UserAccount, Vec<SessionDisconnectSummary>)> {
+        // Validate password strength before touching/consuming the reset token.
+        crate::security::validate_account_password(new_password)
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        let trimmed_tok = raw_token.trim();
+        if trimmed_tok.is_empty() || trimmed_tok.len() > 256 {
+            anyhow::bail!("Invalid or expired password reset token");
+        }
+        let token_hash = hex::encode(crate::characters::sha256_digest(trimmed_tok.as_bytes()));
+        let now_us = Utc::now().timestamp_micros();
+
+        let row_opt = sqlx::query(
+            "SELECT user_id, expires_at_us, used_at_us FROM password_reset_tokens WHERE token_hash = ?1",
+        )
+        .bind(&token_hash)
+        .fetch_optional(&self.db_pool)
+        .await?;
+
+        let Some(row) = row_opt else {
+            anyhow::bail!("Invalid or expired password reset token");
+        };
+        let user_id: String = row.try_get("user_id")?;
+        let expires_at_us: i64 = row.try_get("expires_at_us")?;
+        let used_at_us: Option<i64> = row.try_get("used_at_us")?;
+        if used_at_us.is_some() || expires_at_us <= now_us {
+            anyhow::bail!("Invalid or expired password reset token");
+        }
+
+        let new_hash = Self::hash_secret_async(new_password.to_string()).await?;
+
+        let res = sqlx::query(
+            "UPDATE password_reset_tokens SET used_at_us = ?1 WHERE token_hash = ?2 AND used_at_us IS NULL AND expires_at_us > ?1",
+        )
+        .bind(now_us)
+        .bind(&token_hash)
+        .execute(&self.db_pool)
+        .await?;
+        if res.rows_affected() != 1 {
+            anyhow::bail!("Invalid or expired password reset token");
+        }
+        let _ =
+            sqlx::query("DELETE FROM password_reset_tokens WHERE user_id = ?1 AND used_at_us IS NULL")
+                .bind(&user_id)
+                .execute(&self.db_pool)
+                .await;
+
+        let updated = {
+            let mut guard = self.users_by_username.write().await;
+            let acct = guard
+                .values_mut()
+                .find(|u| u.user_id == user_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid or expired password reset token"))?;
+            sqlx::query("UPDATE users SET password_hash = ?1 WHERE user_id = ?2")
+                .bind(&new_hash)
+                .bind(&user_id)
+                .execute(&self.db_pool)
+                .await?;
+            acct.password_hash = new_hash;
+            acct.clone()
+        };
+
+        let disconnected = self.revoke_all_user_tokens(&user_id).await;
+        Ok((updated, disconnected))
     }
 
     pub(crate) async fn issue_auth_token(
@@ -2328,6 +2575,19 @@ impl AuthAndSessionManager {
             .write()
             .await
             .retain(|_, claims| claims.expires_at_us > now_us);
+        let _ = sqlx::query(
+            "DELETE FROM password_reset_tokens WHERE expires_at_us <= ?1 OR used_at_us IS NOT NULL",
+        )
+        .bind(now_us)
+        .execute(&self.db_pool)
+        .await;
+        let email_cutoff_us = now_us.saturating_sub(
+            (self.quotas.recovery_email_window_mins.max(1) as i64).saturating_mul(60_000_000),
+        );
+        let _ = sqlx::query("DELETE FROM recovery_email_attempts WHERE created_at_us <= ?1")
+            .bind(email_cutoff_us)
+            .execute(&self.db_pool)
+            .await;
     }
 
     /// Drains all active sessions for graceful shutdown lifecycle logging.

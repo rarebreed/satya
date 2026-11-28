@@ -1,4 +1,4 @@
-//! Pluggable outbound email notification transport for offline GM join-request alerts.
+//! Pluggable outbound email notification transport for offline GM alerts and account recovery.
 //!
 //! Supports zero-network [`LocalOutboxEmailNotifier`] (persisting into SQLite `email_outbox`
 //! and structured logs) as well as GCP-ready HTTP API dispatch (`Resend`, `SendGrid`, `Mailgun`,
@@ -14,16 +14,16 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-/// Outbound email payload constructed for an offline Game Master.
+/// Outbound email payload constructed for a Satya user (join requests or account recovery).
 #[derive(Debug, Clone)]
 pub struct OutboundEmail {
-    /// Destination email address of the GM.
+    /// Destination email address of the recipient.
     pub to_email: String,
     /// Email subject line.
     pub subject: String,
-    /// Plain-text email body containing the Satya review URL.
+    /// Plain-text email body.
     pub body_text: String,
-    /// Associated join request identifier (`jreq_<uuid>`).
+    /// Associated request or recovery correlation identifier (`jreq_<uuid>` or `rec_<uuid>`).
     pub request_id: String,
 }
 
@@ -96,7 +96,7 @@ impl EmailNotifier for LocalOutboxEmailNotifier {
             outbox_id = %outbox_id,
             request_id = %msg.request_id,
             subject = %safe_subject,
-            "Recorded offline GM join-request email in local email_outbox"
+            "Recorded outbound email in local email_outbox"
         );
 
         Ok(EmailDeliveryResult {

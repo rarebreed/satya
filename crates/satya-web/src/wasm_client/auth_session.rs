@@ -25,9 +25,11 @@ use crate::wasm_client::webrtc::{
     connect_signaling_websocket, send_ws_packet, teardown_prosody_monitor,
 };
 use satya_schema::{
-    AccountRole, AiGmProviderConfig, AuthSuccessResponse, ClientWsPacket, CreateSessionRequest,
-    LeaveSessionRequest, LoginRequest, LogoutRequest, Participant, ParticipantKind,
-    RegisterRequest, SessionEnterResponse, SessionMode, SessionRole, WebRtcEventKind,
+    AccountRecoveryRequest, AccountRecoveryResponse, AccountRole, AiGmProviderConfig,
+    AuthSuccessResponse, ClientWsPacket, CreateSessionRequest, LeaveSessionRequest, LoginRequest,
+    LogoutRequest, Participant, ParticipantKind, PasswordResetConfirmRequest,
+    PasswordResetConfirmResponse, RegisterRequest, SessionEnterResponse, SessionMode, SessionRole,
+    WebRtcEventKind,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -175,6 +177,189 @@ pub fn satya_login() {
     });
 }
 
+/// Extracts a non-empty `reset_token` parameter from a URL query string (`?reset_token=...`).
+#[must_use]
+pub fn extract_reset_token_from_query(search: &str) -> Option<String> {
+    let query = search.trim().strip_prefix('?').unwrap_or(search.trim());
+    for pair in query.split('&') {
+        if let Some((key, raw_val)) = pair.split_once('=')
+            && key == "reset_token"
+        {
+            let trimmed = raw_val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn reset_recovery_secret_inputs() {
+    set_input_value("recovery-token", "");
+    set_input_value("recovery-new-password", "");
+    set_input_value("recovery-confirm-password", "");
+}
+
+/// Inspects `window.location.search` on startup; if `?reset_token=...` is present, opens the
+/// recovery panel pre-filled with the token and scrubs the token from the browser URL bar.
+pub(crate) fn apply_reset_token_from_url_if_present() -> bool {
+    let Some(win) = window() else {
+        return false;
+    };
+    let Ok(search) = win.location().search() else {
+        return false;
+    };
+    let Some(token) = extract_reset_token_from_query(&search) else {
+        return false;
+    };
+
+    set_display("auth-card", "block");
+    set_display("auth-recovery-panel", "flex");
+    set_input_value("recovery-token", &token);
+    set_feedback(
+        "auth-recovery-feedback",
+        "Reset link loaded. Enter and confirm your new password below.",
+        false,
+    );
+
+    if let Ok(history) = js_sys::Reflect::get(&win, &JsValue::from_str("history"))
+        && let Ok(replace_fn) = js_sys::Reflect::get(&history, &JsValue::from_str("replaceState"))
+            .and_then(|v| v.dyn_into::<js_sys::Function>())
+        && let Ok(pathname) = win.location().pathname()
+    {
+        let _ = replace_fn.call3(
+            &history,
+            &JsValue::NULL,
+            &JsValue::from_str(""),
+            &JsValue::from_str(&pathname),
+        );
+    }
+    true
+}
+
+/// Toggles the inline Account Recovery panel (`#auth-recovery-panel`) inside `#auth-card`.
+#[wasm_bindgen]
+pub fn satya_toggle_recovery_panel() {
+    let Some(panel) = get_element("auth-recovery-panel")
+        .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+    else {
+        return;
+    };
+    let currently_hidden = panel
+        .style()
+        .get_property_value("display")
+        .map(|v| v == "none" || v.is_empty())
+        .unwrap_or(true);
+    if currently_hidden {
+        set_display("auth-recovery-panel", "flex");
+        if input_value("recovery-identifier").trim().is_empty() {
+            let email = input_value("auth-email").trim().to_string();
+            let username = input_value("auth-username").trim().to_string();
+            let prefill = if !email.is_empty() { email } else { username };
+            if !prefill.is_empty() {
+                set_input_value("recovery-identifier", &prefill);
+            }
+        }
+        set_feedback("auth-recovery-feedback", "", false);
+    } else {
+        satya_close_recovery_panel();
+    }
+}
+
+/// Closes `#auth-recovery-panel` and scrubs any recovery token/password inputs from the DOM.
+#[wasm_bindgen]
+pub fn satya_close_recovery_panel() {
+    set_display("auth-recovery-panel", "none");
+    reset_recovery_secret_inputs();
+    set_feedback("auth-recovery-feedback", "", false);
+}
+
+/// Requests a username reminder and password reset token via `POST /api/auth/recovery/request`.
+#[wasm_bindgen]
+pub fn satya_request_account_recovery() {
+    spawn_local(async move {
+        let identifier = input_value("recovery-identifier").trim().to_string();
+        if identifier.is_empty() {
+            set_feedback(
+                "auth-recovery-feedback",
+                "Please enter your registered email address or username.",
+                true,
+            );
+            return;
+        }
+        let req = AccountRecoveryRequest { identifier };
+        match fetch_json::<_, AccountRecoveryResponse>(
+            "POST",
+            "/api/auth/recovery/request",
+            None,
+            Some(&req),
+        )
+        .await
+        {
+            Ok(resp) => set_feedback("auth-recovery-feedback", &resp.message, false),
+            Err(err) => set_feedback("auth-recovery-feedback", &err, true),
+        }
+    });
+}
+
+/// Confirms a single-use password reset token via `POST /api/auth/recovery/confirm`.
+#[wasm_bindgen]
+pub fn satya_confirm_password_reset() {
+    spawn_local(async move {
+        let token = input_value("recovery-token").trim().to_string();
+        let new_password = input_value("recovery-new-password");
+        let confirm_password = input_value("recovery-confirm-password");
+
+        if token.is_empty() {
+            set_feedback(
+                "auth-recovery-feedback",
+                "Please paste the password reset token from your recovery email.",
+                true,
+            );
+            return;
+        }
+        if new_password.chars().count() < 8 {
+            set_feedback(
+                "auth-recovery-feedback",
+                "New password must be at least 8 characters.",
+                true,
+            );
+            return;
+        }
+        if new_password != confirm_password {
+            set_feedback(
+                "auth-recovery-feedback",
+                "New password and confirmation do not match.",
+                true,
+            );
+            return;
+        }
+
+        let req = PasswordResetConfirmRequest {
+            token,
+            new_password,
+        };
+        match fetch_json::<_, PasswordResetConfirmResponse>(
+            "POST",
+            "/api/auth/recovery/confirm",
+            None,
+            Some(&req),
+        )
+        .await
+        {
+            Ok(resp) => {
+                reset_recovery_secret_inputs();
+                set_display("auth-recovery-panel", "none");
+                set_feedback("auth-recovery-feedback", "", false);
+                set_input_value("auth-username", &resp.username);
+                set_input_value("auth-password", "");
+                set_feedback("auth-feedback", &resp.message, false);
+            }
+            Err(err) => set_feedback("auth-recovery-feedback", &err, true),
+        }
+    });
+}
+
 pub(crate) async fn perform_login() -> bool {
     let username = input_value("auth-username").trim().to_string();
     let password = input_value("auth-password");
@@ -215,6 +400,7 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
 
     // Hide the Authentication pane once logged in and open the guided Campaign & Session modal
     set_display("auth-card", "none");
+    satya_close_recovery_panel();
     set_display("workspace-panel", "grid");
     set_display("hamburger-menu-dropdown", "none");
     set_text("btn-menu-toggle-auth-pane", "Show Auth Pane");
@@ -967,5 +1153,20 @@ mod tests {
                 .contains(r#"class="recip-row selected" data-recipient-row-uid="u-sara&#39;02""#)
         );
         assert!(recip_sel.contains(r#"data-recipient-uid="u-sara&#39;02" checked"#));
+    }
+
+    #[test]
+    fn test_extract_reset_token_from_query() {
+        assert_eq!(extract_reset_token_from_query(""), None);
+        assert_eq!(extract_reset_token_from_query("?foo=bar"), None);
+        assert_eq!(extract_reset_token_from_query("?reset_token=   "), None);
+        assert_eq!(
+            extract_reset_token_from_query("?reset_token=satya_rst_abc123"),
+            Some("satya_rst_abc123".to_string())
+        );
+        assert_eq!(
+            extract_reset_token_from_query("?utm=1&reset_token=satya_rst_xyz789&other=2"),
+            Some("satya_rst_xyz789".to_string())
+        );
     }
 }

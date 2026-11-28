@@ -60,6 +60,9 @@ pub const CAMPAIGN_DIRECTORY_V1_AVSC: &str =
 /// Raw JSON schema definition (`v1`) for [`crate::events::SessionAccessEvent`].
 pub const SESSION_ACCESS_V1_AVSC: &str =
     include_str!("../../../schemas/v1/session_access_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::AccountSecurityEvent`].
+pub const ACCOUNT_SECURITY_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/account_security_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -320,6 +323,13 @@ pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
         topics::SESSION_ACCESS,
         1,
         SESSION_ACCESS_V1_AVSC,
+    ),
+    (
+        17,
+        subjects::ACCOUNT_SECURITY,
+        topics::ACCOUNT_SECURITY,
+        1,
+        ACCOUNT_SECURITY_V1_AVSC,
     ),
 ];
 

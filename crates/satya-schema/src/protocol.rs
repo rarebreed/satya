@@ -44,6 +44,42 @@ pub struct LogoutRequest {
     pub reason: Option<String>,
 }
 
+/// HTTP request body for `POST /api/auth/recovery/request`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountRecoveryRequest {
+    /// Registered email address or username (with optional leading `@`).
+    pub identifier: String,
+}
+
+/// Uniform anti-enumeration HTTP response for `POST /api/auth/recovery/request`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountRecoveryResponse {
+    /// Status string (always `"accepted"` on valid input).
+    pub status: String,
+    /// Human-readable confirmation message.
+    pub message: String,
+}
+
+/// HTTP request body for `POST /api/auth/recovery/confirm`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PasswordResetConfirmRequest {
+    /// Single-use password reset token delivered via recovery email.
+    pub token: String,
+    /// New account password meeting platform password policy.
+    pub new_password: String,
+}
+
+/// HTTP response body returned after a successful `POST /api/auth/recovery/confirm`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PasswordResetConfirmResponse {
+    /// Status string (`"reset"`).
+    pub status: String,
+    /// Canonical lowercase username of the recovered account.
+    pub username: String,
+    /// Human-readable confirmation message.
+    pub message: String,
+}
+
 /// Platform-wide account role controlling administrative APIs while preserving universal
 /// quota-governed campaign and session ownership.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -134,6 +134,10 @@ macro_rules! for_all_window_callbacks {
             "satyaModeChanged" => satya_mode_changed(),
             "satyaRegister" => satya_register(),
             "satyaLogin" => satya_login(),
+            "satyaToggleRecoveryPanel" => satya_toggle_recovery_panel(),
+            "satyaCloseRecoveryPanel" => satya_close_recovery_panel(),
+            "satyaRequestAccountRecovery" => satya_request_account_recovery(),
+            "satyaConfirmPasswordReset" => satya_confirm_password_reset(),
             "satyaLogout" => satya_logout(),
             "satyaLeaveSession" => satya_leave_session(),
             "satyaRefreshSavedSessions" => satya_refresh_saved_sessions(),
@@ -440,7 +444,9 @@ pub fn start_satya_wasm_client() {
     set_display("admin-inspector-card", "none");
     crate::wasm_client::notebook::sync_iggy_tab_visibility(false);
     refresh_map_dom_and_wgpu();
-    restore_saved_auth_and_session();
+    if !apply_reset_token_from_url_if_present() {
+        restore_saved_auth_and_session();
+    }
     if let Some(win) = window() {
         let _ = Reflect::set(&win, &JsValue::from_str("__satyaWasmReady"), &JsValue::TRUE);
     }

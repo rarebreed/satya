@@ -237,7 +237,7 @@ label {
     flex-direction: row; align-items: center; gap: 6px; grid-column: 1 / -1;
     color: var(--text-primary); margin-top: 3px;
 }
-input[type="text"], input[type="password"], input[type="number"], input[type="search"], select, textarea {
+input[type="text"], input[type="password"], input[type="email"], input[type="number"], input[type="search"], select, textarea {
     background: var(--bg-0); color: var(--text-primary); border: 1px solid var(--border);
     border-radius: var(--control-radius); padding: var(--control-pad-y) var(--control-pad-x);
     font-size: 0.83rem; inline-size: 100%; max-inline-size: 100%; min-inline-size: 0;
@@ -1250,4 +1250,39 @@ button.lobby-crumb.is-done:hover {
     align-items: center;
     gap: 0.35rem;
     flex-wrap: wrap;
+}
+
+.auth-recovery-panel {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: var(--control-radius);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auth-recovery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-heading);
+}
+
+.auth-recovery-hint {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.auth-recovery-section {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }

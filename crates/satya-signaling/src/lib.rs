@@ -108,6 +108,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/logout", post(logout_handler))
         .route("/api/auth/logout-all", post(logout_all_handler))
+        .route(
+            "/api/auth/recovery/request",
+            post(request_account_recovery_handler),
+        )
+        .route(
+            "/api/auth/recovery/confirm",
+            post(confirm_password_reset_handler),
+        )
         .route("/api/auth/me", get(auth_me_handler))
         .route("/api/ws/ticket", post(issue_ws_ticket_handler))
         .route("/api/auth/profile", patch(update_profile_handler))

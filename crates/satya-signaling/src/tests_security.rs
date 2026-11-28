@@ -889,5 +889,390 @@ async fn test_wave4_path_traversal_unicode_panic_idor_observer_and_body_limit() 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
+#[tokio::test]
+async fn test_account_recovery_email_username_reset_and_anti_enumeration() {
+    let temp_dir = new_temp_dir("satya_sec_recovery");
+    let mut cfg = StorageConfig::default();
+    cfg.auth.seed_demo_accounts = Some(false);
+    cfg.quotas.max_recovery_requests_per_ip_per_hour = 20;
+    cfg.quotas.max_recovery_requests_per_identifier_per_hour = 3;
+    cfg.quotas.max_recovery_requests_per_email_per_window = 2;
+    cfg.quotas.recovery_email_window_mins = 60;
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let alice = state
+        .auth
+        .register_user_with_email(
+            "alice_rec",
+            "initial-pass-123",
+            "Alice Rec",
+            Some("alice@example.com"),
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .register_user("bob_no_email", "initial-pass-123", "Bob NoEmail")
+        .await
+        .unwrap();
+
+    // 1. Anti-enumeration: unknown email, unknown username, and user without email all return identical 200 OK and emit zero outbox rows.
+    let mut expected_msg: Option<String> = None;
+    for ident in [
+        "missing@example.com",
+        "no_such_user",
+        "bob_no_email",
+        "bad-email@",
+    ] {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/recovery/request")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({ "identifier": ident })).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "ident={ident}");
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp.into_body(), 64 * 1024).await.unwrap()).unwrap();
+        assert_eq!(body["status"], "accepted");
+        let msg = body["message"].as_str().unwrap().to_string();
+        if let Some(ref prev) = expected_msg {
+            assert_eq!(&msg, prev);
+        } else {
+            expected_msg = Some(msg);
+        }
+    }
+    let outbox_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM email_outbox")
+        .fetch_one(state.auth.db_pool())
+        .await
+        .unwrap();
+    assert_eq!(outbox_before, 0);
+
+    // 2. Request recovery by email (1st email for alice@example.com) -> emits outbox email with @alice_rec & reset token; DB stores only SHA-256 hash.
+    let resp_email = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/request")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "identifier": "ALICE@EXAMPLE.COM" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_email.status(), StatusCode::OK);
+    let body_email: serde_json::Value =
+        serde_json::from_slice(&to_bytes(resp_email.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert_eq!(
+        body_email["message"].as_str().unwrap(),
+        expected_msg.as_deref().unwrap()
+    );
+
+    let outbox_row = sqlx::query(
+        "SELECT to_email, subject, body_text FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+    )
+    .fetch_one(state.auth.db_pool())
+    .await
+    .unwrap();
+    let to_email: String = outbox_row.try_get("to_email").unwrap();
+    let subject: String = outbox_row.try_get("subject").unwrap();
+    let body_text: String = outbox_row.try_get("body_text").unwrap();
+    assert_eq!(to_email, "alice@example.com");
+    assert!(subject.contains("Account Recovery"));
+    assert!(body_text.contains("@alice_rec"));
+    let tok_start = body_text.find("satya_rst_").expect("missing reset token");
+    let raw_token_1: String = body_text[tok_start..]
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+    assert!(body_text.contains(&format!("?reset_token={raw_token_1}")));
+
+    let stored_hash: String = sqlx::query_scalar(
+        "SELECT token_hash FROM password_reset_tokens WHERE user_id = ?1 AND used_at_us IS NULL",
+    )
+    .bind(&alice.user_id)
+    .fetch_one(state.auth.db_pool())
+    .await
+    .unwrap();
+    assert_ne!(stored_hash, raw_token_1);
+    assert_eq!(
+        stored_hash,
+        hex::encode(crate::characters::sha256_digest(raw_token_1.as_bytes()))
+    );
+
+    // 3. Request recovery by @username (2nd email for alice@example.com, hits per-email cap=2) -> invalidates token_1 and issues raw_token_2.
+    let resp_uname = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/request")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "identifier": "@alice_rec" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_uname.status(), StatusCode::OK);
+    let body_text_2: String =
+        sqlx::query_scalar("SELECT body_text FROM email_outbox ORDER BY rowid DESC LIMIT 1")
+            .fetch_one(state.auth.db_pool())
+            .await
+            .unwrap();
+    let tok_start_2 = body_text_2.find("satya_rst_").unwrap();
+    let raw_token_2: String = body_text_2[tok_start_2..]
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+    assert_ne!(raw_token_1, raw_token_2);
+
+    // 3b. Persistent per-email window cap (max_recovery_requests_per_email_per_window = 2):
+    // A 3rd request via a different alias ("alice_rec") still returns uniform 200 OK,
+    // does NOT queue a 3rd email, and does NOT invalidate raw_token_2 (DoS protection).
+    let resp_email_cap = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/request")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "identifier": "alice_rec" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_email_cap.status(), StatusCode::OK);
+    let outbox_count_after_cap: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM email_outbox")
+        .fetch_one(state.auth.db_pool())
+        .await
+        .unwrap();
+    assert_eq!(outbox_count_after_cap, 2);
+
+    // Superseded token_1 must fail.
+    let fail_superseded = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/confirm")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "token": raw_token_1,
+                        "new_password": "new-strong-pass-1"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fail_superseded.status(), StatusCode::BAD_REQUEST);
+
+    // 4. Weak password fails 400 WITHOUT consuming raw_token_2.
+    let weak_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/confirm")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "token": raw_token_2,
+                        "new_password": "short"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(weak_resp.status(), StatusCode::BAD_REQUEST);
+
+    // 5. Valid password reset with raw_token_2 (still intact after email cap block!) succeeds,
+    // returns username, revokes prior bearer token, invalidates old password, and enables new login.
+    let ok_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/confirm")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "token": raw_token_2,
+                        "new_password": "new-strong-pass-99"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok_resp.status(), StatusCode::OK);
+    let ok_body: serde_json::Value =
+        serde_json::from_slice(&to_bytes(ok_resp.into_body(), 64 * 1024).await.unwrap()).unwrap();
+    assert_eq!(ok_body["status"], "reset");
+    assert_eq!(ok_body["username"], "alice_rec");
+
+    // Prior bearer token must now be revoked.
+    let me_after = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/auth/me")
+                .header("Authorization", format!("Bearer {}", alice.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(me_after.status(), StatusCode::UNAUTHORIZED);
+
+    // Old password fails; new password succeeds.
+    assert!(
+        state
+            .auth
+            .authenticate_user("alice_rec", "initial-pass-123")
+            .await
+            .is_err()
+    );
+    assert!(
+        state
+            .auth
+            .authenticate_user("alice_rec", "new-strong-pass-99")
+            .await
+            .is_ok()
+    );
+
+    // Replaying consumed raw_token_2 fails.
+    let replay_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/confirm")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "token": raw_token_2,
+                        "new_password": "another-pass-99"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replay_resp.status(), StatusCode::BAD_REQUEST);
+
+    // 6. Rate limiting on identifier spray (2 already sent for alice_rec; 3rd succeeds, 4th returns 429).
+    let req3 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/request")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "identifier": "alice_rec" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(req3.status(), StatusCode::OK);
+    let req4 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/recovery/request")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "identifier": "alice_rec" })).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(req4.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(req4.headers().get("retry-after").is_some());
+
+    // 7. Verify dedicated `account-security` Iggy topic recorded and flushed events with zero plaintext secrets/emails/tokens.
+    let metrics = state.storage.metrics_snapshot().await;
+    let sec_metric = metrics
+        .iter()
+        .find(|m| m.topic == satya_schema::topics::ACCOUNT_SECURITY)
+        .expect("account-security topic missing from metrics");
+    assert!(
+        sec_metric.total_messages_ingested >= 10,
+        "expected >= 10 account-security events, got {}",
+        sec_metric.total_messages_ingested
+    );
+    assert!(sec_metric.flushed_batches_count >= 1);
+
+    let sec_topic_dir = temp_dir.join("data").join("topics").join("account-security");
+    assert!(sec_topic_dir.exists(), "account-security topic directory missing");
+    let mut stack = vec![sec_topic_dir];
+    let mut inspected_files = 0usize;
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.is_file() {
+                let bytes = std::fs::read(&path).unwrap();
+                let lossy = String::from_utf8_lossy(&bytes);
+                assert!(
+                    !lossy.contains("satya_rst_"),
+                    "plaintext reset token leaked into {}",
+                    path.display()
+                );
+                assert!(
+                    !lossy.contains("alice@example.com"),
+                    "plaintext email leaked into {}",
+                    path.display()
+                );
+                assert!(
+                    !lossy.contains("new-strong-pass-99"),
+                    "plaintext password leaked into {}",
+                    path.display()
+                );
+                inspected_files += 1;
+            }
+        }
+    }
+    assert!(inspected_files >= 1, "expected flushed .avro files under account-security");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
 #[allow(dead_code)]
 fn _keep_schema_import(_s: Option<SessionHistorySnapshot>, _c: Option<AiGmProviderConfig>) {}

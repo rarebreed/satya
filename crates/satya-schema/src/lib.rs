@@ -189,7 +189,7 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 16);
+        assert_eq!(all.len(), 17);
         let saved_map_v1 = registry
             .get_by_subject_version(subjects::SAVED_MAP, 1)
             .unwrap();
@@ -202,6 +202,10 @@ mod tests {
             .get_by_subject_version(subjects::SESSION_ACCESS, 1)
             .unwrap();
         assert_eq!(sess_acc_v1.schema_id, 16);
+        let acct_sec_v1 = registry
+            .get_by_subject_version(subjects::ACCOUNT_SECURITY, 1)
+            .unwrap();
+        assert_eq!(acct_sec_v1.schema_id, 17);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -891,7 +895,7 @@ mod tests {
             metadata: acc_meta,
             event_type: SessionAccessEventType::JoinRequestApproved,
             actor: gm,
-            target_participant: Some(player),
+            target_participant: Some(player.clone()),
             request_id: Some("jreq_001".to_string()),
             campaign_id: Some("camp_001".to_string()),
             requested_role: Some(SessionRole::Player),
@@ -918,5 +922,50 @@ mod tests {
         let target = dsar_acc.target_participant.unwrap();
         assert_eq!(target.user_id, "redacted-peer");
         assert_eq!(target.username, "redacted_user");
+
+        let sec_meta = registry
+            .build_metadata(
+                62,
+                subjects::ACCOUNT_SECURITY,
+                1,
+                "account-security",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let sec_ev = AccountSecurityEvent {
+            metadata: sec_meta,
+            event_type: AccountSecurityEventType::RecoveryRequested,
+            actor: player.clone(),
+            identifier_sha256: Some("abc123ident".to_string()),
+            email_sha256: Some("def456email".to_string()),
+            client_ip_sha256: Some("ghi789ip".to_string()),
+            request_id: Some("rec_001".to_string()),
+            delivery_channel: Some("LOCAL_OUTBOX".to_string()),
+            revoked_session_count: 0,
+            reason: Some("requested".to_string()),
+        };
+        let framed_sec = registry
+            .encode_framed(subjects::ACCOUNT_SECURITY, 1, &sec_ev)
+            .unwrap();
+        let (hdr_sec, decoded_sec): (_, AccountSecurityEvent) =
+            registry.decode_framed(&framed_sec, None).unwrap();
+        assert_eq!(hdr_sec.schema_id, 17);
+        assert_eq!(
+            decoded_sec.event_type,
+            AccountSecurityEventType::RecoveryRequested
+        );
+
+        let (sec_match, anon_sec_bytes) = registry
+            .anonymize_framed_for_subject(&framed_sec, &player.user_id, "anon-player")
+            .unwrap();
+        assert_eq!(sec_match, GdprSubjectMatchKind::PrimaryActor);
+        let (_, anon_sec): (_, AccountSecurityEvent) =
+            registry.decode_framed(&anon_sec_bytes, None).unwrap();
+        assert_eq!(anon_sec.actor.user_id, "anon-player");
+        assert_eq!(anon_sec.metadata.timezone_offset_min, 0);
+        assert_eq!(anon_sec.identifier_sha256, None);
+        assert_eq!(anon_sec.email_sha256, None);
+        assert_eq!(anon_sec.client_ip_sha256, None);
+        assert_eq!(anon_sec.reason, None);
     }
 }

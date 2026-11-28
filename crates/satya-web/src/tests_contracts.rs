@@ -964,3 +964,30 @@ fn test_map_controls_vertical_sidebar_layout_contracts() {
         "1240px and 900px stacked workspace rules must keep map-workspace-layout side-by-side"
     );
 }
+
+#[test]
+fn test_auth_recovery_controls_and_email_input_styling() {
+    let html = render_satya_app_html();
+
+    for snippet in [
+        r#"id="btn-forgot-credentials""#,
+        r#"onclick="window.satyaToggleRecoveryPanel()""#,
+        r#"id="auth-recovery-panel""#,
+        r#"id="btn-close-recovery-panel""#,
+        r#"id="recovery-identifier""#,
+        r#"id="btn-request-recovery""#,
+        r#"id="recovery-token""#,
+        r#"id="recovery-new-password""#,
+        r#"id="btn-toggle-recovery-new-password""#,
+        r#"id="recovery-confirm-password""#,
+        r#"id="btn-toggle-recovery-confirm-password""#,
+        r#"id="btn-confirm-password-reset""#,
+        r#"id="auth-recovery-feedback""#,
+        r#"input[type="email"]"#,
+    ] {
+        assert!(
+            html.contains(snippet),
+            "missing account recovery SSR/CSS contract snippet: {snippet}"
+        );
+    }
+}

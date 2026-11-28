@@ -98,7 +98,7 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                         <input id="auth-display-name" type="text" placeholder="e.g. Sean (GM)"/>
                     </label>
                     <label>
-                        <span>"Email (Optional, Private — for GM Search & Offline Alerts)"</span>
+                        <span>"Email (Optional, Private — for Recovery, GM Search & Alerts)"</span>
                         <input id="auth-email" type="email" placeholder="e.g. gm@example.com"/>
                     </label>
                 </div>
@@ -118,6 +118,15 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                         on:click=move |_| wasm_client::satya_register()
                     >
                         "Register New Account"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-forgot-credentials"
+                        class="btn btn-secondary"
+                        onclick="window.satyaToggleRecoveryPanel()"
+                        on:click=move |_| wasm_client::satya_toggle_recovery_panel()
+                    >
+                        "Forgot Username / Password?"
                     </button>
                     <button
                         type="button"
@@ -142,6 +151,99 @@ pub fn AuthAndSessionGate() -> impl IntoView {
                     </button>
                 </div>
                 <div id="auth-feedback" class="feedback-box"></div>
+                <div id="auth-recovery-panel" class="auth-recovery-panel" style="display: none;">
+                    <div class="auth-recovery-header">
+                        <strong>"Account Recovery (Forgotten Username or Password)"</strong>
+                        <button
+                            type="button"
+                            id="btn-close-recovery-panel"
+                            class="btn btn-sm btn-secondary"
+                            aria-label="Close Account Recovery"
+                            onclick="window.satyaCloseRecoveryPanel()"
+                            on:click=move |_| wasm_client::satya_close_recovery_panel()
+                        >
+                            "×"
+                        </button>
+                    </div>
+                    <p class="auth-recovery-hint">
+                        "Enter your registered email address or username. If an email is on file, we will send your username reminder and a single-use password reset token."
+                    </p>
+                    <div class="auth-recovery-section">
+                        <div class="form-grid">
+                            <label>
+                                <span>"Email or Username"</span>
+                                <input
+                                    id="recovery-identifier"
+                                    type="text"
+                                    placeholder="Registered email or username"
+                                />
+                            </label>
+                        </div>
+                        <div class="btn-row">
+                            <button
+                                type="button"
+                                id="btn-request-recovery"
+                                class="btn btn-primary btn-sm"
+                                onclick="window.satyaRequestAccountRecovery()"
+                                on:click=move |_| wasm_client::satya_request_account_recovery()
+                            >
+                                "Send Recovery Email"
+                            </button>
+                        </div>
+                    </div>
+                    <div class="auth-recovery-section">
+                        <div class="form-grid">
+                            <label>
+                                <span>"Reset Token"</span>
+                                <input
+                                    id="recovery-token"
+                                    type="text"
+                                    placeholder="Paste reset token (satya_rst_...)"
+                                />
+                            </label>
+                            <label>
+                                <span>"New Password"</span>
+                                <div class="password-field">
+                                    <input
+                                        id="recovery-new-password"
+                                        type="password"
+                                        placeholder="New password (8+ chars)"
+                                    />
+                                    <PasswordToggleButton
+                                        input_id="recovery-new-password"
+                                        btn_id="btn-toggle-recovery-new-password"
+                                    />
+                                </div>
+                            </label>
+                            <label>
+                                <span>"Confirm New Password"</span>
+                                <div class="password-field">
+                                    <input
+                                        id="recovery-confirm-password"
+                                        type="password"
+                                        placeholder="Confirm new password"
+                                    />
+                                    <PasswordToggleButton
+                                        input_id="recovery-confirm-password"
+                                        btn_id="btn-toggle-recovery-confirm-password"
+                                    />
+                                </div>
+                            </label>
+                        </div>
+                        <div class="btn-row">
+                            <button
+                                type="button"
+                                id="btn-confirm-password-reset"
+                                class="btn btn-accent btn-sm"
+                                onclick="window.satyaConfirmPasswordReset()"
+                                on:click=move |_| wasm_client::satya_confirm_password_reset()
+                            >
+                                "Reset Password"
+                            </button>
+                        </div>
+                    </div>
+                    <div id="auth-recovery-feedback" class="feedback-box"></div>
+                </div>
             </div>
         </section>
 

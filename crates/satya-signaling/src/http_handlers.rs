@@ -1,6 +1,7 @@
 //! HTTP REST handlers for Leptos SSR shell rendering, user authentication (`/api/auth/*`),
 //! session creation/joining/leaving (`/api/sessions/*`), and admin storage metrics (`/api/storage/*`).
 
+use crate::email_notifier::OutboundEmail;
 use crate::rate_limit::extract_client_ip;
 use crate::state::SignalingAppState;
 use axum::{
@@ -11,11 +12,13 @@ use axum::{
 };
 use satya_rules_book::{build_rules_catalog_response, get_rules_chapter};
 use satya_schema::{
-    AccountRole, AdminSetUserRoleRequest, AiGmProviderConfig, AuthSuccessResponse,
+    AccountRecoveryRequest, AccountRecoveryResponse, AccountRole, AccountSecurityEvent,
+    AccountSecurityEventType, AdminSetUserRoleRequest, AiGmProviderConfig, AuthSuccessResponse,
     CampaignDirectoryEvent, CampaignDirectoryEventType, CreateSessionRequest, JoinSessionRequest,
     LeaveSessionRequest, LifecycleEventType, LoginRequest, LogoutRequest, Participant,
-    RegisterRequest, SessionAccessEvent, SessionAccessEventType, SessionEnterResponse,
-    SessionLifecycleEvent, SessionMode, SessionRole, UpdateProfileRequest, subjects,
+    PasswordResetConfirmRequest, PasswordResetConfirmResponse, RegisterRequest, SessionAccessEvent,
+    SessionAccessEventType, SessionEnterResponse, SessionLifecycleEvent, SessionMode, SessionRole,
+    UpdateProfileRequest, subjects,
 };
 use satya_storage::TopicMetricsSnapshot;
 use satya_web::render_satya_app_html;
@@ -266,6 +269,382 @@ pub async fn logout_all_handler(
         })),
     )
         .into_response()
+}
+
+fn sha256_hex(raw: &str) -> String {
+    hex::encode(crate::characters::sha256_digest(raw.as_bytes()))
+}
+
+fn anonymous_security_actor() -> Participant {
+    Participant::human(
+        "anonymous",
+        "anonymous",
+        "Anonymous Requester",
+        SessionRole::Observer,
+    )
+}
+
+struct AccountSecurityAudit<'a> {
+    event_type: AccountSecurityEventType,
+    actor: Participant,
+    identifier_sha256: Option<String>,
+    email_sha256: Option<String>,
+    client_ip_sha256: Option<String>,
+    request_id: Option<String>,
+    delivery_channel: Option<String>,
+    revoked_session_count: i32,
+    reason: Option<&'a str>,
+}
+
+async fn emit_account_security_event(state: &SignalingAppState, audit: AccountSecurityAudit<'_>) {
+    if let Ok(meta) = state.storage.registry().build_metadata(
+        state.next_seq(),
+        subjects::ACCOUNT_SECURITY,
+        1,
+        "account-security",
+        SessionMode::Ttrpg,
+    ) {
+        let ev = AccountSecurityEvent {
+            metadata: meta,
+            event_type: audit.event_type,
+            actor: audit.actor,
+            identifier_sha256: audit.identifier_sha256,
+            email_sha256: audit.email_sha256,
+            client_ip_sha256: audit.client_ip_sha256,
+            request_id: audit.request_id,
+            delivery_channel: audit.delivery_channel,
+            revoked_session_count: audit.revoked_session_count,
+            reason: audit.reason.map(str::to_string),
+        };
+        let _ = state.storage.log_account_security(&ev).await;
+    }
+}
+
+/// Initiates username reminder & single-use password reset email delivery (`POST /api/auth/recovery/request`).
+///
+/// Always returns a uniform `200 OK` response for syntactically valid non-empty identifiers to
+/// prevent account enumeration regardless of whether a matching account or email exists.
+pub async fn request_account_recovery_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    peer: Option<ConnectInfo<SocketAddr>>,
+    headers: HeaderMap,
+    Json(req): Json<AccountRecoveryRequest>,
+) -> impl IntoResponse {
+    let ip = extract_client_ip(&headers, peer.map(|c| c.0.ip()));
+    let client_ip_sha256 = Some(sha256_hex(&ip));
+    let quotas = &state.storage.config().quotas;
+    let trimmed = req.identifier.trim();
+    let norm_id_opt = (!trimmed.is_empty() && trimmed.len() <= 254)
+        .then(|| trimmed.strip_prefix('@').unwrap_or(trimmed).to_lowercase());
+    let identifier_sha256 = norm_id_opt.as_deref().map(sha256_hex);
+
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "recovery_req_ip",
+            &ip,
+            quotas.max_recovery_requests_per_ip_per_hour,
+            Duration::from_secs(3600),
+        )
+        .await
+    {
+        emit_account_security_event(
+            &state,
+            AccountSecurityAudit {
+                event_type: AccountSecurityEventType::RecoveryRateLimited,
+                actor: anonymous_security_actor(),
+                identifier_sha256,
+                email_sha256: None,
+                client_ip_sha256,
+                request_id: None,
+                delivery_channel: None,
+                revoked_session_count: 0,
+                reason: Some("per_ip_limit"),
+            },
+        )
+        .await;
+        return too_many_requests_response(
+            format!("Recovery request rate limit exceeded; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+
+    let Some(norm_id) = norm_id_opt.filter(|_| !trimmed.chars().any(char::is_control)) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Please enter a valid email address or username" })),
+        )
+            .into_response();
+    };
+
+    let id_window_secs = quotas.recovery_email_window_mins.max(1).saturating_mul(60);
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record(
+            "recovery_req_id",
+            &norm_id,
+            quotas.max_recovery_requests_per_identifier_per_hour,
+            Duration::from_secs(id_window_secs),
+        )
+        .await
+    {
+        emit_account_security_event(
+            &state,
+            AccountSecurityAudit {
+                event_type: AccountSecurityEventType::RecoveryRateLimited,
+                actor: anonymous_security_actor(),
+                identifier_sha256,
+                email_sha256: None,
+                client_ip_sha256,
+                request_id: None,
+                delivery_channel: None,
+                revoked_session_count: 0,
+                reason: Some("per_identifier_limit"),
+            },
+        )
+        .await;
+        return too_many_requests_response(
+            format!("Too many recovery requests for this account; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+
+    match state.auth.request_password_reset(trimmed).await {
+        Ok(crate::auth::PasswordResetRequestOutcome::Issued(issued)) => {
+            let app_url = state
+                .storage
+                .config()
+                .email
+                .public_app_url
+                .trim_end_matches('/');
+            let reset_url = format!("{app_url}/?reset_token={}", issued.raw_token);
+            let request_id = format!("rec_{}", uuid::Uuid::now_v7());
+            let email_msg = OutboundEmail {
+                to_email: issued.to_email,
+                subject: "[Satya] Account Recovery & Password Reset".to_string(),
+                body_text: format!(
+                    "Hello {},\n\n\
+                    We received a request to recover your Satya account.\n\n\
+                    Your username is: @{}\n\n\
+                    To reset your password, open this link (valid for {} minutes, single-use):\n\
+                    {}\n\n\
+                    Or paste this reset token into the Account Recovery panel:\n\
+                    {}\n\n\
+                    If you did not request this, you can safely ignore this email; your password has not been changed.\n",
+                    issued.account.display_name,
+                    issued.account.username,
+                    issued.ttl_mins,
+                    reset_url,
+                    issued.raw_token,
+                ),
+                request_id: request_id.clone(),
+            };
+            let delivery_channel = match state.email_notifier.send_email(&email_msg).await {
+                Ok(res) if res.provider == "local_outbox" => "LOCAL_OUTBOX",
+                Ok(_) => "EMAIL",
+                Err(_) => "EMAIL_FAILED",
+            };
+            let actor = Participant::human(
+                &issued.account.user_id,
+                &issued.account.username,
+                &issued.account.display_name,
+                SessionRole::Participant,
+            );
+            emit_account_security_event(
+                &state,
+                AccountSecurityAudit {
+                    event_type: AccountSecurityEventType::RecoveryRequested,
+                    actor,
+                    identifier_sha256,
+                    email_sha256: Some(issued.email_sha256),
+                    client_ip_sha256,
+                    request_id: Some(request_id),
+                    delivery_channel: Some(delivery_channel.to_string()),
+                    revoked_session_count: 0,
+                    reason: None,
+                },
+            )
+            .await;
+        }
+        Ok(crate::auth::PasswordResetRequestOutcome::EmailRateLimited {
+            account,
+            email_sha256,
+            ..
+        }) => {
+            let actor = Participant::human(
+                &account.user_id,
+                &account.username,
+                &account.display_name,
+                SessionRole::Participant,
+            );
+            emit_account_security_event(
+                &state,
+                AccountSecurityAudit {
+                    event_type: AccountSecurityEventType::RecoveryRateLimited,
+                    actor,
+                    identifier_sha256,
+                    email_sha256: Some(email_sha256),
+                    client_ip_sha256,
+                    request_id: None,
+                    delivery_channel: None,
+                    revoked_session_count: 0,
+                    reason: Some("per_email_window_limit"),
+                },
+            )
+            .await;
+        }
+        Ok(crate::auth::PasswordResetRequestOutcome::NoMatch) | Err(_) => {
+            emit_account_security_event(
+                &state,
+                AccountSecurityAudit {
+                    event_type: AccountSecurityEventType::RecoveryIgnored,
+                    actor: anonymous_security_actor(),
+                    identifier_sha256,
+                    email_sha256: None,
+                    client_ip_sha256,
+                    request_id: None,
+                    delivery_channel: None,
+                    revoked_session_count: 0,
+                    reason: Some("no_matching_account_or_email"),
+                },
+            )
+            .await;
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(AccountRecoveryResponse {
+            status: "accepted".to_string(),
+            message: "If an account with an email on file matches that email or username, recovery instructions (including your username and a password reset link) have been sent.".to_string(),
+        }),
+    )
+        .into_response()
+}
+
+/// Validates a single-use password reset token, updates the user's password hash, and revokes all
+/// active auth/join tokens and live WebSocket sessions (`POST /api/auth/recovery/confirm`).
+pub async fn confirm_password_reset_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    peer: Option<ConnectInfo<SocketAddr>>,
+    headers: HeaderMap,
+    Json(req): Json<PasswordResetConfirmRequest>,
+) -> impl IntoResponse {
+    let ip = extract_client_ip(&headers, peer.map(|c| c.0.ip()));
+    let client_ip_sha256 = Some(sha256_hex(&ip));
+    let limit = state
+        .storage
+        .config()
+        .quotas
+        .max_recovery_confirms_per_ip_per_min;
+    if let Err(retry_secs) = state
+        .rate_limiter
+        .check_and_record("recovery_confirm_ip", &ip, limit, Duration::from_secs(60))
+        .await
+    {
+        emit_account_security_event(
+            &state,
+            AccountSecurityAudit {
+                event_type: AccountSecurityEventType::RecoveryRateLimited,
+                actor: anonymous_security_actor(),
+                identifier_sha256: None,
+                email_sha256: None,
+                client_ip_sha256,
+                request_id: None,
+                delivery_channel: None,
+                revoked_session_count: 0,
+                reason: Some("confirm_per_ip_limit"),
+            },
+        )
+        .await;
+        return too_many_requests_response(
+            format!("Too many password reset attempts; retry in {retry_secs}s"),
+            retry_secs,
+        );
+    }
+
+    match state
+        .auth
+        .confirm_password_reset(&req.token, &req.new_password)
+        .await
+    {
+        Ok((user, disconnected_sessions)) => {
+            state.disconnect_account_sockets(&user.user_id).await;
+            state.disconnect_user_session_sockets(&user.user_id).await;
+            for summary in &disconnected_sessions {
+                state
+                    .process_session_disconnect(
+                        summary,
+                        LifecycleEventType::ParticipantLeft,
+                        "Password reset completed",
+                    )
+                    .await;
+            }
+            let actor = Participant::human(
+                &user.user_id,
+                &user.username,
+                &user.display_name,
+                SessionRole::Participant,
+            );
+            let email_sha256 = user
+                .email
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|em| sha256_hex(&em.to_lowercase()));
+            emit_account_security_event(
+                &state,
+                AccountSecurityAudit {
+                    event_type: AccountSecurityEventType::PasswordResetCompleted,
+                    actor,
+                    identifier_sha256: None,
+                    email_sha256,
+                    client_ip_sha256,
+                    request_id: None,
+                    delivery_channel: None,
+                    revoked_session_count: disconnected_sessions.len() as i32,
+                    reason: Some("password_reset_completed"),
+                },
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(PasswordResetConfirmResponse {
+                    status: "reset".to_string(),
+                    username: user.username.clone(),
+                    message: format!(
+                        "Password updated for @{}. You can now log in with your new password.",
+                        user.username
+                    ),
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            let err_str = e.to_string();
+            let reason_code = if err_str.contains("Password must") {
+                "password_policy_violation"
+            } else {
+                "invalid_or_expired_token"
+            };
+            emit_account_security_event(
+                &state,
+                AccountSecurityAudit {
+                    event_type: AccountSecurityEventType::PasswordResetFailed,
+                    actor: anonymous_security_actor(),
+                    identifier_sha256: None,
+                    email_sha256: None,
+                    client_ip_sha256,
+                    request_id: None,
+                    delivery_channel: None,
+                    revoked_session_count: 0,
+                    reason: Some(reason_code),
+                },
+            )
+            .await;
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": err_str }))).into_response()
+        }
+    }
 }
 
 /// Creates a new password-protected session at `POST /api/sessions/create`.

@@ -31,6 +31,8 @@ pub mod subjects {
     pub const CAMPAIGN_DIRECTORY: &str = "com.satya.events.CampaignDirectoryEvent";
     /// Subject name for [`super::SessionAccessEvent`].
     pub const SESSION_ACCESS: &str = "com.satya.events.SessionAccessEvent";
+    /// Subject name for [`super::AccountSecurityEvent`].
+    pub const ACCOUNT_SECURITY: &str = "com.satya.events.AccountSecurityEvent";
 }
 
 /// Canonical Apache Iggy topic names corresponding to each Satya event stream.
@@ -61,6 +63,8 @@ pub mod topics {
     pub const CAMPAIGN_DIRECTORY: &str = "campaign-directory";
     /// Topic storing [`super::SessionAccessEvent`] records.
     pub const SESSION_ACCESS: &str = "session-access";
+    /// Topic storing [`super::AccountSecurityEvent`] records.
+    pub const ACCOUNT_SECURITY: &str = "account-security";
 }
 
 /// Schema evolution compatibility policy enforced for a registered subject.
@@ -898,5 +902,49 @@ pub struct SessionAccessEvent {
     /// Notification delivery channel (`"LIVE_WS"`, `"EMAIL"`, `"INBOX_ONLY"`).
     pub delivery_channel: Option<String>,
     /// Optional diagnostic reason or decision summary.
+    pub reason: Option<String>,
+}
+
+/// Specific account recovery or password reset audit event recorded by [`AccountSecurityEvent`]
+/// on `account-security` (`Topic 14`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AccountSecurityEventType {
+    /// A recovery email with username reminder and single-use reset token was dispatched.
+    RecoveryRequested,
+    /// A recovery request did not match an account with an email on file.
+    RecoveryIgnored,
+    /// A recovery or reset confirmation attempt was blocked by rate limiting.
+    RecoveryRateLimited,
+    /// A user successfully reset their password and had active tokens revoked.
+    PasswordResetCompleted,
+    /// A password reset confirmation failed token verification or password policy.
+    PasswordResetFailed,
+}
+
+/// Avro event (`v1`, `schema_id = 17`) emitted to `account-security` tracking account recovery
+/// requests, rate-limit blocks, password resets, and failures without storing plaintext secrets,
+/// emails, or IP addresses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountSecurityEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Specific account security audit event type.
+    pub event_type: AccountSecurityEventType,
+    /// Matched user account or anonymous observer placeholder when no account matched.
+    pub actor: Participant,
+    /// Lowercase SHA-256 hex digest of the normalized submitted identifier, if applicable.
+    pub identifier_sha256: Option<String>,
+    /// Lowercase SHA-256 hex digest of the resolved account email address, if applicable.
+    pub email_sha256: Option<String>,
+    /// Lowercase SHA-256 hex digest of the client IP address, if applicable.
+    pub client_ip_sha256: Option<String>,
+    /// Outbound recovery email correlation ID (`rec_<uuidv7>`), if an email was dispatched.
+    pub request_id: Option<String>,
+    /// Delivery channel used (`"EMAIL"`, `"LOCAL_OUTBOX"`, or `"EMAIL_FAILED"`).
+    pub delivery_channel: Option<String>,
+    /// Count of active sessions disconnected/revoked when a password reset completed.
+    pub revoked_session_count: i32,
+    /// Non-secret static reason code (`"per_email_window_limit"`, `"invalid_or_expired_token"`, etc.).
     pub reason: Option<String>,
 }
