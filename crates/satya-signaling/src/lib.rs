@@ -68,16 +68,20 @@ fn resolve_static_dir(rel: &'static str, manifest_fallback: &'static str) -> &'s
     }
 }
 
-/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg`, `/maps`, `/book`, `/campaign-book`, `/assets`, and `/docs-assets` serving,
-/// Backend GM REST endpoints (`/api/gm/sessions/:id/*`), and the `/ws/session` WebSocket upgrade route.
-pub fn build_router(state: Arc<SignalingAppState>) -> Router {
-    let pkg_dir = std::env::var("SATYA_PKG_DIR")
+pub(crate) fn resolve_pkg_dir() -> String {
+    std::env::var("SATYA_PKG_DIR")
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| {
             resolve_static_dir("pkg", concat!(env!("CARGO_MANIFEST_DIR"), "/../../pkg")).to_string()
-        });
+        })
+}
+
+/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg`, `/maps`, `/book`, `/campaign-book`, `/assets`, and `/docs-assets` serving,
+/// Backend GM REST endpoints (`/api/gm/sessions/:id/*`), and the `/ws/session` WebSocket upgrade route.
+pub fn build_router(state: Arc<SignalingAppState>) -> Router {
+    let pkg_dir = resolve_pkg_dir();
 
     Router::new()
         .route("/", get(index_handler))

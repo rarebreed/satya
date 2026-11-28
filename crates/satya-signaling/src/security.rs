@@ -354,9 +354,13 @@ pub async fn security_headers_middleware(
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.trim().eq_ignore_ascii_case("https"));
     let is_https = state.tls_enabled || forwarded_https;
+    let no_cache_asset = req.uri().path() == "/" || req.uri().path().starts_with("/pkg/");
 
     let mut resp = next.run(req).await;
     let headers = resp.headers_mut();
+    if no_cache_asset {
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    }
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),

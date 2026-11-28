@@ -43,9 +43,24 @@ fn too_many_requests_response(msg: String, retry_secs: u64) -> axum::response::R
     resp
 }
 
+fn current_wasm_pkg_version() -> String {
+    let wasm_path = std::path::PathBuf::from(crate::resolve_pkg_dir()).join("satya_web_bg.wasm");
+    let Ok(meta) = std::fs::metadata(&wasm_path) else {
+        return String::new();
+    };
+    let mtime_secs = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{mtime_secs}-{}", meta.len())
+}
+
 /// Renders the Leptos SSR HTML application shell at `GET /`.
 pub async fn index_handler() -> Html<String> {
-    Html(render_satya_app_html())
+    let ver = current_wasm_pkg_version();
+    Html(render_satya_app_html().replace("__SATYA_PKG_VER__", &ver))
 }
 
 /// Registers a new user account at `POST /api/auth/register`.

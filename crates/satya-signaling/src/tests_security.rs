@@ -332,6 +332,33 @@ async fn test_wave2_security_headers_and_authenticated_maps_route() {
     assert!(hdrs.get("permissions-policy").is_some());
     assert!(hdrs.get("cross-origin-opener-policy").is_some());
     assert!(hdrs.get("content-security-policy").is_some());
+    assert_eq!(hdrs.get(header::CACHE_CONTROL).unwrap(), "no-cache");
+    let index_html = String::from_utf8(
+        to_bytes(index_resp.into_body(), 4 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(!index_html.contains("__SATYA_PKG_VER__"));
+
+    let pkg_js_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/pkg/satya_web.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    if pkg_js_resp.status() == StatusCode::OK {
+        assert_eq!(
+            pkg_js_resp.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-cache"
+        );
+    }
 
     // Unauthenticated `/maps/*` is rejected with 401.
     let unauth_map = app

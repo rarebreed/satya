@@ -80,6 +80,35 @@ window.satyaToggleAppearanceSettings = () => {
     const p = document.getElementById("menu-appearance-settings-panel");
     if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
 };
+window.satyaCloseRecoveryPanel = () => {
+    const p = document.getElementById("auth-recovery-panel");
+    if (p) p.style.display = "none";
+    for (const id of ["recovery-token", "recovery-new-password", "recovery-confirm-password"]) {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    }
+    const fb = document.getElementById("auth-recovery-feedback");
+    if (fb) fb.textContent = "";
+};
+window.satyaToggleRecoveryPanel = () => {
+    const p = document.getElementById("auth-recovery-panel");
+    if (!p) return;
+    const isHidden = p.style.display === "none" || p.style.display === "";
+    if (isHidden) {
+        p.style.display = "flex";
+        const ident = document.getElementById("recovery-identifier");
+        if (ident && !ident.value.trim()) {
+            const em = document.getElementById("auth-email");
+            const un = document.getElementById("auth-username");
+            const prefill = (em && em.value.trim()) || (un && un.value.trim()) || "";
+            if (prefill) ident.value = prefill;
+        }
+        const fb = document.getElementById("auth-recovery-feedback");
+        if (fb) fb.textContent = "";
+    } else {
+        window.satyaCloseRecoveryPanel();
+    }
+};
 window.satyaToggleTabIcons = () => satyaSyncAppearance(true);
 window.satyaApplyAppearanceSettings = () => satyaSyncAppearance(true);
 window.satyaSelectThemePreset = (t) => {
@@ -97,8 +126,12 @@ window.satyaResetAppearanceSettings = () => {
     satyaSyncAppearance(true);
 };
 satyaSyncAppearance(false);
-import init from "/pkg/satya_web.js";
-init().then(() => satyaSyncAppearance(false)).catch((err) => console.warn("Satya Wasm module init:", err));
+const SATYA_PKG_VER = "__SATYA_PKG_VER__";
+const satyaPkgQuery = SATYA_PKG_VER && !SATYA_PKG_VER.startsWith("__") ? "?v=" + SATYA_PKG_VER : "";
+import("/pkg/satya_web.js" + satyaPkgQuery)
+    .then((mod) => mod.default({ module_or_path: "/pkg/satya_web_bg.wasm" + satyaPkgQuery }))
+    .then(() => satyaSyncAppearance(false))
+    .catch((err) => console.warn("Satya Wasm module init:", err));
 "#;
 
 /// Renders the full-stack Leptos application shell for Satya WebRTC, Chat & Avro Telemetry.
