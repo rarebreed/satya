@@ -867,8 +867,8 @@ pub fn push_furniture_glyph_with_mode(
                 r#"stroke-width="1""#,
             );
         }
-        PropKind::Car | PropKind::UtilityVan => {
-            let van = p.kind == PropKind::UtilityVan;
+        PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck => {
+            let van = matches!(p.kind, PropKind::UtilityVan | PropKind::PickupTruck);
             let body = if van {
                 pick(v, &["#e2e4e6", "#3d4f60", "#586257", "#2c3034", "#8a3b32"])
             } else {
@@ -1433,7 +1433,23 @@ pub fn push_furniture_glyph_with_mode(
         | PropKind::ConferenceTable
         | PropKind::CopyMachine
         | PropKind::StreetLamp
-        | PropKind::BusShelter => {
+        | PropKind::BusShelter
+        | PropKind::Urinal
+        | PropKind::ChangingTable
+        | PropKind::SnackVendingMachine
+        | PropKind::FastFoodCounter
+        | PropKind::SodaFountain
+        | PropKind::DriveThruMenuBoard
+        | PropKind::HostStand
+        | PropKind::DeepFryerStation
+        | PropKind::Horse
+        | PropKind::Cow
+        | PropKind::Pig
+        | PropKind::Chicken
+        | PropKind::Goat
+        | PropKind::Dog
+        | PropKind::Silo
+        | PropKind::Wheelbarrow => {
             let _ = crate::wasm_client::map_2d_art_props_packs::push_pack_furniture_glyph(
                 out, p.kind, lw, lh, painted, v,
             );

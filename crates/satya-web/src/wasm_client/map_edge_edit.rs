@@ -59,6 +59,8 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::ShowerStall,
             PropKind::SpaBath,
             PropKind::Toilet,
+            PropKind::Urinal,
+            PropKind::ChangingTable,
             PropKind::BathroomSink,
             PropKind::WasherDryer,
             PropKind::FloorClothes,
@@ -81,6 +83,11 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::CommercialPrepTable,
             PropKind::CommercialGrillHood,
             PropKind::BuffetCounter,
+            PropKind::FastFoodCounter,
+            PropKind::SodaFountain,
+            PropKind::DriveThruMenuBoard,
+            PropKind::HostStand,
+            PropKind::DeepFryerStation,
             PropKind::PatioUmbrellaTable,
             PropKind::DisplayRack,
             PropKind::CheckoutCounter,
@@ -89,6 +96,7 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::ClothingRack,
             PropKind::PharmacyCounter,
             PropKind::VendingMachine,
+            PropKind::SnackVendingMachine,
             PropKind::AtmKiosk,
         ],
     ),
@@ -191,9 +199,18 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::CropRow,
             PropKind::HayBaleStack,
             PropKind::LivestockTrough,
+            PropKind::Silo,
+            PropKind::Wheelbarrow,
+            PropKind::Horse,
+            PropKind::Cow,
+            PropKind::Pig,
+            PropKind::Chicken,
+            PropKind::Goat,
+            PropKind::Dog,
             PropKind::PlanterTable,
             PropKind::ConservatorySpecimenIsland,
             PropKind::Car,
+            PropKind::PickupTruck,
             PropKind::UtilityVan,
             PropKind::Tractor,
         ],
@@ -308,7 +325,13 @@ pub const fn next_painted_edge(cur: Option<WallEdgeKind>) -> Option<WallEdgeKind
         Some(WallEdgeKind::Wall) => Some(WallEdgeKind::DoorClosed),
         Some(WallEdgeKind::DoorClosed) => Some(WallEdgeKind::DoorOpen),
         Some(WallEdgeKind::DoorOpen) => Some(WallEdgeKind::Window),
-        Some(WallEdgeKind::Window) => None,
+        Some(
+            WallEdgeKind::Window
+            | WallEdgeKind::FenceWood
+            | WallEdgeKind::FenceWire
+            | WallEdgeKind::LowWallStone
+            | WallEdgeKind::StallPartition,
+        ) => None,
     }
 }
 

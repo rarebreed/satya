@@ -15,10 +15,22 @@ PROP_STYLE_PREAMBLE = (
     "CHROMA-KEY BACKGROUND:"
 )
 
+PROP_GREEN_CHROMA_PREAMBLE = (
+    "Strictly 90-degree orthographic top-down bird's-eye view looking straight down at "
+    "the back/top surfaces, realistic hand-painted gouache and ink tabletop RPG battlemap "
+    "prop illustration (Czepeku / Dungeondraft style), crisp tactile materials, subtle "
+    "self-occlusion and fine surface details, uniform zenithal flat lighting, NO perspective "
+    "tilt, NO isometric angle, NO side view, NO floor tiles, NO cast drop shadow on the "
+    "background, NO border, NO watermark, NO text labels, single centered isolated object "
+    "with a clean small margin on a COMPLETELY FLAT UNIFORM SOLID NEON GREEN (#00FF00) "
+    "CHROMA-KEY BACKGROUND:"
+)
 
-def prop_prompt(body: str) -> str:
+
+def prop_prompt(body: str, *, key_color: str = "magenta") -> str:
     """Wrap a prop body prompt with the standard 90-degree top-down chroma-key preamble."""
-    return f"{PROP_STYLE_PREAMBLE} {body}"
+    preamble = PROP_GREEN_CHROMA_PREAMBLE if key_color == "green" else PROP_STYLE_PREAMBLE
+    return f"{preamble} {body}"
 
 
 @dataclass(frozen=True)

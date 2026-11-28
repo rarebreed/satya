@@ -162,9 +162,9 @@ fn build_compound_wall(
     for x in comp.x0..comp.x1 {
         let is_grille = (x - comp.x0) % 4 == 1 || (x - comp.x0) % 4 == 2;
         let (kind, mat) = if is_grille {
-            (WallEdgeKind::Window, MaterialClass::SheetSteel)
+            (WallEdgeKind::FenceWood, MaterialClass::SolidWood)
         } else {
-            (WallEdgeKind::Wall, MaterialClass::Brick)
+            (WallEdgeKind::LowWallStone, MaterialClass::ConcreteBlock)
         };
         if north_gate_w > 0 && x >= north_gate_x0 && x < north_gate_x0 + north_gate_w {
             b.remove_edge(x, comp.y0, EdgeSide::North);

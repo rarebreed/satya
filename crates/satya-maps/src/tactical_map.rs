@@ -73,7 +73,7 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 29] {
+    pub enum SectorPreset [count = 32] {
         #[default]
         ResidentialApartment => {
             code: "residential_apartment",
@@ -92,6 +92,24 @@ define_coded_enum! {
             label: "Neighborhood Corner Bar",
             subtitle: "Neighborhood bar with a long counter, booths, pool table & back rooms",
             aliases: ["bar", "pub", "tavern", "saloon"],
+        },
+        FastFoodRestaurant => {
+            code: "fast_food_restaurant",
+            label: "Fast Food Drive-Thru",
+            subtitle: "Single-story quick-service restaurant with wrapping drive-thru lane, menu board, soda fountain & restrooms",
+            aliases: ["fast_food", "drive_thru", "burger", "quick_service"],
+        },
+        BistroDiner => {
+            code: "bistro_diner",
+            label: "Streetfront Bistro & Diner",
+            subtitle: "Casual cafe & diner (1F + 2F mezzanine loft) with booth rows, diner counter & stone patio seating",
+            aliases: ["bistro", "diner", "cafe", "eatery", "deli"],
+        },
+        FineDiningRestaurant => {
+            code: "fine_dining_restaurant",
+            label: "Fine Dining & Banquet Hall",
+            subtitle: "Upscale restaurant (1F grand hall + 2F private dining rooms) with cocktail bar, buffet, piano & stone patio",
+            aliases: ["fine_dining", "restaurant", "banquet", "steakhouse", "upscale_dining"],
         },
         UrbanCrossroads => {
             code: "urban_crossroads",
@@ -259,7 +277,7 @@ pub struct SectorPresetGroup {
     pub presets: &'static [SectorPreset],
 }
 
-/// Canonical grouped `<optgroup>` hierarchy covering all `29` [`SectorPreset`] variants without overlap.
+/// Canonical grouped `<optgroup>` hierarchy covering all `32` [`SectorPreset`] variants without overlap.
 pub const SECTOR_PRESET_GROUPS: &[SectorPresetGroup] = &[
     SectorPresetGroup {
         label: "Awakened 2035 Venues",
@@ -277,6 +295,9 @@ pub const SECTOR_PRESET_GROUPS: &[SectorPresetGroup] = &[
             SectorPreset::DowntownCommercial,
             SectorPreset::ShoppingPlaza,
             SectorPreset::ShoppingMall,
+            SectorPreset::FastFoodRestaurant,
+            SectorPreset::BistroDiner,
+            SectorPreset::FineDiningRestaurant,
             SectorPreset::CornerBar,
             SectorPreset::OfficeFloor,
         ],
@@ -407,6 +428,7 @@ impl SectorPreset {
             | Self::DerelictCorridor
             | Self::OrbitalAirlock
             | Self::SatyangSafehouse => (24, 18),
+            Self::FastFoodRestaurant | Self::BistroDiner => (28, 22),
             Self::OfficeFloor
             | Self::UrbanCrossroads
             | Self::WoodedPark
@@ -416,7 +438,8 @@ impl SectorPreset {
             | Self::UrbanResidential
             | Self::ProjectsHighDensity
             | Self::CommunityClinicAnnex
-            | Self::CorporateServerBunker => (36, 26),
+            | Self::CorporateServerBunker
+            | Self::FineDiningRestaurant => (36, 26),
             Self::GardenEstate
             | Self::DockingBay
             | Self::SuburbanNeighborhood
@@ -497,6 +520,14 @@ pub fn generate_procedural_sector_with_options(
     }
     if matches!(
         preset,
+        SectorPreset::FastFoodRestaurant
+            | SectorPreset::BistroDiner
+            | SectorPreset::FineDiningRestaurant
+    ) {
+        return crate::map_gen_restaurants::generate_restaurant_sector(preset, w, h, seed);
+    }
+    if matches!(
+        preset,
         SectorPreset::Hospital | SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall
     ) {
         return crate::map_gen_civic_retail::generate_civic_or_retail_sector(preset, w, h, seed);
@@ -574,16 +605,16 @@ fn eval_continuous_ray(
         if let Some(t) = intersect_segment_edge(origin_m, target_m, edge) {
             let hit_dist = t * seg_len;
             match edge.kind {
-                WallEdgeKind::Wall | WallEdgeKind::DoorClosed => {
+                WallEdgeKind::Wall | WallEdgeKind::DoorClosed | WallEdgeKind::StallPartition => {
                     obs.blocked = true;
                     return obs;
                 }
-                WallEdgeKind::Window => {
+                WallEdgeKind::Window | WallEdgeKind::FenceWood | WallEdgeKind::LowWallStone => {
                     if hit_dist > 0.85 {
                         obs.half_cover = true;
                     }
                 }
-                WallEdgeKind::DoorOpen => {}
+                WallEdgeKind::DoorOpen | WallEdgeKind::FenceWire => {}
             }
         }
     }

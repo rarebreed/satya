@@ -415,7 +415,7 @@ pub fn sync_battlemap_svg_host() {
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
-fn apply_battlemap_view_chrome(battlemap_on: bool) {
+pub(crate) fn apply_battlemap_view_chrome(battlemap_on: bool) {
     set_text(
         "btn-map-view-mode",
         if battlemap_on {

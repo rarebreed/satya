@@ -677,6 +677,9 @@ mod tests {
                             | crate::tactical_map::SectorPreset::DowntownCommercial
                             | crate::tactical_map::SectorPreset::Hospital
                             | crate::tactical_map::SectorPreset::ShoppingPlaza
+                            | crate::tactical_map::SectorPreset::FastFoodRestaurant
+                            | crate::tactical_map::SectorPreset::BistroDiner
+                            | crate::tactical_map::SectorPreset::FineDiningRestaurant
                             | crate::tactical_map::SectorPreset::Farms
                             | crate::tactical_map::SectorPreset::BotanicalGarden
                             | crate::tactical_map::SectorPreset::ManufacturingPlant
@@ -709,7 +712,10 @@ mod tests {
                             }
                             if matches!(
                                 p.kind,
-                                PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
+                                PropKind::Car
+                                    | PropKind::UtilityVan
+                                    | PropKind::PickupTruck
+                                    | PropKind::JerseyBarrier
                             ) {
                                 assert!(
                                     !top_kind

@@ -239,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             "batch8",
             "batch9",
             "batch10",
+            "batch11",
             "packs",
             "remaining",
             "all",

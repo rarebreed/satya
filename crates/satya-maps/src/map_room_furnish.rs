@@ -17,6 +17,7 @@ use crate::map_interior_gen::{Rng, Room, Side};
 use crate::tactical_map_edges::WallEdgeIndex;
 
 /// Semantic functional role of an interior room or semi-outdoor zone.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Role {
     Living,
@@ -39,6 +40,9 @@ pub(crate) enum Role {
     BarHall,
     Storage,
     Restroom,
+    RestroomMen,
+    RestroomWomen,
+    RestroomFamily,
     BackKitchen,
     Bullpen,
     ConferenceRoom,
@@ -85,6 +89,8 @@ const fn requires_solid_wall(kind: PropKind) -> bool {
             | PropKind::MedicalCounter
             | PropKind::BathroomSink
             | PropKind::Toilet
+            | PropKind::Urinal
+            | PropKind::ChangingTable
             | PropKind::ShowerStall
             | PropKind::Bathtub
             | PropKind::SpaBath
@@ -247,7 +253,11 @@ impl Furnisher {
         len: Option<i32>,
         require_wall: bool,
     ) -> Option<MapPropPlacement> {
-        let rot = side.rot();
+        let rot = if kind == PropKind::Booth {
+            (side.rot() + 90) % 360
+        } else {
+            side.rot()
+        };
         let probe = make_prop(kind, 0, 0, rot, len, 0);
         let (fw, fh) = (probe.w_cells, probe.h_cells);
         let mut cands: Vec<(i32, i32)> = match side {
@@ -743,11 +753,25 @@ impl Furnisher {
                 let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::Planter, r);
             }
-            Role::Bathroom | Role::MasterBath | Role::Restroom => {
+            Role::Bathroom
+            | Role::MasterBath
+            | Role::Restroom
+            | Role::RestroomMen
+            | Role::RestroomWomen
+            | Role::RestroomFamily => {
                 // Guarantee core sanitary fixtures first so tight layouts never drop toilet or vanity.
                 let _ = self.against_any_wall(P::Toilet, r, None);
-                if role == Role::Restroom {
+                if matches!(
+                    role,
+                    Role::Restroom | Role::RestroomMen | Role::RestroomWomen
+                ) {
                     let _ = self.against_any_wall(P::Toilet, r, None);
+                }
+                if role == Role::RestroomMen {
+                    let _ = self.against_any_wall(P::Urinal, r, None);
+                }
+                if role == Role::RestroomFamily && r.w() >= 3 && r.h() >= 3 {
+                    let _ = self.against_any_wall(P::ChangingTable, r, None);
                 }
                 let _ = self.against_any_wall(
                     P::BathroomSink,
@@ -758,7 +782,10 @@ impl Furnisher {
                         None
                     },
                 );
-                if role != Role::Restroom {
+                if !matches!(
+                    role,
+                    Role::Restroom | Role::RestroomMen | Role::RestroomWomen | Role::RestroomFamily
+                ) {
                     if role == Role::MasterBath {
                         if r.w() >= 3 && r.h() >= 3 {
                             let kind = if self.rng.chance(1, 2) {
@@ -806,6 +833,13 @@ impl Furnisher {
             }
             Role::BarHall => self.furnish_bar_hall(r),
             Role::Bullpen => {
+                if r.w() >= 14 && r.h() >= 10 {
+                    for py in (r.y0 + 3..r.y1 - 2).step_by(6) {
+                        for px in (r.x0 + 3..r.x1 - 2).step_by(6) {
+                            let _ = self.try_place(P::StructuralPillar, px, py, 0, None, r);
+                        }
+                    }
+                }
                 let side = if self.rng.chance(1, 2) {
                     Side::North
                 } else {
@@ -833,6 +867,10 @@ impl Furnisher {
                 let _ = self.against_any_wall(P::FilingCabinet, r, None);
                 let _ = self.against_any_wall(P::FilingCabinet, r, None);
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
+                if r.area() >= 48 {
+                    let _ = self.against_any_wall(P::VendingMachine, r, None);
+                    let _ = self.against_any_wall(P::SnackVendingMachine, r, None);
+                }
                 let _ = self.in_corner(P::WaterCooler, r);
                 let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::FireExtinguisher, r);
@@ -869,6 +907,7 @@ impl Furnisher {
                     .against_wall(P::Fridge, r, side, None)
                     .or_else(|| self.against_any_wall(P::Fridge, r, None));
                 let _ = self.against_any_wall(P::VendingMachine, r, None);
+                let _ = self.against_any_wall(P::SnackVendingMachine, r, None);
                 let _ = self.in_corner(P::CopyMachine, r);
                 let _ = self.in_corner(P::WaterCooler, r);
                 let _ = self.in_corner(P::TrashCan, r);
@@ -1011,6 +1050,9 @@ pub(crate) fn emit_room_floor_surface(
         Role::ServerCloset => Some(SurfaceFeatureKind::SteelPlateFloor),
         Role::Bathroom
         | Role::Restroom
+        | Role::RestroomMen
+        | Role::RestroomWomen
+        | Role::RestroomFamily
         | Role::Kitchen
         | Role::BackKitchen
         | Role::Sunroom
@@ -1057,4 +1099,60 @@ pub(crate) fn emit_room_floor_surface(
         variant_seed,
         tint_rgb: None,
     })
+}
+
+/// Places a regular structural column grid (`PropKind::StructuralPillar`) inside large spans (`>= 10x8`),
+/// skipping doorways, existing props, and walls so movement aisles stay open.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn place_structural_pillar_grid(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    step_x: i32,
+    step_y: i32,
+    wall_edges: &[MapWallEdge],
+    props: &mut Vec<MapPropPlacement>,
+    seed: u32,
+) {
+    let bw = x1 - x0;
+    let bh = y1 - y0;
+    if bw < 10 || bh < 8 {
+        return;
+    }
+    let sx = step_x.max(4);
+    let sy = step_y.max(4);
+    let mut idx = 0u32;
+    for py in ((y0 + 3)..(y1 - 2)).step_by(sy as usize) {
+        for px in ((x0 + 3)..(x1 - 2)).step_by(sx as usize) {
+            let near_door = wall_edges.iter().any(|e| {
+                e.kind.is_door()
+                    && match e.side {
+                        EdgeSide::West => (e.y - py).abs() <= 1 && (e.x == px || e.x == px + 1),
+                        EdgeSide::North => (e.x - px).abs() <= 1 && (e.y == py || e.y == py + 1),
+                    }
+            });
+            let blocked_edge = wall_edges.iter().any(|e| {
+                !e.kind.is_door()
+                    && match e.side {
+                        EdgeSide::West => (e.x == px || e.x == px + 1) && e.y == py,
+                        EdgeSide::North => (e.y == py || e.y == py + 1) && e.x == px,
+                    }
+            });
+            let overlaps_prop = props
+                .iter()
+                .any(|p| !prop_spec(p.kind).floor_layer && p.covers(px, py));
+            if !near_door && !blocked_edge && !overlaps_prop {
+                props.push(make_prop(
+                    PropKind::StructuralPillar,
+                    px,
+                    py,
+                    0,
+                    None,
+                    seed.wrapping_add(idx),
+                ));
+                idx += 1;
+            }
+        }
+    }
 }

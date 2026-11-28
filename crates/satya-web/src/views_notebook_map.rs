@@ -557,6 +557,10 @@ pub fn NotebookMapPane() -> impl IntoView {
                             <option value="door_closed">"Closed Door"</option>
                             <option value="door_open">"Open Door"</option>
                             <option value="window">"Window Sill"</option>
+                            <option value="fence_wood">"Wooden Fence"</option>
+                            <option value="fence_wire">"Wire / Chain-Link Fence"</option>
+                            <option value="low_wall_stone">"Stone Low Wall"</option>
+                            <option value="stall_partition">"Restroom Stall Divider"</option>
                             <option value="erase">"Remove Wall / Open"</option>
                         </select>
                     </label>

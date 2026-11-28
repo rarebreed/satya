@@ -146,6 +146,10 @@ fn edge_barrier_entry(kind: WallEdgeKind, material: MaterialClass) -> Intercepte
         WallEdgeKind::DoorClosed => format!("Closed {} door", material.label()),
         WallEdgeKind::Window => "Window pane / sill".to_string(),
         WallEdgeKind::DoorOpen => "Open doorway".to_string(),
+        WallEdgeKind::FenceWood => "Wooden fence".to_string(),
+        WallEdgeKind::FenceWire => "Wire fence".to_string(),
+        WallEdgeKind::LowWallStone => "Outdoor stone wall".to_string(),
+        WallEdgeKind::StallPartition => "Restroom stall partition".to_string(),
     };
     InterceptedBarrier {
         label,
@@ -200,12 +204,16 @@ pub fn collect_ray_barriers(
     );
     let mut ordered: Vec<OrderedBarrierHit> = Vec::new();
     for edge in scene.edges {
-        if matches!(edge.kind, WallEdgeKind::DoorOpen) {
+        if matches!(edge.kind, WallEdgeKind::DoorOpen | WallEdgeKind::FenceWire) {
             continue;
         }
         if let Some(t) = intersect_segment_edge(attacker_m, target_m, edge) {
             let dist_m = t * seg_len;
-            if matches!(edge.kind, WallEdgeKind::Window) && dist_m <= 0.85 {
+            if matches!(
+                edge.kind,
+                WallEdgeKind::Window | WallEdgeKind::FenceWood | WallEdgeKind::LowWallStone
+            ) && dist_m <= 0.85
+            {
                 continue;
             }
             ordered.push((

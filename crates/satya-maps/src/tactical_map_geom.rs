@@ -262,7 +262,10 @@ pub fn prop_intersects_circle(p: &MapPropPlacement, cx_m: f32, cy_m: f32, radius
 /// Whether world point `(wx_m, wy_m)` hits a vehicle's front hood / engine block at any `0..360°` orientation.
 #[must_use]
 pub fn vehicle_point_is_engine_bay(p: &MapPropPlacement, wx_m: f32, wy_m: f32) -> bool {
-    if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
+    if !matches!(
+        p.kind,
+        PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck
+    )
         || !prop_contains_point(p, wx_m, wy_m, false)
     {
         return false;
@@ -467,7 +470,10 @@ pub fn intersect_segment_prop(
     let (t0, t1) = best_t?;
     let mut is_engine_bay = false;
     let mut material = spec.material;
-    if matches!(p.kind, PropKind::Car | PropKind::UtilityVan) {
+    if matches!(
+        p.kind,
+        PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck
+    ) {
         let hood_y = vehicle_hood_y_min_local(p);
         if intersect_segment_aabb(
             la,
@@ -764,7 +770,7 @@ fn prop_slices_wall_segment(p: &MapPropPlacement, a: (f32, f32), b: (f32, f32)) 
 pub fn prop_crosses_wall_edge(prop: &MapPropPlacement, edges: &[MapWallEdge]) -> bool {
     edges
         .iter()
-        .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::DoorClosed))
+        .filter(|e| e.kind.blocks_movement())
         .any(|e| {
             let (a, b) = edge_endpoints_m(e);
             prop_slices_wall_segment(prop, a, b)

@@ -2257,7 +2257,7 @@ fn community_clinic_annex_is_richly_furnished_and_valid() {
                 !prop_crosses_wall_edge(p, &req.wall_edges),
                 "1F {w}x{h} prop crosses wall edge: {p:?}"
             );
-            if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan) {
+            if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck) {
                 let fp = p.footprint_m();
                 if let Some(top) = topmost_surface_at_m(&req.surfaces, fp.cx_m, fp.cy_m) {
                     assert_ne!(
@@ -2381,7 +2381,7 @@ fn corporate_bunker_and_safehouse_are_richly_furnished_and_valid() {
                 && top.kind == SurfaceFeatureKind::AsphaltRoad
             {
                 assert!(
-                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan),
+                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck),
                     "CorporateServerBunker {w}x{h} placed non-vehicle {:?} on AsphaltRoad",
                     p.kind
                 );
@@ -2446,7 +2446,7 @@ fn corporate_bunker_and_safehouse_are_richly_furnished_and_valid() {
                 && top.kind == SurfaceFeatureKind::AsphaltRoad
             {
                 assert!(
-                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan),
+                    matches!(p.kind, PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck),
                     "SatyangSafehouse {w}x{h} placed non-vehicle {:?} on AsphaltRoad",
                     p.kind
                 );
@@ -2690,7 +2690,7 @@ fn enriched_sectors_use_new_prop_packs_and_are_valid() {
                     assert!(
                         matches!(
                             p.kind,
-                            PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
+                            PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck | PropKind::JerseyBarrier
                         ),
                         "{preset:?} ({w}x{h}) placed non-vehicle {:?} on AsphaltRoad",
                         p.kind
@@ -2733,6 +2733,9 @@ fn formal_commercial_and_civic_props_align_orthogonally() {
         (SectorPreset::ShoppingPlaza, 32, 24),
         (SectorPreset::DowntownCommercial, 24, 18),
         (SectorPreset::UrbanCrossroads, 26, 20),
+        (SectorPreset::FastFoodRestaurant, 28, 22),
+        (SectorPreset::BistroDiner, 28, 22),
+        (SectorPreset::FineDiningRestaurant, 36, 26),
         (SectorPreset::BotanicalGarden, 28, 22),
         (SectorPreset::ManufacturingPlant, 28, 22),
         (SectorPreset::Warehouse, 28, 22),
@@ -2753,17 +2756,24 @@ fn formal_commercial_and_civic_props_align_orthogonally() {
                         | PropKind::MallKiosk
                         | PropKind::EspressoCounter
                         | PropKind::CheckoutCounter
+                        | PropKind::FastFoodCounter
+                        | PropKind::SodaFountain
+                        | PropKind::DeepFryerStation
+                        | PropKind::HostStand
                         | PropKind::PharmacyCounter
                         | PropKind::PatioUmbrellaTable
                         | PropKind::BusShelter
                         | PropKind::AtmKiosk
                         | PropKind::VendingMachine
+                        | PropKind::SnackVendingMachine
                         | PropKind::RoundTable
                         | PropKind::PlanterTable
                         | PropKind::ConservatorySpecimenIsland
                         | PropKind::PalletRack
                         | PropKind::ShippingContainer
                         | PropKind::PoolTable
+                        | PropKind::Booth
+                        | PropKind::BarCounter
                 ) {
                     assert!(
                         p.rotation_deg.rem_euclid(90) == 0,
@@ -2775,4 +2785,152 @@ fn formal_commercial_and_civic_props_align_orthogonally() {
             }
         }
     }
+}
+
+#[test]
+fn restroom_suites_restaurants_farmstead_plant_and_pillars_generate_cleanly() {
+    use satya_schema::WallEdgeKind;
+
+    // 1. Public Restrooms (Men's Urinal + StallPartition + Women + Family ChangingTable).
+    for (preset, w, h) in [
+        (SectorPreset::Hospital, 48, 36),
+        (SectorPreset::ShoppingMall, 48, 36),
+        (SectorPreset::FineDiningRestaurant, 36, 26),
+        (SectorPreset::ManufacturingPlant, 48, 36),
+    ] {
+        let sec = generate_procedural_sector(preset, w, h, 42);
+        assert!(
+            sec.wall_edges
+                .iter()
+                .any(|e| e.kind == WallEdgeKind::StallPartition),
+            "{preset:?} missing StallPartition restroom dividers"
+        );
+        assert!(
+            sec.props.iter().any(|p| p.kind == PropKind::Urinal),
+            "{preset:?} missing Men's restroom Urinal"
+        );
+    }
+    let fine_large = generate_procedural_sector(SectorPreset::FineDiningRestaurant, 48, 36, 42);
+    assert!(
+        fine_large
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::ChangingTable),
+        "Large FineDiningRestaurant should include Family Restroom ChangingTable"
+    );
+
+    // 2. Three Restaurant Presets + Floor Stacks.
+    let fast = generate_procedural_sector(SectorPreset::FastFoodRestaurant, 28, 22, 11);
+    assert!(fast.floors.is_empty(), "FastFoodRestaurant must remain single-story 1F");
+    for req in [
+        PropKind::FastFoodCounter,
+        PropKind::SodaFountain,
+        PropKind::DeepFryerStation,
+        PropKind::DriveThruMenuBoard,
+        PropKind::Booth,
+    ] {
+        assert!(
+            fast.props.iter().any(|p| p.kind == req),
+            "FastFoodRestaurant missing {req:?}"
+        );
+    }
+
+    let bistro = generate_procedural_sector(SectorPreset::BistroDiner, 28, 22, 17);
+    assert_eq!(bistro.floors.len(), 2, "BistroDiner 28x22 should generate 2F mezzanine loft");
+    assert!(bistro.props.iter().any(|p| p.kind == PropKind::HostStand));
+    assert!(bistro.props.iter().any(|p| p.kind == PropKind::BarCounter));
+    assert!(bistro.wall_edges.iter().any(|e| e.kind == WallEdgeKind::LowWallStone));
+
+    assert_eq!(fine_large.floors.len(), 2, "FineDiningRestaurant 48x36 should generate 2F private dining");
+    assert!(
+        fine_large
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::StructuralPillar),
+        "FineDiningRestaurant should place StructuralPillar columns"
+    );
+    assert!(fine_large.props.iter().any(|p| p.kind == PropKind::BuffetCounter));
+
+    // 3. CornerBar contiguous long BarCounter (1 multi-cell counter per bar run).
+    let bar = generate_procedural_sector(SectorPreset::CornerBar, 24, 18, 42);
+    assert!(
+        bar.props
+            .iter()
+            .any(|p| p.kind == PropKind::BarCounter && p.w_cells.max(p.h_cells) >= 3),
+        "CornerBar should place a single multi-cell BarCounter instead of 1x1 segments"
+    );
+
+    // 4. Farmstead Overhaul (`PickupTruck`, Barn Stalls, Pens, Livestock, `Silo`, `Wheelbarrow`, Fences/Walls).
+    let farm = generate_procedural_sector(SectorPreset::Farms, 48, 36, 42);
+    for req in [
+        PropKind::PickupTruck,
+        PropKind::Horse,
+        PropKind::Cow,
+        PropKind::Pig,
+        PropKind::Chicken,
+        PropKind::Goat,
+        PropKind::Dog,
+        PropKind::Silo,
+        PropKind::Wheelbarrow,
+    ] {
+        assert!(
+            farm.props.iter().any(|p| p.kind == req),
+            "Farms 48x36 missing {req:?}"
+        );
+    }
+    for wk in [
+        WallEdgeKind::FenceWood,
+        WallEdgeKind::FenceWire,
+        WallEdgeKind::LowWallStone,
+    ] {
+        assert!(
+            farm.wall_edges.iter().any(|e| e.kind == wk),
+            "Farms 48x36 missing outdoor barrier {wk:?}"
+        );
+    }
+    assert!(crate::all_walkable_areas_connected(
+        48,
+        36,
+        &farm.wall_edges,
+        &farm.props
+    ));
+
+    // 5. Dense ManufacturingPlant + StructuralPillar + Vending Machines + FenceWire yard.
+    let plant = generate_procedural_sector(SectorPreset::ManufacturingPlant, 48, 36, 42);
+    for req in [
+        PropKind::StructuralPillar,
+        PropKind::VendingMachine,
+        PropKind::SnackVendingMachine,
+        PropKind::Urinal,
+        PropKind::ConveyorBelt,
+        PropKind::RoboticAssemblyArm,
+        PropKind::TestBench,
+        PropKind::SolderingStation,
+    ] {
+        assert!(
+            plant.props.iter().any(|p| p.kind == req),
+            "ManufacturingPlant 48x36 missing {req:?}"
+        );
+    }
+    assert!(
+        plant
+            .props
+            .iter()
+            .filter(|p| p.kind == PropKind::ConveyorBelt)
+            .count()
+            >= 4,
+        "ManufacturingPlant 48x36 should contain multiple assembly conveyors"
+    );
+    assert!(
+        fast.props
+            .iter()
+            .filter(|p| matches!(
+                p.kind,
+                PropKind::CommercialPrepTable | PropKind::KitchenCounter | PropKind::DeepFryerStation
+            ))
+            .count()
+            >= 4,
+        "FastFoodRestaurant kitchen should contain prep tables, counters & fryers"
+    );
+    assert!(plant.wall_edges.iter().any(|e| e.kind == WallEdgeKind::FenceWire));
 }

@@ -1961,7 +1961,13 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
         let door_y = lot.y0 + lot.h() / 2;
         let mut fc = FloorCanvas::new(&mut b.edges, w, h);
         fc.enclose(LotBox::new(lot.x0, lot.y0, split_x, lot.y1), MaterialClass::ConcreteBlock, 4);
-        fc.enclose(LotBox::new(split_x, lot.y0, lot.x1, lot.y1), MaterialClass::SheetSteel, 0);
+        for x in split_x..lot.x1 {
+            fc.upsert(x, lot.y0, EdgeSide::North, WallEdgeKind::FenceWire, MaterialClass::SheetSteel);
+            fc.upsert(x, lot.y1, EdgeSide::North, WallEdgeKind::FenceWire, MaterialClass::SheetSteel);
+        }
+        for y in lot.y0..lot.y1 {
+            fc.upsert(lot.x1, y, EdgeSide::West, WallEdgeKind::FenceWire, MaterialClass::SheetSteel);
+        }
         fc.upsert(lot.x0, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
         fc.upsert(split_x, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
         fc.upsert(lot.x1, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);

@@ -39,6 +39,26 @@ BATCH_10_SCIFI_OFFICE_STREET_IDS: tuple[str, ...] = (
     "bus_shelter",
 )
 
+BATCH_11_RESTROOM_DINER_FARM_IDS: tuple[str, ...] = (
+    "urinal",
+    "changing_table",
+    "snack_vending_machine",
+    "fast_food_counter",
+    "soda_fountain",
+    "drive_thru_menu_board",
+    "host_stand",
+    "deep_fryer_station",
+    "pickup_truck",
+    "horse",
+    "cow",
+    "pig",
+    "chicken",
+    "goat",
+    "dog",
+    "silo",
+    "wheelbarrow",
+)
+
 PACK_PROP_SPECS: tuple[PropSpriteSpec, ...] = (
     # --- Batch 8: Cafe, Restaurant & Retail (10) ---
     PropSpriteSpec(
@@ -587,6 +607,367 @@ PACK_PROP_SPECS: tuple[PropSpriteSpec, ...] = (
             "Anodized dark-charcoal aluminum bus shelter canopy with frosted sky-blue glass roof.",
             "Curved brushed-steel & teal glass urban BRT transit shelter roof with solar trickle panel.",
             "Classic dark bronze-painted municipal bus shelter with corrugated metal awning ribs and bench.",
+        ),
+    ),
+    # --- Batch 11: Restroom Suites, Restaurants, Pickup Truck & Livestock (17) ---
+    PropSpriteSpec(
+        id="urinal",
+        prop_kind_code="URINAL",
+        filename="urinal.webp",
+        label="Wall-Mounted Ceramic Urinal",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Square 1x1 public restroom wall-mounted white glazed ceramic urinal fixture flush against the TOP edge, "
+            "seen strictly 90-degree straight down; bright glossy porcelain basin crescent projecting forward with brushed "
+            "chrome flushometer valve pipe at top and small stainless drain grate."
+        ),
+        variant_directives=(
+            "Crisp white glazed porcelain commercial wall urinal with chrome flush valve.",
+            "Sleek matte-cream modern waterless ceramic urinal basin with brushed nickel trim.",
+            "Commercial stainless-steel brushed urinal bowl with chrome top pipe and drain strainer.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="changing_table",
+        prop_kind_code="CHANGING_TABLE",
+        filename="changing_table.webp",
+        label="Restroom Baby Changing Table",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Square 1x1 restroom family room fold-down wall-mounted baby changing table flush along TOP edge, "
+            "seen strictly straight down; moulded warm cream-white antibacterial plastic tray with curved raised side lips, "
+            "safety nylon buckle strap across center, and small paper liner dispenser."
+        ),
+        variant_directives=(
+            "Cream-white horizontal fold-down changing station with grey nylon safety strap.",
+            "Brushed stainless steel & light-grey horizontal family restroom changing table.",
+            "Warm almond molded polymer changing station with blue liner pocket along top hinge.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="snack_vending_machine",
+        prop_kind_code="SNACK_VENDING_MACHINE",
+        filename="snack_vending_machine.webp",
+        label="Glass-Front Snack Vending Machine",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Square commercial coil-spiral snack vending machine cabinet top seen strictly 90-degree straight down (1:1); "
+            "matte charcoal-black steel cabinet roof with warm amber glowing glass showcase lip and coin-slot bezel along "
+            "the BOTTOM front edge and small ventilation louver along the rear top edge."
+        ),
+        variant_directives=(
+            "Matte-black glass-front snack vending cabinet with warm amber illuminated front lip.",
+            "Hunter-green corporate breakroom snack machine top with silver keypad rim and vent grille.",
+            "Burgundy-red retro coil-snack vending machine cabinet with chrome front edge trim.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="fast_food_counter",
+        prop_kind_code="FAST_FOOD_COUNTER",
+        filename="fast_food_counter.webp",
+        label="Quick-Service Order & POS Counter",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal continuous straight quick-service fast food order counter (2x wider than tall, open flat "
+            "counter ends left & right so sections tile cleanly), seen straight down; crimson-red laminate counter edge, "
+            "brushed steel pickup trays, dual touchscreen POS cash registers facing front, receipt printer, and condiment bins."
+        ),
+        variant_directives=(
+            "Crimson-red and brushed-steel fast-food order counter with dual POS registers and serving trays.",
+            "Bright retro teal & cream diner service counter with metal napkin holders and twin POS screens.",
+            "Modern amber-wood & stainless burger counter with digital order pads and heat-lamp pass bar.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="soda_fountain",
+        prop_kind_code="SODA_FOUNTAIN",
+        filename="soda_fountain.webp",
+        label="Self-Serve Soda Fountain & Ice Island",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal self-serve restaurant beverage & soda fountain island counter seen straight down (twice as wide as tall); "
+            "brushed stainless-steel multi-nozzle carbonated drink dispenser turret with ice chute, slotted chrome drip grate, "
+            "colorful beverage lever tabs, cup lid sleeves, and straw organizer caddy."
+        ),
+        variant_directives=(
+            "Stainless steel multi-flavor soda dispenser tower with chrome drip tray and red/blue logo tabs.",
+            "Black & silver touchscreen freestyle beverage counter with cup lid turret and ice dispenser.",
+            "Compact diner fountain bar with chrome soda heads, napkin caddy, and waxed drink cups.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="drive_thru_menu_board",
+        prop_kind_code="DRIVE_THRU_MENU_BOARD",
+        filename="drive_thru_menu_board.webp",
+        label="Drive-Thru Outdoor Illuminated Menu Board",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal drive-thru outdoor double-panel illuminated menu board canopy & intercom post seen straight down (2:1); "
+            "weatherproof dark charcoal powder-coated steel hood overhang with slim warm glowing lightbox glow along front bottom edge, "
+            "bolted heavy steel base plate, and speaker bollard."
+        ),
+        variant_directives=(
+            "Dark charcoal weatherproof drive-thru menu board hood with warm glowing yellow bottom edge and intercom speaker.",
+            "Crimson-trimmed dual digital drive-thru menu sign canopy with rain hood and call button.",
+            "Sleek silver aluminum QSR order confirmation canopy with solar top plate and bollard mount.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="host_stand",
+        prop_kind_code="HOST_STAND",
+        filename="host_stand.webp",
+        label="Restaurant Host Podium & Menu Lectern",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Square restaurant maître d' host podium stand seen strictly 90-degree straight down (1:1); "
+            "dark polished walnut lectern top with leather-bound floorplan reservation book lying open, stacked linen menus, "
+            "small brass bell, and cup of pens."
+        ),
+        variant_directives=(
+            "Dark walnut host podium with open leather reservation binder and stacked menus.",
+            "Sleek matte-black steel restaurant check-in stand with tablet mount and menu sheaf.",
+            "Warm golden oak diner podium stand with brass menu clip and seating chart.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="deep_fryer_station",
+        prop_kind_code="DEEP_FRYER_STATION",
+        filename="deep_fryer_station.webp",
+        label="Commercial Dual-Vat Deep Fryer Station",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal commercial restaurant stainless-steel dual-vat deep fryer battery seen straight down (2:1); "
+            "heavy brushed chrome frame holding two rectangular glowing golden cooking-oil vats side-by-side with four "
+            "wire mesh fry baskets hooked cleanly in the oil and flue riser along the TOP edge."
+        ),
+        variant_directives=(
+            "Stainless dual-vat commercial deep fryer with amber oil and four wire fry baskets.",
+            "Heavy triple-basket restaurant fryer bank with stainless dump station tray of golden fries.",
+            "Brushed steel commercial kitchen fryer unit with digital timer bar along top backsplash.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="pickup_truck",
+        prop_kind_code="PICKUP_TRUCK",
+        filename="pickup_truck.webp",
+        label="Rural & Work Crew Pickup Truck",
+        base_w_cells=2,
+        base_h_cells=5,
+        target_w_px=256,
+        target_h_px=640,
+        aspect_ratio="9:16",
+        prompt=prop_prompt(
+            "Vertical portrait full-size four-wheel-drive farm & work pickup truck seen strictly from 90 degrees directly "
+            "overhead (much taller than wide); open rectangular pickup cargo bed with ribbed liner, tailgate at the TOP edge "
+            "holding a toolbox and tarp strap, double cab roof in the middle, dark tinted front windshield, side mirrors, "
+            "and broad flat engine hood pointing straight DOWNWARD toward the bottom edge."
+        ),
+        variant_directives=(
+            "Weathered barn-red single-cab pickup truck with black bedliner and silver toolbox in bed.",
+            "Forest-green 4x4 ranch crew-cab pickup truck with dark tonneau trim, roof rack, and spare tire in cargo bed.",
+            "Dusty slate-blue farm utility pickup truck with wood side-stakes in bed and muddy fender flares.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="horse",
+        prop_kind_code="HORSE",
+        filename="horse.webp",
+        label="Farmstead Horse",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal standing horse facing strictly RIGHT seen directly from 90-degree straight down overhead bird's-eye view "
+            "(clean compact 2:1 footprint); rich glossy chestnut-brown barrel coat, flowing dark mane along neck extending right, "
+            "pointed ears forward at right, and dark swishing tail extending left (NO ground shadow)."
+        ),
+        variant_directives=(
+            "Chestnut bay horse with black mane and tail facing right.",
+            "Dapple-grey farm draft horse with creamy flaxen mane facing right.",
+            "Warm pinto paint horse with chestnut and cream patches facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="cow",
+        prop_kind_code="COW",
+        filename="cow.webp",
+        label="Pasture Dairy / Beef Cow",
+        base_w_cells=2,
+        base_h_cells=1,
+        target_w_px=512,
+        target_h_px=256,
+        aspect_ratio="16:9",
+        prompt=prop_prompt(
+            "Horizontal sturdy dairy/beef cow facing strictly RIGHT seen directly from 90-degree straight down overhead bird's-eye view "
+            "(2:1 footprint); rounded broad back with organic Holstein black-and-white hide patches, out-turned ears and pale horns "
+            "at right head, and slender tail at left (NO ground shadow)."
+        ),
+        variant_directives=(
+            "Black-and-white spotted Holstein dairy cow seen strictly from above facing right.",
+            "Warm reddish-brown Hereford beef cattle cow with white head stripe facing right.",
+            "Gentle cream-jersey pasture cow with dark muzzle and ears facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="pig",
+        prop_kind_code="PIG",
+        filename="pig.webp",
+        label="Farmstead Hog / Pig",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        key_color="green",
+        prompt=prop_prompt(
+            "Plump round farmstead pig facing RIGHT seen strictly from 90-degree straight down overhead bird's-eye view "
+            "centered neatly inside a square footprint; warm rosy-peach pink pig body with rounded snout at right, flopped ears, "
+            "light mud dappling along flanks, and tiny curly tail at left (NO ground shadow).",
+            key_color="green",
+        ),
+        variant_directives=(
+            "Rosy pink farmstead hog with pale mud speckles along back facing right.",
+            "Spotted Berkshire dark-slate and cream-pink piglet facing right.",
+            "Reddish-ginger Tamworth farm pig with tufted ears facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="chicken",
+        prop_kind_code="CHICKEN",
+        filename="chicken.webp",
+        label="Free-Range Farm Chicken",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Small round plump barnyard hen/chicken facing RIGHT seen strictly 90-degree straight down from above centered in a square "
+            "(plump feathered teardrop back filling ~55% of center); warm russet-red and buff plumage feathers, small red comb and beak at right, "
+            "fanned tail feathers at left (NO ground shadow)."
+        ),
+        variant_directives=(
+            "Warm Rhode Island russet-red hen with fanned dark tail feathers facing right.",
+            "Speckled cream-white Plymouth barnyard chicken with red comb facing right.",
+            "Golden-buff & black barred heritage hen facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="goat",
+        prop_kind_code="GOAT",
+        filename="goat.webp",
+        label="Farmyard Goat",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Compact shaggy farm goat facing RIGHT seen strictly 90-degree straight down from above centered in a square; "
+            "slender off-white and taupe woolly back, curved dark swept-back horns behind head at right, floppy ears, and short tail at left "
+            "(NO ground shadow)."
+        ),
+        variant_directives=(
+            "Cream-and-taupe dairy goat with curved dark horns facing right.",
+            "Chocolate-brown Nubian farm goat with long droopy ears facing right.",
+            "Black-and-white Alpine piebald goat facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="dog",
+        prop_kind_code="DOG",
+        filename="dog.webp",
+        label="Farmstead / Watch Dog",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Medium shepherd/farmstead dog facing RIGHT seen strictly 90-degree straight down from above centered in a square; "
+            "sleek golden-tan and sable fur along spine, alert pointed ears and dark muzzle pointing right, and bushy tail extending left "
+            "(NO ground shadow)."
+        ),
+        variant_directives=(
+            "Golden-retriever & red collar farm dog facing right.",
+            "Black-and-white Australian shepherd border collie with fluffy tail facing right.",
+            "Tan-and-black German shepherd ranch watchdog facing right.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="silo",
+        prop_kind_code="SILO",
+        filename="silo.webp",
+        label="Corrugated Galvanized Grain Silo",
+        base_w_cells=2,
+        base_h_cells=2,
+        target_w_px=512,
+        target_h_px=512,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Circular corrugated galvanized steel agricultural grain silo conical roof seen strictly 90-degree straight down overhead (1:1); "
+            "silver segmented radial metal roof ribs converging cleanly to a raised center auger vent cap, steel ladder cage stub at bottom rim, "
+            "and subtle weathered zinc patina."
+        ),
+        variant_directives=(
+            "Clean silver galvanized radial-rib steel grain silo dome with central vent cap.",
+            "Weathered zinc-and-rust farm feed bin roof with grain auger pipe flange.",
+            "Painted classic dark-green enamel Harvestore silo dome with white roof cap hatch.",
+        ),
+    ),
+    PropSpriteSpec(
+        id="wheelbarrow",
+        prop_kind_code="WHEELBARROW",
+        filename="wheelbarrow.webp",
+        label="Steel Farm Wheelbarrow",
+        base_w_cells=1,
+        base_h_cells=1,
+        target_w_px=256,
+        target_h_px=256,
+        aspect_ratio="1:1",
+        prompt=prop_prompt(
+            "Single-wheel heavy-duty garden & farm wheelbarrow pointing RIGHT seen strictly 90-degree straight down overhead (1:1); "
+            "twin wooden grip handles extending left, painted deep-green pressed steel hopper tray filled lightly with fresh golden straw/soil, "
+            "and dark rubber front tire peeking out on right."
+        ),
+        variant_directives=(
+            "Forest-green steel farm wheelbarrow with oak handles and straw wisp.",
+            "Weathered royal-blue contractor wheelbarrow with galvanized rim and dark mulch.",
+            "Rusty crimson barn wheelbarrow with timber handles pointing right.",
         ),
     ),
 )

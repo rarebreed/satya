@@ -715,7 +715,11 @@ mod webgpu_runtime {
         pipe.queue
             .write_buffer(&pipe.instance_buffer, 0, bytemuck::cast_slice(&instances));
 
-        let Ok(frame) = pipe.surface.get_current_texture() else {
+        let Some(frame) = crate::wasm_client::wgpu_shared::acquire_surface_frame_with_retry(
+            &pipe.device,
+            &pipe.surface,
+            &pipe.surface_config,
+        ) else {
             return;
         };
         let color_view = frame

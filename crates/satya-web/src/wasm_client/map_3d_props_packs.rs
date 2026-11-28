@@ -157,6 +157,76 @@ pub(crate) fn push_pack_prop_3d(
             b.obb([0.0, 0.0], [top * 0.92, top], [hx * 0.98, hz * 0.92], rgb);
             b.obb([0.0, 0.0], [0.0, 0.48], [hx * 0.68, hz * 0.36], [0.46, 0.34, 0.24]);
         }
+        PropKind::Urinal => {
+            b.obb([0.0, -hz * 0.55], [0.25, top * 0.95], [hx * 0.55, hz * 0.35], rgb);
+            b.obb([0.0, -hz * 0.25], [0.35, 0.60], [hx * 0.48, hz * 0.35], lighten(rgb, 1.06));
+        }
+        PropKind::ChangingTable => {
+            b.obb([0.0, 0.0], [0.75, 0.92], [hx * 0.92, hz * 0.86], rgb);
+            b.obb([0.0, 0.0], [0.92, top], [hx * 0.80, hz * 0.70], [0.85, 0.92, 0.98]);
+        }
+        PropKind::SnackVendingMachine => {
+            b.obb([0.0, 0.0], [0.0, top], [hx * 0.92, hz * 0.90], rgb);
+            b.obb([0.0, hz * 0.78], [0.35, top * 0.90], [hx * 0.78, hz * 0.12], [0.95, 0.84, 0.48]);
+        }
+        PropKind::FastFoodCounter => {
+            b.obb([0.0, 0.0], [0.0, top * 0.88], [hx * 0.96, hz * 0.88], rgb);
+            b.obb([0.0, 0.0], [top * 0.88, top], [hx * 0.98, hz * 0.92], [0.90, 0.90, 0.92]);
+            b.obb([-hx * 0.45, 0.0], [top, top + 0.25], [hx * 0.22, hz * 0.45], [0.18, 0.20, 0.24]);
+        }
+        PropKind::SodaFountain => {
+            b.obb([0.0, 0.0], [0.0, 0.85], [hx * 0.92, hz * 0.86], [0.48, 0.50, 0.54]);
+            b.obb([0.0, -hz * 0.10], [0.85, top], [hx * 0.82, hz * 0.66], rgb);
+        }
+        PropKind::DriveThruMenuBoard => {
+            b.obb([0.0, 0.0], [0.0, 0.45], [hx * 0.30, hz * 0.30], [0.24, 0.26, 0.28]);
+            b.obb([0.0, 0.0], [0.45, top], [hx * 0.94, hz * 0.35], rgb);
+            b.obb([0.0, hz * 0.32], [0.60, top * 0.92], [hx * 0.84, 0.03], [0.96, 0.86, 0.44]);
+        }
+        PropKind::HostStand => {
+            b.obb([0.0, 0.0], [0.0, top], [hx * 0.68, hz * 0.68], rgb);
+            b.obb([0.0, 0.0], [top, top + 0.06], [hx * 0.58, hz * 0.54], [0.88, 0.84, 0.78]);
+        }
+        PropKind::DeepFryerStation => {
+            b.obb([0.0, 0.0], [0.0, top * 0.86], [hx * 0.94, hz * 0.88], rgb);
+            b.obb([-hx * 0.42, 0.0], [top * 0.86, top], [hx * 0.36, hz * 0.70], [0.86, 0.58, 0.16]);
+            b.obb([hx * 0.42, 0.0], [top * 0.86, top], [hx * 0.36, hz * 0.70], [0.86, 0.58, 0.16]);
+        }
+        PropKind::PickupTruck => {
+            b.obb([0.0, -hz * 0.35], [0.22, top * 0.58], [hx * 0.88, hz * 0.58], lighten(rgb, 0.85));
+            b.obb([0.0, hz * 0.36], [0.22, top], [hx * 0.86, hz * 0.44], rgb);
+            b.obb([0.0, hz * 0.58], [top * 0.62, top * 0.92], [hx * 0.76, hz * 0.18], [0.64, 0.82, 0.94]);
+        }
+        PropKind::Horse => {
+            b.obb([-hx * 0.10, 0.0], [0.55, top * 0.82], [hx * 0.72, hz * 0.58], rgb);
+            b.obb([hx * 0.65, 0.0], [0.75, top], [hx * 0.28, hz * 0.34], lighten(rgb, 0.85));
+        }
+        PropKind::Cow => {
+            b.obb([-hx * 0.10, 0.0], [0.45, top * 0.88], [hx * 0.74, hz * 0.64], rgb);
+            b.obb([hx * 0.66, 0.0], [0.55, top], [hx * 0.28, hz * 0.36], [0.22, 0.22, 0.24]);
+        }
+        PropKind::Pig => {
+            b.obb([0.0, 0.0], [0.18, top], [hx * 0.72, hz * 0.58], rgb);
+        }
+        PropKind::Chicken => {
+            b.obb([0.0, 0.0], [0.12, top], [hx * 0.42, hz * 0.42], rgb);
+        }
+        PropKind::Goat => {
+            b.obb([0.0, -hz * 0.08], [0.32, top * 0.82], [hx * 0.66, hz * 0.46], rgb);
+            b.obb([0.0, hz * 0.58], [0.52, top], [hx * 0.28, hz * 0.24], lighten(rgb, 0.80));
+        }
+        PropKind::Dog => {
+            b.obb([0.0, -hz * 0.08], [0.24, top * 0.78], [hx * 0.62, hz * 0.42], rgb);
+            b.obb([0.0, hz * 0.52], [0.42, top], [hx * 0.28, hz * 0.24], rgb);
+        }
+        PropKind::Silo => {
+            b.obb([0.0, 0.0], [0.0, top * 0.84], [hx * 0.90, hz * 0.90], rgb);
+            b.obb([0.0, 0.0], [top * 0.84, top], [hx * 0.72, hz * 0.72], lighten(rgb, 1.15));
+        }
+        PropKind::Wheelbarrow => {
+            b.obb([0.0, -hz * 0.10], [0.22, top], [hx * 0.74, hz * 0.62], rgb);
+            b.obb([0.0, hz * 0.66], [0.0, 0.32], [0.14, 0.22], [0.20, 0.22, 0.25]);
+        }
         _ => return false,
     }
     true

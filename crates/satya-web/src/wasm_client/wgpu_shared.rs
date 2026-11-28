@@ -704,27 +704,59 @@ pub async fn init_wgpu_canvas_context(canvas_id: &str) -> Result<WgpuCanvasConte
     let surface = instance
         .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
         .map_err(|e| format!("WebGPU surface error: {e}"))?;
-    let adapter = instance
+    let mut adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         })
-        .await
+        .await;
+    if adapter.is_none() {
+        adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::LowPower,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: true,
+            })
+            .await;
+    }
+    let adapter = adapter
         .ok_or_else(|| "WebGPU unavailable (showing SVG fallback)".to_string())?;
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some(canvas_id),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        )
-        .await
-        .map_err(|e| format!("WebGPU device error: {e}"))?;
+    let adapter_limits = adapter.limits();
+    let limit_tiers = [
+        wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter_limits),
+        wgpu::Limits::downlevel_webgl2_defaults(),
+        wgpu::Limits::default(),
+    ];
+    let mut device_pair = None;
+    let mut last_err = String::new();
+    for limits in limit_tiers {
+        match adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some(canvas_id),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: limits,
+                    memory_hints: wgpu::MemoryHints::Performance,
+                },
+                None,
+            )
+            .await
+        {
+            Ok(pair) => {
+                device_pair = Some(pair);
+                break;
+            }
+            Err(e) => {
+                last_err = format!("WebGPU device error: {e}");
+            }
+        }
+    }
+    let (device, queue) = device_pair.ok_or(last_err)?;
+    let log_prefix = canvas_id.to_string();
+    device.on_uncaptured_error(Box::new(move |err| {
+        web_sys::console::error_1(&format!("[satya-wgpu:{log_prefix}] {err}").into());
+    }));
 
     let caps = surface.get_capabilities(&adapter);
     let format = caps
@@ -810,6 +842,26 @@ pub fn resize_canvas_surface_if_needed(
         Some((cw, ch))
     } else {
         None
+    }
+}
+
+/// Acquires the next `wgpu::SurfaceTexture`, reconfiguring the surface once on `Lost` or `Outdated`.
+#[cfg(target_arch = "wasm32")]
+pub fn acquire_surface_frame_with_retry(
+    device: &wgpu::Device,
+    surface: &wgpu::Surface<'static>,
+    surface_config: &wgpu::SurfaceConfiguration,
+) -> Option<wgpu::SurfaceTexture> {
+    match surface.get_current_texture() {
+        Ok(frame) => Some(frame),
+        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+            surface.configure(device, surface_config);
+            surface.get_current_texture().ok()
+        }
+        Err(err) => {
+            web_sys::console::error_1(&format!("[satya-wgpu] surface frame error: {err:?}").into());
+            None
+        }
     }
 }
 

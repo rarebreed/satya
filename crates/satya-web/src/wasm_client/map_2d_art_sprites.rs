@@ -95,7 +95,7 @@ prop_sprite_specs! {
     KitchenCounter => "kitchen_counter" (1 x 1, tile=true);
     Stove => "stove" (1 x 1);
     Fridge => "fridge" (1 x 1);
-    BarCounter => "bar_counter" (1 x 1, tile=true);
+    BarCounter => "bar_counter" (3 x 1, tile=true);
     BackBarShelf => "back_bar_shelf" (1 x 1, tile=true);
     BarStool => "bar_stool" (1 x 1);
     PoolTable => "pool_table" (3 x 2);
@@ -198,6 +198,24 @@ prop_sprite_specs! {
     CopyMachine => "copy_machine" (1 x 1);
     StreetLamp => "street_lamp" (1 x 1);
     BusShelter => "bus_shelter" (3 x 1);
+    // --- Batch 11: Restroom Suites, Restaurants, Pickup Truck & Livestock (17) ---
+    Urinal => "urinal" (1 x 1);
+    ChangingTable => "changing_table" (1 x 1);
+    SnackVendingMachine => "snack_vending_machine" (1 x 1);
+    FastFoodCounter => "fast_food_counter" (3 x 1, tile=true);
+    SodaFountain => "soda_fountain" (2 x 1);
+    DriveThruMenuBoard => "drive_thru_menu_board" (2 x 1);
+    HostStand => "host_stand" (1 x 1);
+    DeepFryerStation => "deep_fryer_station" (2 x 1);
+    PickupTruck => "pickup_truck" (2 x 5);
+    Horse => "horse" (2 x 1);
+    Cow => "cow" (2 x 1);
+    Pig => "pig" (1 x 1);
+    Chicken => "chicken" (1 x 1);
+    Goat => "goat" (1 x 1);
+    Dog => "dog" (1 x 1);
+    Silo => "silo" (3 x 3);
+    Wheelbarrow => "wheelbarrow" (1 x 1);
 }
 
 #[must_use]
@@ -249,19 +267,22 @@ pub fn push_prop_sprite_for_placement(
     let actual_aspect = fp.span_w_m / fp.span_h_m.max(0.05);
     let base_aspect = spec.base_w_cells as f32 / spec.base_h_cells as f32;
     let ratio = actual_aspect / base_aspect;
-    if (0.72..=1.38).contains(&ratio) {
-        let asset_file = pick_variant(spec.variant_files, p.variant_seed);
-        push_prop_sprite_image_at(out, asset_file, -lw * 0.5, -lh * 0.5, lw, lh, "xMidYMid meet");
-        return true;
-    }
-    if spec.tile_along_width && ratio > 1.38 {
+    let asset_file = pick_variant(spec.variant_files, p.variant_seed);
+    if spec.tile_along_width && ratio > 2.20 {
         let tiles = ratio.round().clamp(2.0, 12.0) as usize;
         let seg_w = lw / tiles as f32;
         for i in 0..tiles {
             let x = -lw * 0.5 + i as f32 * seg_w;
-            let asset_file = pick_variant(spec.variant_files, p.variant_seed.wrapping_add(i as u32));
             push_prop_sprite_image_at(out, asset_file, x, -lh * 0.5, seg_w, lh, "none");
         }
+        return true;
+    }
+    if spec.tile_along_width && ratio > 1.05 {
+        push_prop_sprite_image_at(out, asset_file, -lw * 0.5, -lh * 0.5, lw, lh, "none");
+        return true;
+    }
+    if (0.72..=1.38).contains(&ratio) {
+        push_prop_sprite_image_at(out, asset_file, -lw * 0.5, -lh * 0.5, lw, lh, "xMidYMid meet");
         return true;
     }
     false
@@ -297,8 +318,8 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn all_140_prop_sprite_variants_exist_and_toggle_with_texture_mode() {
-        assert_eq!(BATTLEMAP_PROP_SPRITE_SPECS.len(), 140);
+    fn all_157_prop_sprite_variants_exist_and_toggle_with_texture_mode() {
+        assert_eq!(BATTLEMAP_PROP_SPRITE_SPECS.len(), 157);
         let kinds: BTreeSet<u16> = BATTLEMAP_PROP_SPRITE_SPECS
             .iter()
             .map(|s| s.kind as u16)
@@ -307,8 +328,8 @@ mod tests {
             .iter()
             .flat_map(|s| s.variant_files.iter().copied())
             .collect();
-        assert_eq!(kinds.len(), 140);
-        assert_eq!(files.len(), 420);
+        assert_eq!(kinds.len(), 157);
+        assert_eq!(files.len(), 471);
 
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/sprites/props");
         for spec in BATTLEMAP_PROP_SPRITE_SPECS {
@@ -357,6 +378,18 @@ mod tests {
         push_furniture_glyph_with_mode(&mut painted, &bed, 64.0, BattlemapTextureMode::Painted);
         assert!(painted.contains("/assets/sprites/props/hospital_bed"));
         assert_eq!(painted.matches("<g ").count(), painted.matches("</g>").count());
+
+        for (kind, needle) in [
+            (PropKind::Cow, "/assets/sprites/props/cow"),
+            (PropKind::Horse, "/assets/sprites/props/horse"),
+            (PropKind::FastFoodCounter, "/assets/sprites/props/fast_food_counter"),
+            (PropKind::Silo, "/assets/sprites/props/silo"),
+        ] {
+            let prop = make_prop(kind, 4, 4, 0, None, 3);
+            let mut svg = String::new();
+            push_furniture_glyph_with_mode(&mut svg, &prop, 64.0, BattlemapTextureMode::Painted);
+            assert!(svg.contains(needle), "expected sprite for {kind:?}: {svg}");
+        }
 
         let mut vector = String::new();
         push_furniture_glyph_with_mode(

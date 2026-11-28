@@ -289,9 +289,15 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
             "urban_residential" | "projects_high_density" | "downtown_commercial" => {
                 ([0.14, 0.16, 0.19, 0.0], -1.0_f32)
             }
-            "residential_apartment" | "corner_bar" | "modern_interior" | "bar_interior" => {
+            "residential_apartment"
+            | "corner_bar"
+            | "bistro_diner"
+            | "fine_dining_restaurant"
+            | "modern_interior"
+            | "bar_interior" => {
                 ([0.23, 0.17, 0.12, 0.0], -1.0_f32)
             }
+            "fast_food_restaurant" => ([0.20, 0.21, 0.23, 0.0], -1.0_f32),
             _ => ([0.075, 0.115, 0.185, 0.0], -1.0_f32),
         }
     };

@@ -243,7 +243,11 @@ mod model_wgpu_runtime {
             .write_buffer(&pipe.instance_buffer, 0, bytemuck::bytes_of(&inst));
         pipe.instance_count = 1;
 
-        let Ok(frame) = pipe.surface.get_current_texture() else {
+        let Some(frame) = acquire_surface_frame_with_retry(
+            &pipe.device,
+            &pipe.surface,
+            &pipe.surface_config,
+        ) else {
             return;
         };
         let view = frame

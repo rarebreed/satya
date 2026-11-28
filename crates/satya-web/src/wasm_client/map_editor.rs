@@ -110,6 +110,10 @@ pub enum WallBrushMode {
     DoorClosed,
     DoorOpen,
     Window,
+    FenceWood,
+    FenceWire,
+    LowWallStone,
+    StallPartition,
     EraseEdge,
 }
 
@@ -121,6 +125,10 @@ impl WallBrushMode {
             Self::DoorClosed => "door_closed",
             Self::DoorOpen => "door_open",
             Self::Window => "window",
+            Self::FenceWood => "fence_wood",
+            Self::FenceWire => "fence_wire",
+            Self::LowWallStone => "low_wall_stone",
+            Self::StallPartition => "stall_partition",
             Self::EraseEdge => "erase",
         }
     }
@@ -131,6 +139,10 @@ impl WallBrushMode {
             "door_closed" => Self::DoorClosed,
             "door_open" => Self::DoorOpen,
             "window" => Self::Window,
+            "fence_wood" => Self::FenceWood,
+            "fence_wire" => Self::FenceWire,
+            "low_wall_stone" => Self::LowWallStone,
+            "stall_partition" => Self::StallPartition,
             "erase" => Self::EraseEdge,
             _ => Self::Wall,
         }
@@ -143,6 +155,10 @@ impl WallBrushMode {
             Self::DoorClosed => Some(WallEdgeKind::DoorClosed),
             Self::DoorOpen => Some(WallEdgeKind::DoorOpen),
             Self::Window => Some(WallEdgeKind::Window),
+            Self::FenceWood => Some(WallEdgeKind::FenceWood),
+            Self::FenceWire => Some(WallEdgeKind::FenceWire),
+            Self::LowWallStone => Some(WallEdgeKind::LowWallStone),
+            Self::StallPartition => Some(WallEdgeKind::StallPartition),
             Self::EraseEdge => None,
         }
     }

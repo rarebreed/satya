@@ -246,6 +246,23 @@ prop_catalog! {
     CopyMachine: 1 x 1, HalfCover, Appliance, 112 cm, [0.84, 0.86, 0.88];
     StreetLamp: 1 x 1, FloorLayer, SheetSteel, 360 cm, [0.32, 0.36, 0.40], floor;
     BusShelter: 3 x 1, HalfCover, Glass, 240 cm, [0.46, 0.62, 0.74];
+    Urinal: 1 x 1, HalfCover, Ceramic, 115 cm, [0.94, 0.95, 0.96];
+    ChangingTable: 1 x 1, HalfCover, WoodFurniture, 95 cm, [0.88, 0.86, 0.82];
+    SnackVendingMachine: 1 x 1, FullObstacle, Appliance, 188 cm, [0.22, 0.24, 0.28];
+    FastFoodCounter: 3 x 1, HalfCover, WoodFurniture, 110 cm, [0.76, 0.24, 0.20], stretch;
+    SodaFountain: 2 x 1, HalfCover, Appliance, 135 cm, [0.30, 0.34, 0.38];
+    DriveThruMenuBoard: 2 x 1, FullObstacle, SheetSteel, 210 cm, [0.20, 0.24, 0.30];
+    HostStand: 1 x 1, HalfCover, WoodFurniture, 118 cm, [0.46, 0.30, 0.20];
+    DeepFryerStation: 2 x 1, HalfCover, Appliance, 112 cm, [0.74, 0.78, 0.82];
+    PickupTruck: 2 x 5, HalfCover, VehicleBody, 178 cm, [0.64, 0.24, 0.22];
+    Horse: 2 x 1, HalfCover, Upholstery, 165 cm, [0.54, 0.34, 0.20];
+    Cow: 2 x 1, HalfCover, Upholstery, 145 cm, [0.86, 0.84, 0.80];
+    Pig: 1 x 1, HalfCover, Upholstery, 78 cm, [0.88, 0.66, 0.64];
+    Chicken: 1 x 1, FloorLayer, Foliage, 38 cm, [0.82, 0.56, 0.34], floor;
+    Goat: 1 x 1, HalfCover, Upholstery, 82 cm, [0.80, 0.78, 0.74];
+    Dog: 1 x 1, FloorLayer, Upholstery, 62 cm, [0.56, 0.42, 0.28], floor;
+    Silo: 3 x 3, FullObstacle, SheetSteel, 600 cm, [0.68, 0.72, 0.76];
+    Wheelbarrow: 1 x 1, FloorLayer, SheetSteel, 70 cm, [0.34, 0.52, 0.32], floor;
 }
 
 /// Catalog entry for `kind`.
@@ -460,7 +477,11 @@ pub fn props_share_covered_cell(a: &MapPropPlacement, b: &MapPropPlacement) -> b
 /// hood / engine-block row (matching the headlight end in `map_2d_art_furniture`).
 #[must_use]
 pub fn vehicle_cell_is_engine_bay(p: &MapPropPlacement, gx: i32, gy: i32) -> bool {
-    if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan) || !p.covers(gx, gy) {
+    if !matches!(
+        p.kind,
+        PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck
+    ) || !p.covers(gx, gy)
+    {
         return false;
     }
     let (cx_m, cy_m) = p.center_m();

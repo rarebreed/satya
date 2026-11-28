@@ -183,6 +183,41 @@ fn push_edge_walls_impl(
                     r##"<path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="{BATTLEMAP_INK}" stroke-width="10"/><path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="#d6ebf5" stroke-width="6"/><path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="{BATTLEMAP_INK}" stroke-width="1"/>"##
                 );
             }
+            WallEdgeKind::FenceWood => {
+                let _ = write!(
+                    out,
+                    r##"<path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="{BATTLEMAP_INK}" stroke-width="6.5" stroke-linecap="butt"/><path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="#9b6a3c" stroke-width="3.4" stroke-linecap="butt"/><rect x="{:.1}" y="{:.1}" width="5" height="5" fill="#7c522c" stroke="{BATTLEMAP_INK}" stroke-width="1"/><rect x="{:.1}" y="{:.1}" width="5" height="5" fill="#7c522c" stroke="{BATTLEMAP_INK}" stroke-width="1"/>"##,
+                    ax - 2.5,
+                    ay - 2.5,
+                    bx - 2.5,
+                    by - 2.5
+                );
+            }
+            WallEdgeKind::FenceWire => {
+                let (mx, my) = ((ax + bx) * 0.5, (ay + by) * 0.5);
+                let _ = write!(
+                    out,
+                    r##"<path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="#334155" stroke-width="2.6" stroke-dasharray="5 3"/><circle cx="{ax:.1}" cy="{ay:.1}" r="2.6" fill="#64748b" stroke="{BATTLEMAP_INK}" stroke-width="1"/><circle cx="{mx:.1}" cy="{my:.1}" r="2.0" fill="#94a3b8"/><circle cx="{bx:.1}" cy="{by:.1}" r="2.6" fill="#64748b" stroke="{BATTLEMAP_INK}" stroke-width="1"/>"##
+                );
+            }
+            WallEdgeKind::LowWallStone => {
+                let (mx, my) = ((ax + bx) * 0.5, (ay + by) * 0.5);
+                let (tx, ty) = if north { (0.0, 4.0) } else { (4.0, 0.0) };
+                let _ = write!(
+                    out,
+                    r##"<path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="{BATTLEMAP_INK}" stroke-width="11" stroke-linecap="square"/><path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="#948e84" stroke-width="7.5" stroke-linecap="square"/><path d="M{:.1} {:.1}L{:.1} {:.1}" stroke="{BATTLEMAP_INK}" stroke-width="1.4"/>"##,
+                    mx - tx,
+                    my - ty,
+                    mx + tx,
+                    my + ty
+                );
+            }
+            WallEdgeKind::StallPartition => {
+                let _ = write!(
+                    out,
+                    r##"<path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="{BATTLEMAP_INK}" stroke-width="5.5" stroke-linecap="square"/><path d="M{ax:.0} {ay:.0}L{bx:.0} {by:.0}" stroke="#cbd5e1" stroke-width="3.2" stroke-linecap="square"/>"##
+                );
+            }
             WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen => {
                 let leaf = cell - 6.0;
                 // Jamb ticks perpendicular to the opening at both ends.

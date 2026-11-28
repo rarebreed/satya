@@ -601,6 +601,20 @@ fn hospital_core_x_span(lot: LotBox, tx0: i32) -> (i32, i32) {
     (nx_a, nx_b)
 }
 
+fn bay_touches_exterior_door(bay: LotBox, lot: LotBox, edges: &[MapWallEdge]) -> bool {
+    edges.iter().any(|e| {
+        e.kind.is_door()
+            && ((e.side == EdgeSide::North
+                && ((bay.y0 == lot.y0 && e.y == lot.y0) || (bay.y1 == lot.y1 && e.y == lot.y1))
+                && e.x >= bay.x0
+                && e.x < bay.x1)
+                || (e.side == EdgeSide::West
+                    && ((bay.x0 == lot.x0 && e.x == lot.x0) || (bay.x1 == lot.x1 && e.x == lot.x1))
+                    && e.y >= bay.y0
+                    && e.y < bay.y1))
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn fill_hospital_floor(
     lot: LotBox,
@@ -1002,6 +1016,20 @@ fn fill_hospital_floor(
                     s + 54,
                 ),
             );
+        } else if idx + 1 == se_spans.len()
+            && !bay_touches_exterior_door(bay, lot, edges)
+            && ((bay.w() >= 4 && bay.h() >= 3) || (bay.w() >= 3 && bay.h() >= 4))
+        {
+            crate::map_restroom_gen::build_public_restroom_suite_in_lot(
+                bay,
+                CardinalEntry::North,
+                lot.w() >= 28 && !is_upper,
+                MaterialClass::ReinforcedConcrete,
+                seed.wrapping_add(820 + idx as u64),
+                edges,
+                props,
+                surfaces,
+            );
         } else {
             furnish_patient_room(
                 bay,
@@ -1072,6 +1100,32 @@ fn fill_hospital_floor(
         props,
         lot,
         make_prop(PropKind::WaterCooler, tx0, corr_y1, 0, None, s + 750),
+    );
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        corr_bay,
+        make_prop(
+            PropKind::VendingMachine,
+            (tx1 - 1).max(lot.x0),
+            corr_y0,
+            180,
+            None,
+            s + 752,
+        ),
+    );
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        corr_bay,
+        make_prop(
+            PropKind::SnackVendingMachine,
+            (tx1 - 2).max(lot.x0),
+            corr_y0,
+            180,
+            None,
+            s + 753,
+        ),
     );
     let _ = place_indoor_checked(
         edges,
@@ -1424,6 +1478,13 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
         None,
     );
     let _ = b.try_place_off_road_cm(
+        PropKind::SnackVendingMachine,
+        OutdoorBuilder::cm((w as f32 * 0.64).min(bx1 as f32 - 8.0) + 1.15),
+        prom_cy,
+        0,
+        None,
+    );
+    let _ = b.try_place_off_road_cm(
         PropKind::ParkBench,
         OutdoorBuilder::cm(bx1 as f32 - 2.5),
         prom_cy,
@@ -1615,6 +1676,23 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         }
     }
 
+    let mut restroom_bay: Option<(LotBox, CardinalEntry)> = None;
+    if let Some(&(last_bay, last_entry, _)) = wing_lots.last() {
+        if last_bay.w() >= 12 && last_bay.h() >= 4 {
+            let split = last_bay.x1 - 6.min(last_bay.w() / 2);
+            if let Some(last) = wing_lots.last_mut() {
+                last.0 = LotBox::new(last_bay.x0, last_bay.y0, split, last_bay.y1);
+            }
+            restroom_bay = Some((
+                LotBox::new(split, last_bay.y0, last_bay.x1, last_bay.y1),
+                last_entry,
+            ));
+        } else if wing_lots.len() >= 5 && last_bay.w() >= 6 && last_bay.h() >= 4 {
+            restroom_bay = Some((last_bay, last_entry));
+            let _ = wing_lots.pop();
+        }
+    }
+
     for (bi, &(bay, entry, arch)) in wing_lots.iter().enumerate() {
         let unit = generate_store_unit(
             w,
@@ -1630,6 +1708,26 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             b.put_edge(e.x, e.y, e.side, e.kind, e.material);
         }
         b.props.extend(unit.props);
+    }
+    if let Some((r_bay, r_entry)) = restroom_bay {
+        let mut rest_edges = Vec::new();
+        let mut rest_props = Vec::new();
+        let mut rest_surfaces = Vec::new();
+        crate::map_restroom_gen::build_public_restroom_suite_in_lot(
+            r_bay,
+            r_entry,
+            w >= 32,
+            MaterialClass::ReinforcedConcrete,
+            (seed as u64).wrapping_add(0xBA74),
+            &mut rest_edges,
+            &mut rest_props,
+            &mut rest_surfaces,
+        );
+        for e in rest_edges {
+            b.put_edge(e.x, e.y, e.side, e.kind, e.material);
+        }
+        b.props.extend(rest_props);
+        b.surfaces.extend(rest_surfaces);
     }
 
     // Apply enclosing 0..w, 0..h galleria perimeter shell on top so portal doors and glazed entries stay exact.
@@ -1716,6 +1814,14 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             true,
         );
         let _ = b.try_place_cm(
+            PropKind::SnackVendingMachine,
+            OutdoorBuilder::cm(cx1 as f32 - 1.9),
+            OutdoorBuilder::cm(conc_y1 as f32 - 0.8),
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
             PropKind::SmallFountain,
             OutdoorBuilder::cm(w as f32 * 0.40),
             cy_mid_cm,
@@ -1740,6 +1846,19 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             true,
         );
     }
+
+    crate::map_room_furnish::place_structural_pillar_grid(
+        cx0,
+        conc_y0,
+        cx1,
+        conc_y1,
+        6,
+        5,
+        &b.edges,
+        &mut b.props,
+        floor_seed + 40,
+    );
+    prune_occluded_surfaces(&mut b.surfaces, w, h);
 
     let mut sec = b.finalize_connected();
 
@@ -1801,6 +1920,7 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         make_prop(PropKind::PatioUmbrellaTable, (3 * w / 4 - 2).min(w - 4), conc_y0 + 2, 0, None, floor_seed + 12),
         make_prop(PropKind::AtmKiosk, cx0, conc_y0 + 3, 0, None, floor_seed + 13),
         make_prop(PropKind::VendingMachine, cx1 - 1, conc_y1 - 1, 0, None, floor_seed + 14),
+        make_prop(PropKind::SnackVendingMachine, (cx1 - 2).max(cx0), conc_y1 - 1, 0, None, floor_seed + 17),
         make_prop(PropKind::ParkBench, (w * 3 / 5).min(w - 4), conc_y0, 0, None, floor_seed + 15),
         make_prop(PropKind::TrashCan, (w * 3 / 5 + 2).min(w - 2), conc_y0, 0, None, floor_seed + 16),
     ]
@@ -1809,6 +1929,17 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
     {
         let _ = (ci, place_indoor_checked(&f2_edges, &mut f2_props, full_lot, extra_2f));
     }
+    crate::map_room_furnish::place_structural_pillar_grid(
+        cx0,
+        conc_y0,
+        cx1,
+        conc_y1,
+        6,
+        5,
+        &f2_edges,
+        &mut f2_props,
+        floor_seed + 50,
+    );
     trim_floor_props_to_connected(w, h, full_lot, &f2_edges, &mut f2_props);
 
     let mut f2_surfaces = vec![

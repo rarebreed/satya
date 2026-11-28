@@ -465,22 +465,24 @@ INTERIOR_PROP_SPECS: tuple[PropSpriteSpec, ...] = (
         id="bar_counter",
         prop_kind_code="BAR_COUNTER",
         filename="bar_counter.webp",
-        label="Bar Counter",
-        base_w_cells=1,
+        label="Continuous Long Bar Counter",
+        base_w_cells=3,
         base_h_cells=1,
-        target_w_px=256,
+        target_w_px=768,
         target_h_px=256,
-        aspect_ratio="1:1",
+        aspect_ratio="16:9",
         prompt=prop_prompt(
-            "Single solid 1x1 straight modular tavern / lounge bar counter slab filling "
-            "the square footprint (tileable horizontally, NOT a U-shaped box), seen "
-            "strictly straight down; polished dark timber or stone bar top with brass "
-            "foot/drip rail along BOTTOM edge, stainless service mat, and pint glasses."
+            "Wide horizontal continuous straight tavern & lounge bar counter section (3x wider than tall, "
+            "edge-to-edge full-bleed LEFT to RIGHT with open straight plank ends and ZERO end-caps so segments "
+            "tile seamlessly into one very long counter, with narrow neon magenta chroma margin ONLY above the "
+            "top edge and below the bottom edge), seen strictly straight down; continuous polished timber planks "
+            "with continuous warm brass drip/foot rail along the entire BOTTOM edge, two bar mats, pint glasses, "
+            "and brass tap handles."
         ),
         variant_directives=(
-            "Polished dark mahogany straight bar slab with brass draft tap tower and coasters.",
-            "Weathered reclaimed oak straight tavern bar slab with black rubber bar mat, cocktail shaker, and amber pint glass.",
-            "Sleek black marble and brushed-steel straight cocktail bar slab with chrome speed-rail along top and martini glasses.",
+            "Continuous dark mahogany bar slab edge-to-edge horizontally with brass draft tap tower and bar mat.",
+            "Continuous reclaimed oak tavern bar slab edge-to-edge horizontally with rubber drip mats and amber pint glasses.",
+            "Continuous sleek charcoal marble & brushed-steel cocktail bar slab edge-to-edge with silver speed-rail and martini glasses.",
         ),
     ),
     PropSpriteSpec(

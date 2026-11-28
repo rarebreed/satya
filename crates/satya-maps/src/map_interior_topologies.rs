@@ -799,8 +799,9 @@ fn subdivide_zone_by_style(
                     cuts.push((base + shell.rng.range(-1, 2)).clamp(zone.y0 + 3, zone.y1 - 3));
                 }
                 cuts.push(zone.y1);
-                const EAST: [Role; 4] = [
+                const EAST: [Role; 5] = [
                     Role::ConferenceRoom,
+                    Role::Restroom,
                     Role::Office,
                     Role::Breakroom,
                     Role::ServerCloset,

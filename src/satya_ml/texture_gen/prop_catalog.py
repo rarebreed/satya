@@ -17,6 +17,7 @@ from satya_ml.texture_gen.prop_catalog_packs import (
     BATCH_8_CAFE_RETAIL_IDS,
     BATCH_9_INDUSTRIAL_FARM_IDS,
     BATCH_10_SCIFI_OFFICE_STREET_IDS,
+    BATCH_11_RESTROOM_DINER_FARM_IDS,
     PACK_PROP_SPECS,
 )
 from satya_ml.texture_gen.prop_catalog_world import (
@@ -626,10 +627,12 @@ _BATCH_IDS: dict[str, tuple[str, ...]] = {
     "batch8": BATCH_8_CAFE_RETAIL_IDS,
     "batch9": BATCH_9_INDUSTRIAL_FARM_IDS,
     "batch10": BATCH_10_SCIFI_OFFICE_STREET_IDS,
+    "batch11": BATCH_11_RESTROOM_DINER_FARM_IDS,
     "packs": (
         BATCH_8_CAFE_RETAIL_IDS
         + BATCH_9_INDUSTRIAL_FARM_IDS
         + BATCH_10_SCIFI_OFFICE_STREET_IDS
+        + BATCH_11_RESTROOM_DINER_FARM_IDS
     ),
     "remaining": (
         BATCH_3_LIVING_BEDROOM_IDS

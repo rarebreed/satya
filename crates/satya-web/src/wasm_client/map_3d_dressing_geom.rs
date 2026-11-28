@@ -174,6 +174,60 @@ pub fn push_dressing_geometry(
                     push_box(verts, mx, mz, 2.05, wall_h_m, hx, hz, wall_rgb, 0.0);
                 }
             }
+            WallEdgeKind::FenceWood => {
+                let wood_col = [0.58, 0.39, 0.22];
+                // Fence posts at both ends + 2 horizontal rails.
+                for (px, pz) in [(ax, az), (ax + dir_x * s, az + dir_z * s)] {
+                    push_box(verts, px, pz, 0.0, 1.45, 0.055, 0.055, lighten(wood_col, 0.8), 0.0);
+                }
+                let (rhx, rhz) = (
+                    dir_x * s * 0.5 + dir_z * 0.03,
+                    dir_z * s * 0.5 + dir_x * 0.03,
+                );
+                push_box(verts, mx, mz, 0.45, 0.62, rhx, rhz, wood_col, 0.0);
+                push_box(verts, mx, mz, 1.05, 1.24, rhx, rhz, lighten(wood_col, 1.08), 0.0);
+            }
+            WallEdgeKind::FenceWire => {
+                let post_col = [0.42, 0.46, 0.50];
+                for (px, pz) in [(ax, az), (ax + dir_x * s, az + dir_z * s)] {
+                    push_box(verts, px, pz, 0.0, 2.05, 0.04, 0.04, post_col, 0.0);
+                }
+                let (mhx, mhz) = (
+                    dir_x * s * 0.5 + dir_z * 0.015,
+                    dir_z * s * 0.5 + dir_x * 0.015,
+                );
+                // Top rail + airy mesh sheet band.
+                push_box(verts, mx, mz, 1.98, 2.04, mhx, mhz, post_col, 0.0);
+                push_box(verts, mx, mz, 0.15, 1.95, mhx, mhz, [0.58, 0.64, 0.68], 0.0);
+            }
+            WallEdgeKind::LowWallStone => {
+                let stone = [0.55, 0.53, 0.50];
+                let (shx, shz) = (
+                    dir_x * (s * 0.5 + 0.08) + dir_z * 0.11,
+                    dir_z * (s * 0.5 + 0.08) + dir_x * 0.11,
+                );
+                push_box(verts, mx, mz, 0.0, 1.08, shx, shz, stone, 0.0);
+                push_box(
+                    verts,
+                    mx,
+                    mz,
+                    1.08,
+                    1.15,
+                    shx + 0.01,
+                    shz + 0.01,
+                    lighten(stone, 1.15),
+                    0.0,
+                );
+            }
+            WallEdgeKind::StallPartition => {
+                let panel = [0.78, 0.81, 0.85];
+                let (phx, phz) = (
+                    dir_x * s * 0.48 + dir_z * 0.025,
+                    dir_z * s * 0.48 + dir_x * 0.025,
+                );
+                // Raised steel cubicle divider starting 0.28m above ceramic floor.
+                push_box(verts, mx, mz, 0.28, 1.98, phx, phz, panel, 0.0);
+            }
         }
     }
 

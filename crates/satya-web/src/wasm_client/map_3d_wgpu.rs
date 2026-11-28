@@ -81,7 +81,7 @@ mod map_wgpu_runtime {
     }
 
     thread_local! {
-        static MAP_CTRL: RefCell<MapDioramaController> =
+        pub(super) static MAP_CTRL: RefCell<MapDioramaController> =
             RefCell::new(MapDioramaController::default());
     }
 
@@ -282,7 +282,11 @@ mod map_wgpu_runtime {
         pipe.queue
             .write_buffer(&pipe.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
 
-        let Ok(frame) = pipe.surface.get_current_texture() else {
+        let Some(frame) = acquire_surface_frame_with_retry(
+            &pipe.device,
+            &pipe.surface,
+            &pipe.surface_config,
+        ) else {
             return;
         };
         let view = frame
@@ -549,47 +553,86 @@ mod map_wgpu_runtime {
         on_up.forget();
     }
 
-    pub fn ensure_map_wgpu_initialized_and_render() {
-        attach_map_listeners_if_needed();
-        let should_init = with_map_ctrl(|c| {
-            if c.pipeline.is_some() {
-                render_map_frame(c);
-                false
-            } else if c.initializing {
-                false
-            } else {
-                c.initializing = true;
-                true
+    fn schedule_post_layout_map_render() {
+        let Some(win) = crate::wasm_client::dom::window() else {
+            return;
+        };
+        let cb = Closure::once_into_js(move || {
+            if !with_map_ui(|ui| ui.view_battlemap) {
+                with_map_ctrl(|c| {
+                    if c.pipeline.is_some() {
+                        render_map_frame(c);
+                    }
+                });
+                crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
             }
         });
+        let _ = win.request_animation_frame(cb.unchecked_ref());
+    }
+
+    pub fn ensure_map_wgpu_initialized_and_render() {
+        attach_map_listeners_if_needed();
+        let (should_init, rendered) = with_map_ctrl(|c| {
+            if c.pipeline.is_some() {
+                render_map_frame(c);
+                (false, true)
+            } else if c.initializing {
+                (false, false)
+            } else {
+                c.initializing = true;
+                (true, false)
+            }
+        });
+        if rendered {
+            let needs_raf = crate::wasm_client::dom::get_element("wgpu-map-canvas")
+                .is_some_and(|el| el.client_width() <= 0 || el.client_height() <= 0);
+            if needs_raf {
+                schedule_post_layout_map_render();
+            }
+            return;
+        }
         if !should_init {
             return;
         }
         spawn_local(async move {
             let res = init_map_pipeline().await;
-            with_map_ctrl(|c| {
+            let outcome = with_map_ctrl(|c| {
                 c.initializing = false;
                 match res {
                     Ok(pipe) => {
                         c.pipeline = Some(pipe);
                         c.scene_dirty = true;
-                        // The user may have switched to `Mode: 2D Battlemap` while the adapter was initializing.
-                        if !with_map_ui(|ui| ui.view_battlemap) {
-                            crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "block");
-                            crate::wasm_client::dom::set_display(
-                                "tabletop-map-svg-fallback",
-                                "none",
-                            );
-                            render_map_frame(c);
-                        }
+                        Ok(())
                     }
-                    Err(_err) => {
-                        crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "none");
-                        crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "block");
-                        crate::wasm_client::map_2d_art::sync_battlemap_svg_host();
-                    }
+                    Err(err) => Err(err),
                 }
             });
+            match outcome {
+                Ok(()) => {
+                    // The user may have switched to `Mode: 2D Battlemap` while the adapter was initializing.
+                    if !with_map_ui(|ui| ui.view_battlemap) {
+                        crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "block");
+                        crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "none");
+                        with_map_ctrl(render_map_frame);
+                        crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+                        let needs_raf = crate::wasm_client::dom::get_element("wgpu-map-canvas")
+                            .is_some_and(|el| el.client_width() <= 0 || el.client_height() <= 0);
+                        if needs_raf {
+                            schedule_post_layout_map_render();
+                        }
+                    }
+                }
+                Err(err) => {
+                    web_sys::console::error_1(
+                        &format!("[satya-map-3d] WebGPU unavailable, reverting to 2D: {err}").into(),
+                    );
+                    crate::wasm_client::map_3d::with_map_ui_mut(|ui| {
+                        ui.view_battlemap = true;
+                    });
+                    crate::wasm_client::map_2d_art_overlay::apply_battlemap_view_chrome(true);
+                    crate::wasm_client::map_2d_art::sync_battlemap_svg_host();
+                }
+            }
         });
     }
 
@@ -726,12 +769,16 @@ pub fn satya_update_3d_map_style() {
     let _ = (shader, lighting);
 }
 
-/// Returns `(zoom, pan_xz)` for the live WebGPU tactical camera (`(1.0, [0.0, 0.0])` on host targets).
+/// Returns `(zoom, pan_xz)` for the live WebGPU tactical camera (`(1.0, [0.0, 0.0])` on host targets
+/// or if the controller is temporarily borrowed).
 #[must_use]
 pub fn current_3d_map_zoom_and_pan() -> (f32, [f32; 2]) {
     #[cfg(target_arch = "wasm32")]
     {
-        map_wgpu_runtime::with_map_ctrl(|c| (c.camera.zoom, c.camera.pan))
+        map_wgpu_runtime::MAP_CTRL.with(|c| {
+            c.try_borrow()
+                .map_or((1.0, [0.0, 0.0]), |ctrl| (ctrl.camera.zoom, ctrl.camera.pan))
+        })
     }
     #[cfg(not(target_arch = "wasm32"))]
     {

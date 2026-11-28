@@ -11,6 +11,7 @@ use satya_schema::{
 use serde::{Deserialize, Serialize};
 
 use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
+use crate::map_gen_residential::{CardinalEntry, LotBox};
 use crate::map_pool_spa_gen::{SpaStyle, spa_variant_seed};
 pub(crate) use crate::map_room_furnish::{Furnisher, Role, emit_room_floor_surface};
 use crate::map_surface_geom::vehicle_forward_rot_deg;
@@ -325,8 +326,8 @@ pub fn generate_furnished_interior(
                 let mut doors = Vec::new();
                 const BACK_ROLES: [Role; 4] = [
                     Role::Storage,
-                    Role::Restroom,
                     Role::BackKitchen,
+                    Role::Restroom,
                     Role::Office,
                 ];
                 for i in 0..n_back {
@@ -518,8 +519,83 @@ pub fn generate_furnished_interior(
         furn.reserve_cell(sx, sy);
     }
     furn.reserve_doors(&shell.edges);
+    let wall_mat = match style {
+        InteriorStyle::Office => MaterialClass::ConcreteBlock,
+        InteriorStyle::Apartment | InteriorStyle::Bar => MaterialClass::Brick,
+    };
+    let mut built_restroom_suite = false;
     for &(r, role) in &rooms_roles {
-        furn.furnish(role, r);
+        let touches_ext_door = shell.edges.iter().any(|e| {
+            e.kind.is_door()
+                && ((e.side == EdgeSide::West
+                    && ((e.x == 0 && r.x0 == 0) || (e.x == w && r.x1 == w))
+                    && e.y >= r.y0
+                    && e.y < r.y1)
+                    || (e.side == EdgeSide::North
+                        && ((e.y == 0 && r.y0 == 0) || (e.y == h && r.y1 == h))
+                        && e.x >= r.x0
+                        && e.x < r.x1))
+        });
+        if role == Role::Restroom
+            && style != InteriorStyle::Apartment
+            && !touches_ext_door
+            && ((r.w() >= 4 && r.h() >= 3) || (r.w() >= 3 && r.h() >= 4))
+        {
+            let has_door_west = r.x0 > 0
+                && shell.edges.iter().any(|e| {
+                    e.x == r.x0 && e.side == EdgeSide::West && e.y >= r.y0 && e.y < r.y1 && e.kind.is_door()
+                });
+            let has_door_east = r.x1 < w
+                && shell.edges.iter().any(|e| {
+                    e.x == r.x1 && e.side == EdgeSide::West && e.y >= r.y0 && e.y < r.y1 && e.kind.is_door()
+                });
+            let has_door_north = r.y0 > 0
+                && shell.edges.iter().any(|e| {
+                    e.y == r.y0 && e.side == EdgeSide::North && e.x >= r.x0 && e.x < r.x1 && e.kind.is_door()
+                });
+            let has_door_south = r.y1 < h
+                && shell.edges.iter().any(|e| {
+                    e.y == r.y1 && e.side == EdgeSide::North && e.x >= r.x0 && e.x < r.x1 && e.kind.is_door()
+                });
+            let entry_side = if has_door_west {
+                CardinalEntry::West
+            } else if has_door_east {
+                CardinalEntry::East
+            } else if has_door_north {
+                CardinalEntry::North
+            } else if has_door_south {
+                CardinalEntry::South
+            } else if r.x0 > 0 {
+                CardinalEntry::West
+            } else if r.x1 < w {
+                CardinalEntry::East
+            } else if r.y0 > 0 {
+                CardinalEntry::North
+            } else {
+                CardinalEntry::South
+            };
+            crate::map_restroom_gen::build_public_restroom_suite_in_lot(
+                LotBox::new(r.x0, r.y0, r.x1, r.y1),
+                entry_side,
+                w >= 28 && h >= 20,
+                wall_mat,
+                furn.rng.next(),
+                &mut shell.edges,
+                &mut furn.props,
+                &mut surfaces,
+            );
+            for yy in r.y0..r.y1 {
+                for xx in r.x0..r.x1 {
+                    furn.reserve_cell(xx, yy);
+                }
+            }
+            built_restroom_suite = true;
+        } else {
+            furn.furnish(role, r);
+        }
+    }
+    if built_restroom_suite {
+        prune_occluded_surfaces(&mut surfaces, w, h);
     }
     if style == InteriorStyle::Office
         && w >= 24

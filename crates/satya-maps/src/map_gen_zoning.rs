@@ -1950,7 +1950,38 @@ fn build_rural_countryside(
     }
     stack.absorb_home(b, home, tier == EconomicTier::LuxuryMansion);
 
-    let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, lane_idx, 0.30, 0.1, 10);
+    let _ = b.place_vehicle_along_ribbon(PropKind::PickupTruck, lane_idx, 0.30, 0.1, 10);
+    if lot.x0 >= 4 && lot.y0 + 3 < lot.y1 {
+        let fx0 = 1.max(lot.x0 - 4);
+        let fy0 = lot.y0.max(2);
+        let fy1 = (lot.y0 + 3).min(lot.y1);
+        for x in fx0..lot.x0 {
+            b.put_edge(x, fy0, EdgeSide::North, WallEdgeKind::FenceWood, MaterialClass::SolidWood);
+            b.put_edge(x, fy1, EdgeSide::North, WallEdgeKind::FenceWood, MaterialClass::SolidWood);
+        }
+        // Leave south-west corner gap open for walkway connectivity, rail West edge partially.
+        for y in fy0..(fy1 - 1).max(fy0) {
+            b.put_edge(fx0, y, EdgeSide::West, WallEdgeKind::FenceWood, MaterialClass::SolidWood);
+        }
+    }
+    if wf >= 24.0 && hf >= 18.0 {
+        let _ = b.try_place_cm(
+            PropKind::Wheelbarrow,
+            OutdoorBuilder::cm((lot.x1 as f32 + 1.5).min(wf - 1.5)),
+            OutdoorBuilder::cm((lot.y0 + lot.y1) as f32 * 0.5),
+            20,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::Dog,
+            OutdoorBuilder::cm(entry_m + 1.6),
+            OutdoorBuilder::cm(if variant == 1 { lot.y0 as f32 - 0.8 } else { lot.y1 as f32 + 0.8 }),
+            15,
+            None,
+            true,
+        );
+    }
     let bounds = RectM {
         x0: 1.5,
         y0: 1.5,

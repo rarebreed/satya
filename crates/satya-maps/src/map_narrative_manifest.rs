@@ -191,6 +191,7 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::ClothingRack
         | PropKind::PharmacyCounter
         | PropKind::VendingMachine
+        | PropKind::SnackVendingMachine
         | PropKind::AtmKiosk => Some(("retail_concourse", "Retail Concourse / Counter")),
         PropKind::ConveyorBelt
         | PropKind::IndustrialPress
@@ -253,7 +254,11 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::CommercialPrepTable
         | PropKind::CommercialGrillHood
         | PropKind::PatioUmbrellaTable
-        | PropKind::BuffetCounter => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
+        | PropKind::BuffetCounter
+        | PropKind::FastFoodCounter
+        | PropKind::SodaFountain
+        | PropKind::HostStand
+        | PropKind::DeepFryerStation => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
         PropKind::Sofa
         | PropKind::Loveseat
         | PropKind::Armchair
@@ -272,6 +277,8 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Wardrobe
         | PropKind::BathroomSink
         | PropKind::Toilet
+        | PropKind::Urinal
+        | PropKind::ChangingTable
         | PropKind::Bathtub
         | PropKind::ShowerStall
         | PropKind::SpaBath
@@ -287,8 +294,10 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::FloorToys => Some(("residential_quarters", "Living Quarters / Unit")),
         PropKind::Car
         | PropKind::UtilityVan
+        | PropKind::PickupTruck
         | PropKind::Tractor
         | PropKind::JerseyBarrier
+        | PropKind::DriveThruMenuBoard
         | PropKind::StreetDebris
         | PropKind::AwningCanopy
         | PropKind::StreetLamp
@@ -296,6 +305,14 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         PropKind::CropRow
         | PropKind::HayBaleStack
         | PropKind::LivestockTrough
+        | PropKind::Horse
+        | PropKind::Cow
+        | PropKind::Pig
+        | PropKind::Chicken
+        | PropKind::Goat
+        | PropKind::Dog
+        | PropKind::Silo
+        | PropKind::Wheelbarrow
         | PropKind::ConservatorySpecimenIsland
         | PropKind::Planter
         | PropKind::PlanterTable

@@ -620,6 +620,26 @@ fn inspect_map_point_raw(
                     )
                 }
             }
+            WallEdgeKind::FenceWood => (
+                "Wooden Fence".to_owned(),
+                "Half Cover / Blocks Movement".to_owned(),
+                145,
+            ),
+            WallEdgeKind::FenceWire => (
+                "Wire / Chain-Link Fence".to_owned(),
+                "Blocks Movement / Clear Sightline".to_owned(),
+                210,
+            ),
+            WallEdgeKind::LowWallStone => (
+                "Stone / Masonry Low Wall".to_owned(),
+                "Half Cover / Blocks Movement".to_owned(),
+                115,
+            ),
+            WallEdgeKind::StallPartition => (
+                "Restroom Stall Partition".to_owned(),
+                "Full Cover / Blocks LoS".to_owned(),
+                200,
+            ),
         };
         let orient_deg = match edge.side {
             EdgeSide::North => 0,
@@ -683,7 +703,10 @@ fn inspect_map_point_raw(
             ));
         }
         if !p.decorative
-            && matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
+            && matches!(
+                p.kind,
+                PropKind::Car | PropKind::UtilityVan | PropKind::PickupTruck
+            )
             && vehicle_point_is_engine_bay(p, x_m, y_m)
         {
             return Some((

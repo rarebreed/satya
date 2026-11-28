@@ -260,7 +260,7 @@ fn phase5_sector_preset_groups_and_aliases_roundtrip() {
         }
     }
     assert_eq!(flat.len(), SectorPreset::ALL.len());
-    assert_eq!(flat.len(), 29);
+    assert_eq!(flat.len(), 32);
     for p in SectorPreset::ALL {
         assert!(
             seen.contains(p.as_str()),
@@ -278,6 +278,9 @@ fn phase5_sector_preset_groups_and_aliases_roundtrip() {
         ("hospital", SectorPreset::Hospital),
         ("medlab", SectorPreset::MedLabSector),
         ("medical", SectorPreset::MedLabSector),
+        ("fast_food", SectorPreset::FastFoodRestaurant),
+        ("bistro", SectorPreset::BistroDiner),
+        ("fine_dining", SectorPreset::FineDiningRestaurant),
         ("warehouse", SectorPreset::Warehouse),
         ("cargo", SectorPreset::DockingBay),
         ("plant", SectorPreset::ManufacturingPlant),

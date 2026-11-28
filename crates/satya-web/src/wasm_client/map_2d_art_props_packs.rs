@@ -206,6 +206,82 @@ pub(crate) fn push_pack_furniture_glyph(
             rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, lh - 4.0], 4.0, "#38bdf8", r##"fill-opacity=".42" stroke="#1e293b" stroke-width="1.3""##);
             rect(out, [-l + 6.0, 0.0, lw - 12.0, lh * 0.35], 2.0, "#64748b", dark);
         }
+        // --- Batch 11: Restroom Suites, Restaurants, Vehicles & Livestock ---
+        PropKind::Urinal => {
+            rect(out, [-l + 5.0, -t + 2.0, lw - 10.0, lh * 0.58], 4.0, "#f1f5f9", dark);
+            circle(out, 0.0, 0.0, (lw.min(lh) * 0.20).max(4.0), "#94a3b8", "");
+        }
+        PropKind::ChangingTable => {
+            rect(out, [-l + 2.0, -t + 3.0, lw - 4.0, lh - 6.0], 3.0, "#e2e8f0", dark);
+            rect(out, [-l + 6.0, -t + 6.0, lw - 12.0, lh - 12.0], 2.0, "#bfdbfe", "");
+        }
+        PropKind::SnackVendingMachine => {
+            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, lh - 6.0], 3.0, "#0f172a", dark);
+            rect(out, [-l + 6.0, -t + 6.0, lw - 12.0, lh * 0.55], 2.0, "#fde68a", "");
+        }
+        PropKind::FastFoodCounter => {
+            rect(out, [-l + 2.0, -t + 3.0, lw - 4.0, lh - 6.0], 3.0, "#dc2626", dark);
+            rect(out, [-l + 4.0, t - 10.0, lw - 8.0, 6.0], 2.0, "#f8fafc", dark);
+            rect(out, [-l + 6.0, -t + 6.0, 12.0, 8.0], 1.5, "#334155", "");
+        }
+        PropKind::SodaFountain => {
+            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, lh - 6.0], 3.0, "#cbd5e1", dark);
+            for i in 0..4 {
+                circle(out, -l + 8.0 + (i as f32) * ((lw - 16.0) / 3.0), 0.0, 3.0, "#dc2626", "");
+            }
+        }
+        PropKind::DriveThruMenuBoard => {
+            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 3.0, "#1e293b", dark);
+            rect(out, [-l + 7.0, -t + 8.0, lw - 14.0, 6.0], 1.5, "#f59e0b", "");
+        }
+        PropKind::HostStand => {
+            rect(out, [-l + 5.0, -t + 5.0, lw - 10.0, lh - 10.0], 3.0, "#5c3b23", dark);
+            rect(out, [-4.0, -4.0, 8.0, 6.0], 1.0, "#fef2f2", "");
+        }
+        PropKind::DeepFryerStation => {
+            rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, lh - 4.0], 2.0, "#94a3b8", dark);
+            rect(out, [-l + 6.0, -t + 6.0, lw * 0.36, lh - 12.0], 2.0, "#f59e0b", dark);
+            rect(out, [4.0, -t + 6.0, lw * 0.36, lh - 12.0], 2.0, "#f59e0b", dark);
+        }
+        PropKind::PickupTruck => {
+            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 5.0, "#991b1b", dark);
+            rect(out, [-l + 7.0, -t + 8.0, lw - 14.0, lh * 0.42], 3.0, "#334155", dark);
+            rect(out, [-l + 7.0, 4.0, lw - 14.0, lh * 0.20], 2.0, "#bae6fd", dark);
+        }
+        PropKind::Horse => {
+            rect(out, [-l + 4.0, -t + 7.0, lw - 8.0, lh - 14.0], 8.0, "#7c4724", dark);
+            circle(out, l - 8.0, 0.0, 5.0, "#5c3318", dark);
+        }
+        PropKind::Cow => {
+            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 7.0, "#f8fafc", dark);
+            circle(out, -4.0, -2.0, 5.0, "#1e293b", "");
+            circle(out, 5.0, 3.0, 4.5, "#1e293b", "");
+        }
+        PropKind::Pig => {
+            circle(out, 0.0, 0.0, (lw.min(lh) * 0.30).max(7.0), "#f472b6", dark);
+            circle(out, 5.0, 0.0, 3.0, "#ec4899", "");
+        }
+        PropKind::Chicken => {
+            circle(out, 0.0, 0.0, 5.0, "#fef3c7", dark);
+            circle(out, 4.0, 0.0, 2.5, "#dc2626", "");
+        }
+        PropKind::Goat => {
+            rect(out, [-l + 7.0, -t + 9.0, lw - 14.0, lh - 18.0], 5.0, "#e7e5e4", dark);
+            circle(out, l - 9.0, 0.0, 3.5, "#78716c", dark);
+        }
+        PropKind::Dog => {
+            rect(out, [-l + 7.0, -t + 10.0, lw - 14.0, lh - 20.0], 5.0, "#b45309", dark);
+            circle(out, l - 9.0, 0.0, 3.5, "#92400e", dark);
+        }
+        PropKind::Silo => {
+            let r = (lw.min(lh) * 0.44).max(10.0);
+            circle(out, 0.0, 0.0, r, "#cbd5e1", dark);
+            circle(out, 0.0, 0.0, r * 0.45, "#94a3b8", dark);
+        }
+        PropKind::Wheelbarrow => {
+            rect(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 12.0], 4.0, "#15803d", dark);
+            circle(out, l - 6.0, 0.0, 3.5, "#1e293b", "");
+        }
         _ => return false,
     }
     true

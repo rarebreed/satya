@@ -40,31 +40,50 @@ pub fn format_rgb_hex(rgb: [u8; 3]) -> String {
 
 define_wire_enum! {
     /// What occupies a cell-boundary edge.
-    pub enum WallEdgeKind [count = 4] {
+    pub enum WallEdgeKind [count = 8] {
         Wall => ("WALL", "Wall"),
         DoorClosed => ("DOOR_CLOSED", "Closed Door"),
         DoorOpen => ("DOOR_OPEN", "Open Door"),
         Window => ("WINDOW", "Window (waist-high sill)"),
+        FenceWood => ("FENCE_WOOD", "Wooden Fence (post-and-rail)"),
+        FenceWire => ("FENCE_WIRE", "Wire / Chain-Link Fence"),
+        LowWallStone => ("LOW_WALL_STONE", "Outdoor Stone / Masonry Wall"),
+        StallPartition => ("STALL_PARTITION", "Restroom Stall / Privacy Partition"),
     }
 }
 
 impl WallEdgeKind {
+    /// Whether this edge is a passable doorway (`DoorClosed` or `DoorOpen`).
+    #[must_use]
+    pub const fn is_door(self) -> bool {
+        matches!(self, Self::DoorClosed | Self::DoorOpen)
+    }
+
     /// Whether a combatant cannot step across this edge.
     #[must_use]
     pub const fn blocks_movement(self) -> bool {
-        matches!(self, Self::Wall | Self::DoorClosed | Self::Window)
+        matches!(
+            self,
+            Self::Wall
+                | Self::DoorClosed
+                | Self::Window
+                | Self::FenceWood
+                | Self::FenceWire
+                | Self::LowWallStone
+                | Self::StallPartition
+        )
     }
 
     /// Whether this edge completely blocks Line of Sight.
     #[must_use]
     pub const fn blocks_sight(self) -> bool {
-        matches!(self, Self::Wall | Self::DoorClosed)
+        matches!(self, Self::Wall | Self::DoorClosed | Self::StallPartition)
     }
 
-    /// Whether shooting across this edge imposes Low Cover (window sill / frame).
+    /// Whether shooting across this edge imposes Low Cover (window sill / fence / stone wall).
     #[must_use]
     pub const fn provides_half_cover(self) -> bool {
-        matches!(self, Self::Window)
+        matches!(self, Self::Window | Self::FenceWood | Self::LowWallStone)
     }
 }
 
@@ -104,7 +123,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_maps::map_dressing::prop_spec`.
-    pub enum PropKind [count = 154] {
+    pub enum PropKind [count = 171] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -259,6 +278,23 @@ define_wire_enum! {
         CopyMachine => ("COPY_MACHINE", "Office multifunction printer & copier station", aliases: ["PRINTER_COPIER", "COPIER"]),
         StreetLamp => ("STREET_LAMP", "Cast-iron sidewalk streetlight standard", aliases: ["LAMP_POST", "STREETLIGHT"]),
         BusShelter => ("BUS_SHELTER", "Glazed transit bus stop shelter & bench", aliases: ["TRANSIT_SHELTER", "BUS_STOP"]),
+        Urinal => ("URINAL", "Wall-mounted urinal", aliases: ["PUBLIC_URINAL"]),
+        ChangingTable => ("CHANGING_TABLE", "Fold-down baby changing station", aliases: ["BABY_CHANGING_TABLE", "CHANGING_STATION"]),
+        SnackVendingMachine => ("SNACK_VENDING_MACHINE", "Glass-front snack vending machine", aliases: ["SPIRAL_VENDING_MACHINE", "COIL_VENDING_MACHINE"]),
+        FastFoodCounter => ("FAST_FOOD_COUNTER", "Fast-food order counter & registers", aliases: ["ORDER_COUNTER", "SERVICE_COUNTER"]),
+        SodaFountain => ("SODA_FOUNTAIN", "Self-serve soda fountain & ice station", aliases: ["DRINK_STATION", "BEVERAGE_DISPENSER"]),
+        DriveThruMenuBoard => ("DRIVE_THRU_MENU_BOARD", "Illuminated drive-thru menu board & speaker", aliases: ["MENU_BOARD", "DRIVE_THRU_SIGN"]),
+        HostStand => ("HOST_STAND", "Restaurant host podium & menu stand", aliases: ["HOSTESS_STAND", "MAITRE_D_STAND"]),
+        DeepFryerStation => ("DEEP_FRYER_STATION", "Commercial deep fryer & warming station", aliases: ["FRYER", "DEEP_FRYER"]),
+        PickupTruck => ("PICKUP_TRUCK", "Utility pickup truck", aliases: ["TRUCK", "FARM_TRUCK"]),
+        Horse => ("HORSE", "Horse", aliases: ["FARM_HORSE", "STALLION"]),
+        Cow => ("COW", "Dairy / beef cow", aliases: ["CATTLE", "BULL"]),
+        Pig => ("PIG", "Farm pig", aliases: ["HOG", "SWINE"]),
+        Chicken => ("CHICKEN", "Farm chickens", aliases: ["HEN", "POULTRY"]),
+        Goat => ("GOAT", "Farm goat", aliases: ["BILLY_GOAT"]),
+        Dog => ("DOG", "Farm / guard dog", aliases: ["HOUND", "SHEPHERD"]),
+        Silo => ("SILO", "Agricultural grain silo", aliases: ["GRAIN_SILO", "FARM_SILO"]),
+        Wheelbarrow => ("WHEELBARROW", "Farm & garden wheelbarrow", aliases: ["GARDEN_CART"]),
     }
 }
 
@@ -583,6 +619,10 @@ mod tests {
         assert_eq!(legacy.material, MaterialClass::Drywall);
         assert!(WallEdgeKind::Window.blocks_movement() && !WallEdgeKind::Window.blocks_sight());
         assert!(!WallEdgeKind::DoorOpen.blocks_movement());
+        assert!(WallEdgeKind::FenceWood.blocks_movement() && WallEdgeKind::FenceWood.provides_half_cover() && !WallEdgeKind::FenceWood.blocks_sight());
+        assert!(WallEdgeKind::FenceWire.blocks_movement() && !WallEdgeKind::FenceWire.provides_half_cover() && !WallEdgeKind::FenceWire.blocks_sight());
+        assert!(WallEdgeKind::LowWallStone.blocks_movement() && WallEdgeKind::LowWallStone.provides_half_cover() && !WallEdgeKind::LowWallStone.blocks_sight());
+        assert!(WallEdgeKind::StallPartition.blocks_movement() && WallEdgeKind::StallPartition.blocks_sight());
         for k in PropKind::ALL {
             assert_eq!(
                 serde_json::to_string(&k).unwrap(),
@@ -593,7 +633,7 @@ mod tests {
                 Some(k)
             );
         }
-        assert_eq!(PropKind::ALL.len(), 154);
+        assert_eq!(PropKind::ALL.len(), 171);
         assert_eq!(parse_hex_rgb("#38bdf8"), Some([0x38, 0xbd, 0xf8]));
         assert_eq!(format_rgb_hex([0x38, 0xbd, 0xf8]), "#38bdf8");
         assert!(PropKind::ElevatorCar.is_vertical_portal());

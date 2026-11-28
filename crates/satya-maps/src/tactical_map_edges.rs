@@ -92,10 +92,14 @@ impl WallEdgeIndex {
             let mat = self
                 .get_with_material(x, y, side)
                 .map(|(_, m)| m)
-                .unwrap_or(if k == WallEdgeKind::Window {
-                    MaterialClass::Glass
-                } else {
-                    MaterialClass::Drywall
+                .unwrap_or(match k {
+                    WallEdgeKind::Window => MaterialClass::Glass,
+                    WallEdgeKind::FenceWood => MaterialClass::SolidWood,
+                    WallEdgeKind::FenceWire | WallEdgeKind::StallPartition => {
+                        MaterialClass::SheetSteel
+                    }
+                    WallEdgeKind::LowWallStone => MaterialClass::ConcreteBlock,
+                    _ => MaterialClass::Drywall,
                 });
             (k, mat)
         });

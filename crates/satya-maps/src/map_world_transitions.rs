@@ -42,7 +42,10 @@ impl MacroZoneFamily {
             SectorPreset::DowntownCommercial
             | SectorPreset::UrbanCrossroads
             | SectorPreset::ShoppingPlaza
-            | SectorPreset::ShoppingMall => Self::CommercialCore,
+            | SectorPreset::ShoppingMall
+            | SectorPreset::FastFoodRestaurant
+            | SectorPreset::BistroDiner
+            | SectorPreset::FineDiningRestaurant => Self::CommercialCore,
             SectorPreset::SuburbanNeighborhood
             | SectorPreset::LuxuryMansion
             | SectorPreset::GardenEstate => Self::SuburbanEstate,

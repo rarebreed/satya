@@ -16,6 +16,7 @@ from satya_ml.texture_gen import (
     BATCH_8_CAFE_RETAIL_IDS,
     BATCH_9_INDUSTRIAL_FARM_IDS,
     BATCH_10_SCIFI_OFFICE_STREET_IDS,
+    BATCH_11_RESTROOM_DINER_FARM_IDS,
     PILOT_CLINIC_PROP_IDS,
     PROP_SPRITE_CATALOG,
     crop_and_fit_rgba,
@@ -53,25 +54,29 @@ def test_prop_catalog_integrity_and_variant_selection() -> None:
     assert len(BATCH_8_CAFE_RETAIL_IDS) == 10
     assert len(BATCH_9_INDUSTRIAL_FARM_IDS) == 8
     assert len(BATCH_10_SCIFI_OFFICE_STREET_IDS) == 8
-    assert len(PROP_SPRITE_CATALOG) == 140
+    assert len(BATCH_11_RESTROOM_DINER_FARM_IDS) == 17
+    assert len(PROP_SPRITE_CATALOG) == 157
 
     ids = [s.id for s in PROP_SPRITE_CATALOG]
     codes = [s.prop_kind_code for s in PROP_SPRITE_CATALOG]
     all_variant_files = [s.variant_filename(v) for s in PROP_SPRITE_CATALOG for v in range(3)]
-    assert len(set(ids)) == 140
-    assert len(set(codes)) == 140
-    assert len(all_variant_files) == 420
-    assert len(set(all_variant_files)) == 420
+    assert len(set(ids)) == 157
+    assert len(set(codes)) == 157
+    assert len(all_variant_files) == 471
+    assert len(set(all_variant_files)) == 471
 
     for spec in PROP_SPRITE_CATALOG:
         assert spec.filename.endswith(".webp")
         assert spec.target_w_px >= 256 and spec.target_h_px >= 192
         assert spec.aspect_ratio in {"1:1", "16:9", "9:16", "3:2", "2:3"}
-        assert "MAGENTA" in spec.prompt.upper()
+        expected_key = "GREEN" if spec.key_color == "green" else "MAGENTA"
+        assert expected_key in spec.prompt.upper()
         assert len(spec.variant_directives) == 3
         assert spec.prompt_for_variant(0) == spec.prompt
         assert spec.variant_directives[1] in spec.prompt_for_variant(1)
         assert spec.variant_directives[2] in spec.prompt_for_variant(2)
+
+    assert get_prop_sprite_spec("pig").key_color == "green"
 
     assert [s.id for s in select_prop_sprite_specs(pilot=True)] == list(PILOT_CLINIC_PROP_IDS)
     assert [s.id for s in select_prop_sprite_specs(batch="batch2")] == list(BATCH_2_CLINIC_PROP_IDS)
@@ -83,9 +88,10 @@ def test_prop_catalog_integrity_and_variant_selection() -> None:
     assert len(select_prop_sprite_specs(batch="batch8")) == 10
     assert len(select_prop_sprite_specs(batch="batch9")) == 8
     assert len(select_prop_sprite_specs(batch="batch10")) == 8
-    assert len(select_prop_sprite_specs(batch="packs")) == 26
+    assert len(select_prop_sprite_specs(batch="batch11")) == 17
+    assert len(select_prop_sprite_specs(batch="packs")) == 43
     assert len(select_prop_sprite_specs(batch="remaining")) == 90
-    assert len(select_prop_sprite_specs(batch="all")) == 140
+    assert len(select_prop_sprite_specs(batch="all")) == 157
     assert [s.id for s in select_prop_sprite_specs(only="utility_van,cot,car")] == [
         "utility_van",
         "cot",

@@ -31,7 +31,10 @@ impl SpatialWallFilter {
     #[inline]
     const fn blocks(self, kind: WallEdgeKind) -> bool {
         match self {
-            Self::WallsAndWindowsOnly => matches!(kind, WallEdgeKind::Wall | WallEdgeKind::Window),
+            Self::WallsAndWindowsOnly => !matches!(
+                kind,
+                WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen
+            ),
             Self::MovementBlocking => kind.blocks_movement(),
         }
     }
